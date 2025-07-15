@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import React, { useEffect, Suspense } from "react"; // Import Suspense
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDispatch } from "react-redux";
 import { login as loginAction } from "@/store/slices/authSlice";
 import serverHandler from "@/utils/serverHandler";
 
-export default function OAuthCallbackPage() {
+// This component will contain the actual OAuth logic and use client-side hooks
+function OAuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useDispatch();
@@ -18,10 +19,12 @@ export default function OAuthCallbackPage() {
       const state = searchParams.get("state");
       // For Facebook, sometimes access_token is returned directly
       const accessToken = searchParams.get("access_token");
+
       if (!provider) {
         router.replace("/onboarding");
         return;
       }
+
       try {
         let response;
         if (provider === "google") {
@@ -48,6 +51,7 @@ export default function OAuthCallbackPage() {
           router.replace("/onboarding");
           return;
         }
+
         const data: any = response?.data;
         // On success, store JWT and user info
         if (data?.token && data?.user) {
@@ -71,16 +75,30 @@ export default function OAuthCallbackPage() {
           router.replace("/onboarding");
         }
       } catch (err) {
+        // console.error("OAuth error:", err); // Log the error for debugging
         router.replace("/onboarding");
       }
     };
     handleOAuth();
-    // eslint-disable-next-line
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, dispatch]); // Added router and dispatch to dependency array for correctness
 
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-lg text-gray-700">Processing OAuth login, please wait...</div>
     </div>
   );
-} 
+}
+
+// The main page component that wraps the content in Suspense
+export default function OAuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg text-gray-700">Loading...</div>
+      </div>
+    }>
+      <OAuthCallbackContent />
+    </Suspense>
+  );
+}
