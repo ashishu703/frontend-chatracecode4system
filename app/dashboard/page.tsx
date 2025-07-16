@@ -16,7 +16,7 @@ import InboxView from "@/components/dashboard/InboxView"
 import PhonebookView from "@/components/dashboard/PhonebookView"
 import BroadcastView from "@/components/dashboard/BroadcastView"
 import ChatbotView from "@/components/dashboard/ChatbotView"
-import { FlowBuilder } from "../../chatbot-flow-builder/components/flow-builder"
+import { FlowBuilder } from "@/components/flow-integration/flow-builder"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
