@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,7 +24,8 @@ const loadRazorpayScript = () => {
     document.body.appendChild(script);
   });
 };
-export default function CheckoutPage() {
+
+function CheckoutPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const planId = searchParams.get('plan')
@@ -335,4 +336,16 @@ export default function CheckoutPage() {
       </div>
     </div>
   )
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <span>Loading checkout...</span>
+      </div>
+    }>
+      <CheckoutPageContent />
+    </Suspense>
+  );
 } 
