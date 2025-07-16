@@ -81,7 +81,7 @@ function OAuthCallbackContent() {
     };
     handleOAuth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, dispatch]); // Added router and dispatch to dependency array for correctness
+  }, [router, dispatch, searchParams]); // Added searchParams to dependency array
 
   return (
     <div className="flex items-center justify-center min-h-screen">

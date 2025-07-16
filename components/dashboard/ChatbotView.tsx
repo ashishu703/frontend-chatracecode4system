@@ -1,133 +1,652 @@
 "use client"
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Plus, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
+import serverHandler from '@/utils/serverHandler';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+  PaginationEllipsis,
+} from '@/components/ui/pagination';
+
+interface Chatbot {
+  id: string
+  title: string
+  status: boolean
+  flow: string
+  flow_title?: string
+  chats: string[]
+  for_all: boolean
+}
+
+interface Flow {
+  id: string
+  title: string
+}
+
+interface Chat {
+  id: string
+  name: string
+}
+
+interface QuickReply {
+  id: string
+  text: string
+  type: string
+  category: string
+  created_at: string
+}
+
+interface PaginationState {
+  page: number
+  size: number
+  total: number
+  totalPages: number
+}
+
+const RESPONSE_TYPES = [
+  { value: "text", label: "Text" },
+  { value: "image", label: "Image" },
+  { value: "video", label: "Video" },
+  { value: "document", label: "Document" },
+  { value: "button", label: "Button" },
+  { value: "list", label: "List" },
+]
+
+// Add PAGE_SIZE_OPTIONS for selector
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function ChatbotView() {
-  const [activeTab, setActiveTab] = useState("auto")
+  const [activeTab, setActiveTab] = useState<"auto" | "canned">("auto")
+
+  // Auto Chatbot States
+  const [chatbots, setChatbots] = useState<Chatbot[]>([])
+  const [flows, setFlows] = useState<Flow[]>([])
+  const [chats, setChats] = useState<Chat[]>([])
+  const [chatbotLoading, setChatbotLoading] = useState(false)
+  const [showChatbotForm, setShowChatbotForm] = useState(false)
+  const [editBot, setEditBot] = useState<Chatbot | null>(null)
+  const [chatbotForm, setChatbotForm] = useState({
+    title: "",
+    flow: "",
+    chats: [] as string[],
+    for_all: false,
+  })
+  const [chatbotSaving, setChatbotSaving] = useState(false)
+  const [chatbotPagination, setChatbotPagination] = useState<PaginationState>({
+    page: 1,
+    size: 10,
+    total: 0,
+    totalPages: 0,
+  })
+
+  // Canned Responses States
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([])
+  const [cannedLoading, setCannedLoading] = useState(false)
+  const [showCannedForm, setShowCannedForm] = useState(false)
+  const [editReply, setEditReply] = useState<QuickReply | null>(null)
+  const [cannedForm, setCannedForm] = useState({
+    type: "text",
+    category: "",
+    text: "",
+    media: "",
+    buttons: [],
+    list: [],
+  })
+  const [cannedSaving, setCannedSaving] = useState(false)
+  const [cannedPagination, setCannedPagination] = useState<PaginationState>({
+    page: 1,
+    size: 10,
+    total: 0,
+    totalPages: 0,
+  })
+
+  // Add state for search, filter, and page size for both tables
+  const [chatbotSearch, setChatbotSearch] = useState('');
+  const [chatbotSort, setChatbotSort] = useState('created_at');
+  const [chatbotOrder, setChatbotOrder] = useState('desc');
+  const [cannedSearch, setCannedSearch] = useState('');
+  const [cannedCategory, setCannedCategory] = useState('');
+  const [cannedSort, setCannedSort] = useState('category,created_at');
+  const [cannedOrder, setCannedOrder] = useState('asc,desc');
+
+  // Mock API Functions
+  // Replace fetchChatbots with real API call and full pagination
+  const fetchChatbots = async (page = 1, size = 10, search = '', sort = 'created_at', order = 'desc') => {
+    setChatbotLoading(true);
+    try {
+      const res = await serverHandler.get(`/api/chatbot/get_chatbot?page=${page}&size=${size}&search=${encodeURIComponent(search)}&sort=${sort}&order=${order}`);
+      const data = res.data;
+      setChatbots(data.data || []);
+      setChatbotPagination({
+        page,
+        size,
+        total: data.total || 0,
+        totalPages: data.totalPages || 1,
+      });
+    } catch (error) {
+      setChatbots([]);
+      setChatbotPagination((prev) => ({ ...prev, total: 0, totalPages: 1 }));
+    } finally {
+      setChatbotLoading(false);
+    }
+  };
+
+  const fetchFlows = async () => {
+    try {
+      const res = await serverHandler.get('/api/flow/get_flows');
+      setFlows(res.data.data || []);
+    } catch (error) {
+      setFlows([]);
+    }
+  }
+
+  const fetchChats = async () => {
+    try {
+      const res = await serverHandler.get('/api/chat/get_chats');
+      setChats(res.data.data || []);
+    } catch (error) {
+      setChats([]);
+    }
+  }
+
+  const openChatbotForm = (bot?: Chatbot) => {
+    if (bot) {
+      setEditBot(bot)
+      setChatbotForm({
+        title: bot.title,
+        flow: bot.flow,
+        chats: bot.chats,
+        for_all: bot.for_all,
+      })
+    } else {
+      setEditBot(null)
+      setChatbotForm({ title: "", flow: "", chats: [], for_all: false })
+    }
+    setShowChatbotForm(true)
+  }
+
+  // Update CRUD actions to use real API endpoints
+  const saveChatbot = async () => {
+    setChatbotSaving(true);
+    try {
+      if (editBot) {
+        await serverHandler.post('/api/chatbot/update_chatbot', { id: editBot.id, ...chatbotForm });
+      } else {
+        await serverHandler.post('/api/chatbot/add_chatbot', chatbotForm);
+      }
+      setShowChatbotForm(false);
+      fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
+    } catch (error) {
+      // handle error
+    } finally {
+      setChatbotSaving(false);
+    }
+  };
+
+  const toggleChatbotStatus = async (bot: Chatbot) => {
+    try {
+      await serverHandler.post('/api/chatbot/update_chatbot', { id: bot.id, status: !bot.status });
+      fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
+    } catch (error) {}
+  };
+
+  const deleteChatbot = async (bot: Chatbot) => {
+    if (!window.confirm('Delete this chatbot?')) return;
+    try {
+      await serverHandler.post('/api/chatbot/del_chatbot', { id: bot.id });
+      fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
+    } catch (error) {}
+  };
+
+  // Canned Responses Functions
+  // Replace fetchQuickReplies with real API call and full pagination
+  const fetchQuickReplies = async (page = 1, size = 10, search = '', category = '', sort = 'category,created_at', order = 'asc,desc') => {
+    setCannedLoading(true);
+    try {
+      const res = await serverHandler.get(`/api/quick_reply/get_quick_replies?page=${page}&size=${size}&search=${encodeURIComponent(search)}&category=${encodeURIComponent(category)}&sort=${sort}&order=${order}`);
+      const data = res.data;
+      setQuickReplies(data.data || []);
+      setCannedPagination({
+        page,
+        size,
+        total: data.total || 0,
+        totalPages: data.totalPages || 1,
+      });
+    } catch (error) {
+      setQuickReplies([]);
+      setCannedPagination((prev) => ({ ...prev, total: 0, totalPages: 1 }));
+    } finally {
+      setCannedLoading(false);
+    }
+  };
+
+  const openCannedForm = (reply?: QuickReply) => {
+    if (reply) {
+      setEditReply(reply)
+      setCannedForm({
+        type: reply.type,
+        category: reply.category || "",
+        text: reply.text || "",
+        media: "",
+        buttons: [],
+        list: [],
+      })
+    } else {
+      setEditReply(null)
+      setCannedForm({ type: "text", category: "", text: "", media: "", buttons: [], list: [] })
+    }
+    setShowCannedForm(true)
+  }
+
+  // Update CRUD actions to use real API endpoints
+  const saveCannedResponse = async () => {
+    setCannedSaving(true);
+    try {
+      if (editReply) {
+        await serverHandler.post('/api/quick_reply/update_quick_reply', { id: editReply.id, ...cannedForm });
+      } else {
+        await serverHandler.post('/api/quick_reply/add_quick_reply', cannedForm);
+      }
+      setShowCannedForm(false);
+      fetchQuickReplies(cannedPagination.page, cannedPagination.size, cannedSearch, cannedCategory, cannedSort, cannedOrder);
+    } catch (error) {
+      // handle error
+    } finally {
+      setCannedSaving(false);
+    }
+  };
+
+  const deleteCannedResponse = async (reply: QuickReply) => {
+    if (!window.confirm('Delete this response?')) return;
+    try {
+      await serverHandler.post('/api/quick_reply/delete_quick_reply', { id: reply.id });
+      fetchQuickReplies(cannedPagination.page, cannedPagination.size, cannedSearch, cannedCategory, cannedSort, cannedOrder);
+    } catch (error) {}
+  };
+
+  // Load data when tab changes
+  useEffect(() => {
+    if (activeTab === 'auto') {
+      fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
+      fetchFlows();
+      fetchChats();
+    } else {
+      fetchQuickReplies(cannedPagination.page, cannedPagination.size, cannedSearch, cannedCategory, cannedSort, cannedOrder);
+    }
+    // eslint-disable-next-line
+  }, [activeTab, chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder, cannedPagination.page, cannedPagination.size, cannedSearch, cannedCategory, cannedSort, cannedOrder]);
 
   return (
-    <div className="space-y-6">
-      <Card className="bg-white shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <i className="fas fa-robot mr-2 text-blue-600"></i>
-            Chatbot Management
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex space-x-2 mb-6">
-            <Button
-              variant={activeTab === "auto" ? "default" : "outline"}
-              onClick={() => setActiveTab("auto")}
-              className={`${
-                activeTab === "auto" ? "bg-blue-600 text-white" : "border-gray-300 text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              <i className="fas fa-robot mr-2"></i>
-              Auto Chatbot
-            </Button>
-            <Button
-              variant={activeTab === "canned" ? "default" : "outline"}
-              onClick={() => setActiveTab("canned")}
-              className={`${
-                activeTab === "canned" ? "bg-blue-600 text-white" : "border-gray-300 text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              <i className="fas fa-comments mr-2"></i>
-              Canned Responses
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Simple Tab Buttons */}
+      <div className="flex gap-4 mb-6">
+        <Button variant={activeTab === "auto" ? "default" : "outline"} onClick={() => setActiveTab("auto")}>
+          Auto Chatbot
+        </Button>
+        <Button variant={activeTab === "canned" ? "default" : "outline"} onClick={() => setActiveTab("canned")}>
+          Canned Responses
+        </Button>
+      </div>
+
+      {/* Auto Chatbot Content */}
+      {activeTab === "auto" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Auto Chatbot</h2>
+            <Button onClick={() => openChatbotForm()}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add New Chatbot
             </Button>
           </div>
-
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            {activeTab === "auto" ? (
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Auto Chatbot Configuration</h3>
-                  <p className="text-gray-600 mb-4">
-                    Set up automated responses and conversation flows for your chatbot.
-                  </p>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                    <i className="fas fa-plus mr-2"></i>
-                    Create New Bot
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[1, 2, 3].map((bot) => (
-                    <Card key={bot} className="border border-gray-200">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-gray-900">Bot {bot}</h4>
-                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Active</span>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-3">Automated customer service bot</p>
-                        <div className="flex space-x-2">
-                          <Button size="sm" variant="outline" className="border-gray-300 bg-transparent">
-                            <i className="fas fa-edit mr-1"></i>
-                            Edit
+          {/* Page size selector and total count */}
+          <div className="flex justify-end mb-2">
+            <div className="text-sm text-muted-foreground">
+              Total: {chatbotPagination.total}
+            </div>
+          </div>
+          {/* Table and pagination at bottom */}
+          <div className="relative flex flex-col min-h-[350px]"> {/* min-h to ensure space for pagination */}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Flow Title</TableHead>
+                  <TableHead>Is Active</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {chatbotLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-4">
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : chatbots.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-4">
+                      No chatbots found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  chatbots.map((bot, index) => (
+                    <TableRow key={bot.id}>
+                      <TableCell>{(chatbotPagination.page - 1) * chatbotPagination.size + index + 1}</TableCell>
+                      <TableCell>{bot.title}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{bot.flow_title || bot.flow}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Switch checked={bot.status} onCheckedChange={() => toggleChatbotStatus(bot)} />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => openChatbotForm(bot)}>
+                            <Edit className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="outline" className="border-gray-300 bg-transparent">
-                            <i className="fas fa-chart-bar mr-1"></i>
-                            Stats
+                          <Button variant="ghost" size="sm" onClick={() => deleteChatbot(bot)}>
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            {/* Always show pagination bar, even if only 1 page or no data */}
+            <div className="mt-4 flex-1 flex items-end w-full">
+              <Pagination className="justify-center">
+                <PaginationContent>
+                  <PaginationItem>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">Rows per page:</span>
+                      <Select value={String(chatbotPagination.size)} onValueChange={val => {
+                        setChatbotPagination(prev => ({ ...prev, size: Number(val), page: 1 }));
+                      }}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAGE_SIZE_OPTIONS.map(opt => (
+                            <SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </PaginationItem>
+                  {/* Page numbers */}
+                  {Array.from({ length: Math.max(chatbotPagination.totalPages, 1) }, (_, i) => i + 1).map(pageNum => (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        isActive={chatbotPagination.page === pageNum}
+                        onClick={() => {
+                          if (chatbotPagination.page !== pageNum) {
+                            setChatbotPagination(prev => ({ ...prev, page: pageNum }));
+                          }
+                        }}
+                        aria-disabled={chatbotPagination.totalPages <= 1}
+                      >
+                        <span>{pageNum}</span>
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                </PaginationContent>
+              </Pagination>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Canned Responses Content */}
+      {activeTab === "canned" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Canned Responses</h2>
+            <Button onClick={() => openCannedForm()}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add New
+            </Button>
+          </div>
+          {/* Page size selector and total count */}
+          <div className="flex justify-end mb-2">
+            <div className="text-sm text-muted-foreground">
+              Total: {cannedPagination.total}
+            </div>
+          </div>
+          {/* Table and pagination at bottom */}
+          <div className="relative flex flex-col min-h-[350px]"> {/* min-h to ensure space for pagination */}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Created At</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cannedLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-4">
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : quickReplies.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-4">
+                      No responses found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  quickReplies.map((reply, index) => (
+                    <TableRow key={reply.id}>
+                      <TableCell>{(cannedPagination.page - 1) * cannedPagination.size + index + 1}</TableCell>
+                      <TableCell>{reply.text || `${reply.type} response`}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{reply.type}</Badge>
+                      </TableCell>
+                      <TableCell>{reply.created_at ? new Date(reply.created_at).toLocaleDateString() : "N/A"}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => openCannedForm(reply)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => deleteCannedResponse(reply)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            {/* Always show pagination bar, even if only 1 page or no data */}
+            <div className="mt-4 flex-1 flex items-end w-full">
+              <Pagination className="justify-center">
+                <PaginationContent>
+                  <PaginationItem>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">Rows per page:</span>
+                      <Select value={String(cannedPagination.size)} onValueChange={val => {
+                        setCannedPagination(prev => ({ ...prev, size: Number(val), page: 1 }));
+                      }}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAGE_SIZE_OPTIONS.map(opt => (
+                            <SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </PaginationItem>
+                  {/* Page numbers */}
+                  {Array.from({ length: Math.max(cannedPagination.totalPages, 1) }, (_, i) => i + 1).map(pageNum => (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        isActive={cannedPagination.page === pageNum}
+                        onClick={() => {
+                          if (cannedPagination.page !== pageNum) {
+                            setCannedPagination(prev => ({ ...prev, page: pageNum }));
+                          }
+                        }}
+                        aria-disabled={cannedPagination.totalPages <= 1}
+                      >
+                        <span>{pageNum}</span>
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                </PaginationContent>
+              </Pagination>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chatbot Form Dialog */}
+      <Dialog open={showChatbotForm} onOpenChange={setShowChatbotForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editBot ? "Edit Chatbot" : "Add New Chatbot"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Title</label>
+              <Input
+                value={chatbotForm.title}
+                onChange={(e) => setChatbotForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="Enter chatbot title"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Select Flow</label>
+              <Select value={chatbotForm.flow} onValueChange={(val) => setChatbotForm((f) => ({ ...f, flow: val }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a flow" />
+                </SelectTrigger>
+                <SelectContent>
+                  {flows.map((flow) => (
+                    <SelectItem key={flow.id} value={flow.id}>
+                      {flow.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Switch
+                  checked={chatbotForm.for_all}
+                  onCheckedChange={(val) => setChatbotForm((f) => ({ ...f, for_all: val, chats: val ? [] : f.chats }))}
+                />
+                <span>Turn on for all chats</span>
+              </div>
+              {!chatbotForm.for_all && (
+                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded p-2">
+                  {chats.map((chat) => (
+                    <label key={chat.id} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={chatbotForm.chats.includes(chat.id)}
+                        onChange={(e) => {
+                          setChatbotForm((f) => ({
+                            ...f,
+                            chats: e.target.checked ? [...f.chats, chat.id] : f.chats.filter((id) => id !== chat.id),
+                          }))
+                        }}
+                      />
+                      <span className="text-sm">{chat.name}</span>
+                    </label>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Canned Responses</h3>
-                  <p className="text-gray-600 mb-4">
-                    Create and manage pre-written responses for common customer inquiries.
-                  </p>
-                  <Button className="bg-green-600 hover:bg-green-700 text-white">
-                    <i className="fas fa-plus mr-2"></i>
-                    Add Response
-                  </Button>
-                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowChatbotForm(false)} disabled={chatbotSaving}>
+                Cancel
+              </Button>
+              <Button
+                onClick={saveChatbot}
+                disabled={
+                  chatbotSaving ||
+                  !chatbotForm.title ||
+                  !chatbotForm.flow ||
+                  (!chatbotForm.for_all && chatbotForm.chats.length === 0)
+                }
+              >
+                {chatbotSaving ? (editBot ? "Updating..." : "Creating...") : editBot ? "Update" : "Create"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-                <div className="space-y-3">
-                  {[
-                    { title: "Welcome Message", content: "Hello! Welcome to our service. How can I help you today?" },
-                    { title: "Business Hours", content: "Our business hours are Monday to Friday, 9 AM to 6 PM." },
-                    { title: "Thank You", content: "Thank you for contacting us. We appreciate your business!" },
-                  ].map((response, index) => (
-                    <Card key={index} className="border border-gray-200">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-gray-900 mb-1">{response.title}</h4>
-                            <p className="text-sm text-gray-600">{response.content}</p>
-                          </div>
-                          <div className="flex space-x-2 ml-4">
-                            <Button size="sm" variant="outline" className="border-gray-300 bg-transparent">
-                              <i className="fas fa-edit"></i>
-                            </Button>
-                            <Button size="sm" variant="outline" className="border-red-300 text-red-600 bg-transparent">
-                              <i className="fas fa-trash"></i>
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+      {/* Canned Response Form Dialog */}
+      <Dialog open={showCannedForm} onOpenChange={setShowCannedForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editReply ? "Edit Response" : "Add New Response"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Type</label>
+              <Select value={cannedForm.type} onValueChange={(val) => setCannedForm((f) => ({ ...f, type: val }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RESPONSE_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
                   ))}
-                </div>
-              </div>
-            )}
-          </motion.div>
-        </CardContent>
-      </Card>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Category</label>
+              <Input
+                value={cannedForm.category}
+                onChange={(e) => setCannedForm((f) => ({ ...f, category: e.target.value }))}
+                placeholder="Enter category"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Text</label>
+              <Input
+                value={cannedForm.text}
+                onChange={(e) => setCannedForm((f) => ({ ...f, text: e.target.value }))}
+                placeholder="Enter response text"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowCannedForm(false)} disabled={cannedSaving}>
+                Cancel
+              </Button>
+              <Button onClick={saveCannedResponse} disabled={cannedSaving || !cannedForm.text}>
+                {cannedSaving ? (editReply ? "Updating..." : "Creating...") : editReply ? "Update" : "Create"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
