@@ -2,10 +2,10 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import { Card } from "@/components/ui/card"
 import { List } from "lucide-react"
-import type { NodeData } from "@/types/flow"
+import type { NodeData } from "@/types/flow-integration/flow"
 
 export function ListNode({ data, selected }: NodeProps<NodeData>) {
-  const sectionCount = data.config.sections?.length || 0
+  const sectionCount = data.state?.sections?.length || 0
 
   return (
     <Card className={`min-w-[200px] ${selected ? "ring-2 ring-blue-500" : ""}`}>
@@ -15,9 +15,9 @@ export function ListNode({ data, selected }: NodeProps<NodeData>) {
           <div className="p-1 bg-teal-500 rounded">
             <List className="h-3 w-3 text-white" />
           </div>
-          <span className="font-medium text-sm">{data.config.label}</span>
+          <span className="font-medium text-sm">{data.state?.label}</span>
         </div>
-        <p className="text-xs text-gray-600 line-clamp-2">{data.config.body}</p>
+        <p className="text-xs text-gray-600 line-clamp-2">{data.state?.body}</p>
         <p className="text-xs text-gray-500 mt-1">
           {sectionCount} section{sectionCount !== 1 ? "s" : ""}
         </p>
@@ -26,3 +26,5 @@ export function ListNode({ data, selected }: NodeProps<NodeData>) {
     </Card>
   )
 }
+
+export default ListNode;

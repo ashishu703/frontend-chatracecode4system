@@ -89,6 +89,7 @@ export default function AdminLoginPage() {
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"

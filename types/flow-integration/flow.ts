@@ -1,81 +1,30 @@
 import type { Node, Edge } from "@xyflow/react"
 
-export interface NodeData {
+export interface NodeData extends Record<string, unknown> {
   type:
-    | "start"
-    | "text"
-    | "image"
-    | "audio"
-    | "video"
-    | "document"
-    | "button"
-    | "list"
+    | "simpleMessage"
+    | "imageMessage"
+    | "audioMessage"
+    | "videoMessage"
+    | "documentMessage"
+    | "buttonMessage"
+    | "listMessage"
     | "assignAgent"
-    | "disableChat"
-    | "apiRequest"
-  config: {
-    // Common
-    label?: string
-
-    // Start node
-    content?: string
-
-    // Text message
-    quickReplies?: Array<{ text: string; payload: string }>
-    delay?: number
-
-    // Image message
-    url?: string
-    caption?: string
-    alt?: string
-
-    // Audio message
-    autoPlay?: boolean
-
-    // Video message
-    thumbnail?: string
-
-    // Document message
-    title?: string
-    fileType?: string
-
-    // Button message
-    text?: string
-    buttons?: Array<{
-      type: "url" | "postback" | "phone"
-      title: string
-      url?: string
-      payload?: string
-      phone?: string
-    }>
-
-    // List message
-    header?: string
-    body?: string
-    sections?: Array<{
-      title: string
-      description: string
-      image?: string
-    }>
-    button?: {
-      text: string
-      payload: string
+    | "disableChatTill"
+    | "requestAPI"
+  data: {
+    state?: {
+      messageType?: string
+      contentType?: string
+      message?: string
+      imageUrl?: string
+      imageCaption?: string
+      videoUrl?: string
+      videoCaption?: string
+      audioUrl?: string
+      buttons?: { name: string }[]
+      // add other fields as needed
     }
-
-    // Assign agent
-    agentId?: string
-    message?: string
-    fallback?: "continue_flow" | "end_chat"
-
-    // Disable chat
-    duration?: number
-    resumeAction?: "notify" | "continue"
-
-    // API request
-    method?: string
-    headers?: Record<string, string>
-    body?: Record<string, any>
-    responseMapping?: Record<string, string>
   }
 }
 

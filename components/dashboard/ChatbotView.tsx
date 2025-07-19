@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
@@ -19,6 +19,8 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from '@/components/ui/pagination';
+import { useToast } from '@/hooks/use-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface Chatbot {
   id: string
@@ -68,6 +70,8 @@ const RESPONSE_TYPES = [
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function ChatbotView() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"auto" | "canned">("auto")
 
   // Auto Chatbot States
@@ -126,18 +130,38 @@ export default function ChatbotView() {
   const fetchChatbots = async (page = 1, size = 10, search = '', sort = 'created_at', order = 'desc') => {
     setChatbotLoading(true);
     try {
-      const res = await serverHandler.get(`/api/chatbot/get_chatbot?page=${page}&size=${size}&search=${encodeURIComponent(search)}&sort=${sort}&order=${order}`);
-      const data = res.data;
-      setChatbots(data.data || []);
-      setChatbotPagination({
-        page,
-        size,
-        total: data.total || 0,
-        totalPages: data.totalPages || 1,
-      });
-    } catch (error) {
+      const res = await serverHandler.get(`/api/chat_flow/get_mine?page=${page}&size=${size}&search=${encodeURIComponent(search)}&sort=${sort}&order=${order}`);
+      console.log('API /api/chat_flow/get_mine response:', res.data);
+      if (res.data && res.data.success) {
+        // Map the API data to the Chatbot table format if needed
+        const apiData = res.data.data || [];
+        const mapped = apiData.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          flow: item.flow_id || item.flowId || '',
+          flow_title: item.title,
+          status: item.is_active ?? true, // fallback to true if not present
+          chats: [],
+          for_all: false,
+        }));
+        setChatbots(mapped);
+        setChatbotPagination({
+          page: res.data.pagination?.currentPage || page,
+          size: res.data.pagination?.pageSize || size,
+          total: res.data.pagination?.totalItems || mapped.length,
+          totalPages: res.data.pagination?.totalPages || 1,
+        });
+      } else {
+        setChatbots([]);
+        setChatbotPagination((prev) => ({ ...prev, total: 0, totalPages: 1 }));
+        toast({ title: 'Error', description: res.data?.msg || 'Failed to fetch chatbots', variant: 'destructive' });
+        console.error('API /api/chat_flow/get_mine error:', res.data);
+      }
+    } catch (error: any) {
       setChatbots([]);
       setChatbotPagination((prev) => ({ ...prev, total: 0, totalPages: 1 }));
+      toast({ title: 'Error', description: error?.message || 'Failed to fetch chatbots', variant: 'destructive' });
+      console.error('API /api/chat_flow/get_mine exception:', error);
     } finally {
       setChatbotLoading(false);
     }
@@ -181,10 +205,18 @@ export default function ChatbotView() {
   const saveChatbot = async () => {
     setChatbotSaving(true);
     try {
+      // Find the full flow object by ID
+      const selectedFlow = flows.find(f => f.id === chatbotForm.flow);
+      const payload = {
+        chats: chatbotForm.chats,
+        for_all: chatbotForm.for_all,
+        flow: selectedFlow ? selectedFlow : chatbotForm.flow, // fallback to ID if not found
+        title: chatbotForm.title,
+      };
       if (editBot) {
-        await serverHandler.post('/api/chatbot/update_chatbot', { id: editBot.id, ...chatbotForm });
+        await serverHandler.post('/api/chatbot/update_chatbot', { id: editBot.id, ...payload });
       } else {
-        await serverHandler.post('/api/chatbot/add_chatbot', chatbotForm);
+        await serverHandler.post('/api/chatbot/add_chatbot', payload);
       }
       setShowChatbotForm(false);
       fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
@@ -526,6 +558,7 @@ export default function ChatbotView() {
           <DialogHeader>
             <DialogTitle>{editBot ? "Edit Chatbot" : "Add New Chatbot"}</DialogTitle>
           </DialogHeader>
+          <DialogDescription>Dialog to add or edit a chatbot configuration.</DialogDescription>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Title</label>
@@ -604,6 +637,7 @@ export default function ChatbotView() {
           <DialogHeader>
             <DialogTitle>{editReply ? "Edit Response" : "Add New Response"}</DialogTitle>
           </DialogHeader>
+          <DialogDescription>Dialog to add or edit a canned response.</DialogDescription>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Type</label>

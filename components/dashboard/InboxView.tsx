@@ -137,7 +137,7 @@ export default function ChatInterface() {
                     <Filter className="h-4 w-4" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-48 p-2">
+                <PopoverContent align="end" className="w-48 p-2 z-50">
                   <div className="flex flex-col gap-2">
                     {['all', 'pending', 'open', 'solved'].map((f) => (
                       <Button
@@ -264,9 +264,9 @@ export default function ChatInterface() {
         </header>
 
         {/* Bot Status Banner */}
-        <div className="bg-orange-100 border-l-4 border-orange-500 p-3 flex items-center gap-2">
-          <div className="h-2 w-2 bg-orange-500 rounded-full"></div>
-          <span className="text-sm font-medium text-orange-800">The bot is active</span>
+        <div className="bg-green-100 border-l-4 border-green-500 p-3 flex items-center gap-2">
+          <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+          <span className="text-sm font-medium text-green-800">The bot is active</span>
         </div>
 
         {/* Chat Messages */}
@@ -336,9 +336,10 @@ export default function ChatInterface() {
           "w-80 bg-background border-l flex flex-col transition-all duration-300 ease-in-out",
           "xl:relative xl:translate-x-0",
           rightSidebarOpen
-            ? "fixed inset-y-0 right-0 z-50 translate-x-0"
-            : "fixed inset-y-0 right-0 z-50 translate-x-full xl:translate-x-0",
+            ? "fixed inset-y-0 right-0 z-0 translate-x-0"
+            : "fixed inset-y-0 right-0 z-0 translate-x-full xl:translate-x-0",
         )}
+        style={{ maxHeight: 'calc(100vh - 32px)', marginTop: 16, marginBottom: 16, borderRadius: 12, overflow: 'hidden' }}
       >
         {/* Contact Header */}
         <div className="border-b p-4">
@@ -370,7 +371,7 @@ export default function ChatInterface() {
         </div>
 
         {/* Contact Details */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
           <div className="p-4 space-y-4">
             <div className="space-y-3">
               <div className="flex items-center justify-between">

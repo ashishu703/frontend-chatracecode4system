@@ -142,6 +142,7 @@ export default function PaymentGateway() {
                     })
                   }
                   placeholder="sk_test_..."
+                  autoComplete="current-password"
                 />
               </div>
             </div>
@@ -190,6 +191,7 @@ export default function PaymentGateway() {
                     })
                   }
                   placeholder="your_secret_key"
+                  autoComplete="current-password"
                 />
               </div>
             </div>
@@ -238,6 +240,7 @@ export default function PaymentGateway() {
                     })
                   }
                   placeholder="your_client_secret"
+                  autoComplete="current-password"
                 />
               </div>
             </div>
