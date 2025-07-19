@@ -146,6 +146,7 @@ export default function AppConfiguration() {
       formData.append("instagram_graph_version", settings.instagram.graphVersion);
       formData.append("instagram_scopes", settings.instagram.scopes);
       // Send to backend
+      console.log("Backjend URL: ", serverHandler);
       const res = await serverHandler.post("/api/web/update_web_config", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });

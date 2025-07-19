@@ -22,3 +22,5 @@ export function DisableChatNode({ data, selected }: NodeProps<NodeData>) {
     </Card>
   )
 }
+
+export default DisableChatNode;

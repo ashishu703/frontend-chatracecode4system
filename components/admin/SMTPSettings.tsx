@@ -75,6 +75,7 @@ export default function SMTPSettings() {
                 value={settings.password}
                 onChange={(e) => setSettings({ ...settings, password: e.target.value })}
                 placeholder="Your email password"
+                autoComplete="current-password"
               />
             </div>
           </div>

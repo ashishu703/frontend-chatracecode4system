@@ -22,3 +22,5 @@ export function AudioNode({ data, selected }: NodeProps<NodeData>) {
     </Card>
   )
 }
+
+export default AudioNode;

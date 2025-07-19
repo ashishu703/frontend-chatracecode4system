@@ -1,6 +1,6 @@
 "use client"
 
-import { FlowBuilder } from "@/components/flow-builder"
+import { FlowBuilder } from "@/components/flow-integration/flow-builder"
 
 export default function Home() {
   return (

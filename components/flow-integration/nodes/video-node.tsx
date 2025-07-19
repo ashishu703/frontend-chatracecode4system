@@ -22,3 +22,5 @@ export function VideoNode({ data, selected }: NodeProps<NodeData>) {
     </Card>
   )
 }
+
+export default VideoNode;

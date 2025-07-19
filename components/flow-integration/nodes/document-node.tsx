@@ -22,3 +22,5 @@ export function DocumentNode({ data, selected }: NodeProps<NodeData>) {
     </Card>
   )
 }
+
+export default DocumentNode;

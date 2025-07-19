@@ -15,6 +15,14 @@ import { useDispatch } from "react-redux"
 import { login } from "@/store/slices/authSlice"
 import { useAuth } from '@/hooks/useAuth';
 import serverHandler from "@/utils/serverHandler";
+import { useToast } from '@/hooks/use-toast';
+
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -26,6 +34,10 @@ export default function LoginPage() {
   const [focusedField, setFocusedField] = useState<string | null>(null)
   const [socialConfig, setSocialConfig] = useState<any>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     serverHandler.get('/api/admin/get_social_login').then(res => {
@@ -47,25 +59,102 @@ export default function LoginPage() {
 
   const handleOAuthLogin = (provider: "google" | "facebook") => {
     if (!socialConfig) return;
-    const redirectUri = `${window.location.origin}/auth/callback?provider=${provider}`;
-    let authUrl = "";
-    if (provider === "google") {
-      authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${encodeURIComponent(socialConfig.google_client_id)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=code` +
-        `&scope=openid%20email%20profile` +
-        `&state=google_${Date.now()}`;
-    } else if (provider === "facebook") {
-      authUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
-        `client_id=${encodeURIComponent(socialConfig.fb_login_app_id)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=code` +
-        `&scope=email,public_profile` +
-        `&state=facebook_${Date.now()}`;
+
+    if (provider === "facebook") {
+      // Get all dynamic values from socialConfig with fallbacks
+      const version = socialConfig.facebook_graph_version || "v20.0";
+      const clientId = socialConfig.facebook_client_id || socialConfig.fb_login_app_id;
+      
+      // Default scopes if not provided
+      const scopes = socialConfig.facebook_auth_scopes || 
+        "email,public_profile,pages_show_list,pages_read_engagement";
+      
+      // Construct redirect_uri - use from config or default to /auth/meta/callback
+      const redirectUri = socialConfig.facebook_redirect_uri || 
+        `${window.location.origin}/auth/meta/callback`;
+      
+      // Generate a unique state and other required parameters
+      const state = `state_${Math.random().toString(36).substring(2, 15)}`;
+      const loggerId = uuidv4();
+      const timestamp = Date.now();
+      
+      // Construct the exact URL with all parameters
+      const authUrl = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
+      
+      // Add all required parameters
+      const params = new URLSearchParams();
+      params.append('client_id', clientId);
+      params.append('redirect_uri', redirectUri);
+      params.append('response_type', 'code');
+      params.append('scope', scopes);
+      params.append('state', state);
+      params.append('ret', 'login');
+      params.append('fbapp_pres', '0');
+      params.append('logger_id', loggerId);
+      params.append('tp', 'unspecified');
+      params.append('cbt', timestamp.toString());
+      params.append('ext', (timestamp + 3600000).toString()); // 1 hour later
+      params.append('hash', Math.random().toString(36).substring(2, 15));
+      
+      authUrl.search = params.toString();
+      
+      // Save state to localStorage for verification in callback
+      localStorage.setItem('fb_oauth_state', state);
+      
+      // Redirect to Facebook OAuth
+      window.location.href = authUrl.toString();
+      return;
     }
-    window.location.href = authUrl;
+    
+    // Keep existing Google OAuth flow
+    if (provider === "google") {
+      const redirectUri = socialConfig.google_redirect_uri || 
+        `${window.location.origin}/auth/callback?provider=google`;
+        
+      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      const params = new URLSearchParams({
+        client_id: socialConfig.google_client_id,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'openid email profile',
+        state: `google_${Date.now()}`
+      });
+      
+      authUrl.search = params.toString();
+      window.location.href = authUrl.toString();
+    }
+    
+    if (authUrl) {
+      window.location.href = authUrl;
+    } else {
+      console.error('Failed to construct OAuth URL');
+    }
   }
+
+  // Password recovery handler
+  const handleRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryLoading(true);
+    try {
+      const res = await fetch('/api/user/send_recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: recoveryEmail }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Success', description: 'Recovery email sent. Please check your inbox.', variant: 'default' });
+        setShowRecovery(false);
+        setRecoveryEmail('');
+      } else {
+        toast({ title: 'Error', description: data.msg || 'Failed to send recovery email', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to send recovery email', variant: 'destructive' });
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
@@ -133,6 +222,7 @@ export default function LoginPage() {
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
@@ -148,6 +238,12 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button type="button" className="text-blue-600 hover:underline text-sm" onClick={() => setShowRecovery(true)}>
+                  Forgot password?
+                </button>
               </div>
 
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
@@ -232,6 +328,26 @@ export default function LoginPage() {
             </motion.div>
           </CardContent>
         </Card>
+        {showRecovery && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <form onSubmit={handleRecovery} className="bg-white p-6 rounded shadow w-96">
+              <h2 className="text-lg font-bold mb-4">Password Recovery</h2>
+              <Input
+                name="recoveryEmail"
+                type="email"
+                placeholder="Enter your email"
+                required
+                className="mb-4"
+                value={recoveryEmail}
+                onChange={e => setRecoveryEmail(e.target.value)}
+              />
+              <div className="flex gap-2 justify-end">
+                <Button type="button" variant="outline" onClick={() => setShowRecovery(false)}>Cancel</Button>
+                <Button type="submit" className="bg-blue-600 text-white" disabled={recoveryLoading}>Send Recovery Email</Button>
+              </div>
+            </form>
+          </div>
+        )}
       </motion.div>
     </div>
   )

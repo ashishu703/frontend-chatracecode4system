@@ -24,3 +24,5 @@ export function ApiRequestNode({ data, selected }: NodeProps<NodeData>) {
     </Card>
   )
 }
+
+export default ApiRequestNode;

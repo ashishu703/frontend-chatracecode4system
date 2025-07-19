@@ -23,3 +23,5 @@ export function ImageNode({ data, selected }: NodeProps<NodeData>) {
     </Card>
   )
 }
+
+export default ImageNode;

@@ -23,3 +23,5 @@ export function AssignAgentNode({ data, selected }: NodeProps<NodeData>) {
     </Card>
   )
 }
+
+export default AssignAgentNode;

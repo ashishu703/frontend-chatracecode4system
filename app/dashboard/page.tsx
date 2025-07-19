@@ -16,6 +16,7 @@ import InboxView from "@/components/dashboard/InboxView"
 import PhonebookView from "@/components/dashboard/PhonebookView"
 import BroadcastView from "@/components/dashboard/BroadcastView"
 import ChatbotView from "@/components/dashboard/ChatbotView"
+import FeaturesView from "@/components/dashboard/FeaturesView";
 import { FlowBuilder } from "@/components/flow-integration/flow-builder"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
@@ -117,6 +118,8 @@ export default function DashboardPage() {
         return <BroadcastView />
       case "chatbot":
         return <ChatbotView />
+      case "features":
+        return <FeaturesView />
       case "flows":
         return <FlowBuilder />
       default:
