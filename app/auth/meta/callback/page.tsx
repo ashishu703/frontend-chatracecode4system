@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getOAuthConfig } from "../../../../utils/oauthConfig";
 
-export default function MetaCallback() {
+function MetaCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -65,4 +65,12 @@ export default function MetaCallback() {
 
   if (error) return <div style={{ color: 'red', padding: 24 }}>Facebook login failed: {error}</div>;
   return <div style={{ padding: 24 }}>Logging you in with Facebook...</div>;
+}
+
+export default function MetaCallback() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>Loading...</div>}>
+      <MetaCallbackContent />
+    </Suspense>
+  );
 } 
