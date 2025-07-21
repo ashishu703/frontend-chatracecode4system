@@ -9,16 +9,20 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useToast } from "@/hooks/use-toast"
+import serverHandler from "@/utils/serverHandler"
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { adminLogin, loading, error } = useAuth();
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +31,42 @@ export default function AdminLoginPage() {
       router.push('/admin/dashboard');
     } catch (err) {
       // error is handled by the hook
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!formData.email) {
+      toast({
+        title: "Error",
+        description: "Please enter your email address first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRecoveryLoading(true);
+    try {
+      const res = await serverHandler({
+        method: "POST",
+        url: "/api/admin/send_resovery",
+        data: {
+          email: formData.email
+        }
+      });
+
+      toast({
+        title: "Success",
+        description: "If this email is associated with an admin account, you will receive a recovery link.",
+        variant: "default",
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to send recovery email. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -64,6 +104,7 @@ export default function AdminLoginPage() {
                     id="email"
                     type="email"
                     required
+                    autoComplete="username"
                     className={`pl-10 bg-white/50 border-gray-300 text-gray-800 placeholder:text-gray-400 focus:border-red-400 transition-all duration-300 ${focusedField === "email" ? "ring-1 ring-red-400/50" : ""}`}
                     placeholder="Admin email"
                     value={formData.email}
@@ -83,13 +124,13 @@ export default function AdminLoginPage() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     required
+                    autoComplete="current-password"
                     className={`pl-10 bg-white/50 border-gray-300 text-gray-800 placeholder:text-gray-400 focus:border-red-400 transition-all duration-300 ${focusedField === "password" ? "ring-1 ring-red-400/50" : ""}`}
                     placeholder="Admin password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
-                    autoComplete="current-password"
                   />
                   <button
                     type="button"
@@ -106,8 +147,30 @@ export default function AdminLoginPage() {
                   </button>
                 </div>
               </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="text-sm text-red-600 hover:text-red-700"
+                  onClick={handleForgotPassword}
+                  disabled={recoveryLoading}
+                >
+                  {recoveryLoading ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin mr-2"></i>
+                      Sending...
+                    </>
+                  ) : (
+                    "Forgot Password?"
+                  )}
+                </Button>
+              </div>
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:bg-blue-700 text-white font-semibold py-2" disabled={loading}>
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:bg-blue-700 text-white font-semibold py-2" 
+                  disabled={loading}
+                >
                   <i className="fas fa-shield-alt mr-2"></i>
                   {loading ? 'Signing In...' : 'Sign In'}
                 </Button>
@@ -128,5 +191,5 @@ export default function AdminLoginPage() {
         </Card>
       </motion.div>
     </div>
-  )
+  );
 }

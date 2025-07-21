@@ -19,13 +19,36 @@ import { useRouter } from 'next/navigation';
 import serverHandler from '@/utils/serverHandler';
 import { useEffect, useState } from 'react';
 
+interface AdminDashboardData {
+  success: boolean;
+  paidSignupsByMonth: Array<{
+    month: string;
+    numberOfSignups: number;
+    userEmails: string[];
+    paid: boolean;
+  }>;
+  unpaidSignupsByMonth: Array<{
+    month: string;
+    numberOfSignups: number;
+    userEmails: string[];
+    paid: boolean;
+  }>;
+  ordersByMonth: Array<{
+    month: string;
+    numberOfOders: number;
+    totalOrders: number;
+  }>;
+  totalUsers: number;
+  totalContacts: number;
+}
+
 export default function AdminDashboardPage() {
   const dispatch = useDispatch();
   const router = useRouter();
   const { logout } = useAuth();
   const { sidebarOpen } = useSelector((state: RootState) => state.ui);
   const { currentView } = useSelector((state: RootState) => state.dashboard);
-  const [adminDashboardData, setAdminDashboardData] = useState<AdminDashboardData | undefined>(undefined);
+  const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -34,15 +57,18 @@ export default function AdminDashboardPage() {
       setLoading(true);
       setError(undefined);
       try {
-        const token = typeof window !== 'undefined' ? (localStorage.getItem('serviceToken') || localStorage.getItem('adminToken')) : '';
-        const res = await serverHandler.get('/api/admin/dashboard', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const res = await serverHandler({
+          method: "GET",
+          url: "/api/admin/dashboard",
         });
-        setAdminDashboardData((res.data as any).data);
-      } catch (err) {
+        if (res?.data && 'success' in res.data) {
+          setDashboardData(res.data as AdminDashboardData);
+        } else {
+          throw new Error('Failed to fetch dashboard data');
+        }
+      } catch (err: any) {
         setError('Failed to load admin dashboard data');
+        console.error('Dashboard error:', err);
       } finally {
         setLoading(false);
       }
@@ -59,7 +85,7 @@ export default function AdminDashboardPage() {
           ) : error ? (
             <div className="text-center text-red-500 py-10">{error}</div>
           ) : (
-            <AdminDashboardView data={adminDashboardData} />
+            <AdminDashboardView data={dashboardData} />
           )
         );
       case "plans":
