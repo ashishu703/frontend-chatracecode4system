@@ -5,36 +5,48 @@ import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { useQuery } from '@tanstack/react-query';
+import serverHandler from '@/utils/serverHandler';
+import { useToast } from '@/hooks/use-toast';
 
 interface Lead {
-  id: number
-  name: string
-  email: string
-  mobile: string
-  message: string
-  date: string
+  id: number;
+  name: string;
+  email: string;
+  mobile: string;
+  message: string;
+  date: string;
 }
 
+interface LeadsResponse {
+  data: Lead[];
+  pagination: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    pageSize: number;
+  };
+}
+
+const fetchLeads = async (page: number, limit: number, search: string): Promise<LeadsResponse> => {
+  const res = await serverHandler.get(`/api/admin/get_contact_leads?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
+  return res.data as LeadsResponse;
+};
+
 export default function LeadsManage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [leads] = useState<Lead[]>([
-    {
-      id: 1,
-      name: "John Doe",
-      email: "john@example.com",
-      mobile: "+1234567890",
-      message: "Interested in your automation services",
-      date: "2024-01-15",
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      email: "jane@example.com",
-      mobile: "+1234567891",
-      message: "Need help with WhatsApp integration",
-      date: "2024-01-14",
-    },
-  ])
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const { toast } = useToast ? useToast() : { toast: () => {} };
+
+  const { data, isLoading, isError } = useQuery<LeadsResponse>({
+    queryKey: ['get-contact-leads', page, limit, searchTerm],
+    queryFn: () => fetchLeads(page, limit, searchTerm),
+    keepPreviousData: true,
+  });
+
+  const leads = data?.data || [];
+  const pagination = data?.pagination || { totalItems: 0, totalPages: 1, currentPage: 1, pageSize: limit };
 
   return (
     <div className="space-y-6">
@@ -50,7 +62,7 @@ export default function LeadsManage() {
               <Input
                 placeholder="Search leads..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
                 className="pl-10 w-64"
               />
             </div>
@@ -69,34 +81,64 @@ export default function LeadsManage() {
                 </tr>
               </thead>
               <tbody>
-                {leads.map((lead) => (
-                  <motion.tr
-                    key={lead.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="hover:bg-gray-50"
-                  >
-                    <td className="border border-gray-200 px-4 py-2">{lead.name}</td>
-                    <td className="border border-gray-200 px-4 py-2">{lead.email}</td>
-                    <td className="border border-gray-200 px-4 py-2">{lead.mobile}</td>
-                    <td className="border border-gray-200 px-4 py-2 max-w-xs truncate">{lead.message}</td>
-                    <td className="border border-gray-200 px-4 py-2">{lead.date}</td>
-                  </motion.tr>
-                ))}
+                {isLoading ? (
+                  <tr><td colSpan={5} className="text-center py-4">Loading...</td></tr>
+                ) : isError ? (
+                  <tr><td colSpan={5} className="text-center py-4 text-red-500">Failed to load leads</td></tr>
+                ) : leads.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-4">No leads found</td></tr>
+                ) : (
+                  leads.map((lead) => (
+                    <motion.tr
+                      key={lead.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="hover:bg-gray-50"
+                    >
+                      <td className="border border-gray-200 px-4 py-2">{lead.name}</td>
+                      <td className="border border-gray-200 px-4 py-2">{lead.email}</td>
+                      <td className="border border-gray-200 px-4 py-2">{lead.mobile}</td>
+                      <td className="border border-gray-200 px-4 py-2 max-w-xs truncate">{lead.message}</td>
+                      <td className="border border-gray-200 px-4 py-2">{lead.date}</td>
+                    </motion.tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
 
           <div className="flex items-center justify-between mt-6">
-            <p className="text-sm text-gray-600">Showing 1 to 2 of 2 entries</p>
+            <p className="text-sm text-gray-600">
+              {pagination.totalItems > 0
+                ? `Showing ${(pagination.currentPage - 1) * pagination.pageSize + 1} to ${Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} of ${pagination.totalItems} entries`
+                : 'No entries'}
+            </p>
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm" disabled>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pagination.currentPage === 1}
+                onClick={() => setPage(page - 1)}
+              >
                 Previous
               </Button>
-              <Button variant="outline" size="sm" className="bg-blue-600 text-white">
-                1
-              </Button>
-              <Button variant="outline" size="sm" disabled>
+              {Array.from({ length: pagination.totalPages }, (_, i) => (
+                <Button
+                  key={i + 1}
+                  variant="outline"
+                  size="sm"
+                  className={pagination.currentPage === i + 1 ? "bg-blue-600 text-white" : ""}
+                  onClick={() => setPage(i + 1)}
+                >
+                  {i + 1}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pagination.currentPage === pagination.totalPages || pagination.totalPages === 0}
+                onClick={() => setPage(page + 1)}
+              >
                 Next
               </Button>
             </div>
@@ -104,5 +146,5 @@ export default function LeadsManage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

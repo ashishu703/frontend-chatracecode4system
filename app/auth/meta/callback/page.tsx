@@ -39,7 +39,7 @@ function MetaCallbackContent() {
         const profile = await profileRes.json();
         if (!profile.id || !profile.email || !profile.name) throw new Error("Failed to fetch user profile");
         // POST to backend
-        const backendRes = await fetch(`${backendUrl}/auth/meta/callback`, {
+        const backendRes = await fetch(`${backendUrl}/api/user/auth/meta/callback`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

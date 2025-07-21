@@ -71,7 +71,7 @@ export default function LoginPage() {
       
       // Construct redirect_uri - use from config or default to /auth/meta/callback
       const redirectUri = socialConfig.facebook_redirect_uri || 
-        `${window.location.origin}/auth/meta/callback`;
+        `${window.location.origin}api/user/auth/meta/callback`;
       
       // Generate a unique state and other required parameters
       const state = `state_${Math.random().toString(36).substring(2, 15)}`;
@@ -122,13 +122,10 @@ export default function LoginPage() {
       
       authUrl.search = params.toString();
       window.location.href = authUrl.toString();
+      return;
     }
-    
-    if (authUrl) {
-      window.location.href = authUrl;
-    } else {
-      console.error('Failed to construct OAuth URL');
-    }
+    // If provider is not handled, do nothing
+    return;
   }
 
   // Password recovery handler
@@ -192,6 +189,7 @@ export default function LoginPage() {
                     id="email"
                     type="email"
                     required
+                    autoComplete="username"
                     className={`pl-10 bg-white/50 border-gray-300 text-gray-800 placeholder:text-gray-400 focus:border-blue-400 transition-all duration-300 ${
                       focusedField === "email" ? "ring-2 ring-blue-400/50 scale-105" : ""
                     }`}
@@ -214,6 +212,7 @@ export default function LoginPage() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     required
+                    autoComplete="current-password"
                     className={`pl-10 bg-white/50 border-gray-300 text-gray-800 placeholder:text-gray-400 focus:border-blue-400 transition-all duration-300 ${
                       focusedField === "password" ? "ring-2 ring-blue-400/50 scale-105" : ""
                     }`}
@@ -222,7 +221,6 @@ export default function LoginPage() {
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
-                    autoComplete="current-password"
                   />
                   <button
                     type="button"
