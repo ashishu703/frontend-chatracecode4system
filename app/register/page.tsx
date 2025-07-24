@@ -45,7 +45,41 @@ export default function RegisterPage() {
   };
 
   const handleOAuthLogin = (provider: string) => {
-    console.log(`${provider} OAuth login`)
+    // For now, only handle Facebook and Google
+    if (provider === "facebook") {
+      // Try to get config from window or fallback
+      const socialConfig = (typeof window !== 'undefined' && (window as any).__SOCIAL_CONFIG__) || {};
+      const version = socialConfig.facebook_graph_version || "v20.0";
+      const clientId = (socialConfig.facebook_client_id || socialConfig.fb_login_app_id || '').trim();
+      const scopes = socialConfig.facebook_auth_scopes || "email,public_profile,pages_show_list,pages_read_engagement";
+      // Hardcoded backend URL for redirect_uri
+      const redirectUri = `https://77eee581cbb2.ngrok-free.app/api/user/auth/meta/callback`;
+      const state = `state_${Math.random().toString(36).substring(2, 15)}`;
+      const loggerId = Math.random().toString(36).substring(2, 15);
+      const timestamp = Date.now();
+      const authUrl = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
+      const params = new URLSearchParams();
+      params.append('client_id', clientId);
+      params.append('redirect_uri', redirectUri);
+      params.append('response_type', 'code');
+      params.append('scope', scopes);
+      params.append('state', state);
+      params.append('ret', 'login');
+      params.append('fbapp_pres', '0');
+      params.append('logger_id', loggerId);
+      params.append('tp', 'unspecified');
+      params.append('cbt', timestamp.toString());
+      params.append('ext', (timestamp + 3600000).toString());
+      params.append('hash', Math.random().toString(36).substring(2, 15));
+      authUrl.search = params.toString();
+      localStorage.setItem('fb_oauth_state', state);
+      window.location.href = authUrl.toString();
+      return;
+    }
+    if (provider === "google") {
+      // Implement Google OAuth if needed
+      // ...
+    }
   }
 
   return (

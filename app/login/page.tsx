@@ -63,24 +63,18 @@ export default function LoginPage() {
     if (provider === "facebook") {
       // Get all dynamic values from socialConfig with fallbacks
       const version = socialConfig.facebook_graph_version || "v20.0";
-      const clientId = socialConfig.facebook_client_id || socialConfig.fb_login_app_id;
-      
+      const clientId = (socialConfig.facebook_client_id || socialConfig.fb_login_app_id || '').trim();
       // Default scopes if not provided
       const scopes = socialConfig.facebook_auth_scopes || 
         "email,public_profile,pages_show_list,pages_read_engagement";
-      
-      // Construct redirect_uri - use from config or default to /auth/meta/callback
-      const redirectUri = socialConfig.facebook_redirect_uri || 
-        `${window.location.origin}api/user/auth/meta/callback`;
-      
+      // Hardcoded backend URL for redirect_uri
+      const redirectUri = `https://77eee581cbb2.ngrok-free.app/api/user/auth/meta/callback`;
       // Generate a unique state and other required parameters
       const state = `state_${Math.random().toString(36).substring(2, 15)}`;
       const loggerId = uuidv4();
       const timestamp = Date.now();
-      
       // Construct the exact URL with all parameters
       const authUrl = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
-      
       // Add all required parameters
       const params = new URLSearchParams();
       params.append('client_id', clientId);
@@ -95,12 +89,9 @@ export default function LoginPage() {
       params.append('cbt', timestamp.toString());
       params.append('ext', (timestamp + 3600000).toString()); // 1 hour later
       params.append('hash', Math.random().toString(36).substring(2, 15));
-      
       authUrl.search = params.toString();
-      
       // Save state to localStorage for verification in callback
       localStorage.setItem('fb_oauth_state', state);
-      
       // Redirect to Facebook OAuth
       window.location.href = authUrl.toString();
       return;

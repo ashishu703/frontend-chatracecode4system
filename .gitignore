@@ -17,7 +17,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-<<<<<<< HEAD
 
 # vercel
 .vercel
@@ -26,8 +25,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /lib/generated/prisma
-=======
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
->>>>>>> 84a6a6a78404ea5a0702439bbfacbbe4247d6791
+

@@ -14,6 +14,30 @@ function OAuthCallbackContent() {
 
   useEffect(() => {
     const handleOAuth = async () => {
+      // 1. Extract token from URL if present
+      const urlToken = searchParams.get('token');
+      if (urlToken) {
+        localStorage.setItem('serviceToken', urlToken);
+        try {
+          const userRes = await serverHandler.get("/api/user/get_me", {
+            headers: { Authorization: `Bearer ${urlToken}` }
+          });
+          if (userRes && typeof userRes === 'object' && 'data' in userRes && userRes.data && typeof userRes.data === 'object' && 'data' in userRes.data) {
+            const user = (userRes.data as any).data;
+            dispatch(loginAction({
+              id: user.uid,
+              username: user.name,
+              email: user.email,
+            }));
+            localStorage.setItem('user', JSON.stringify(user));
+          }
+        } catch (userErr) {
+          // Optionally handle user fetch error
+        }
+        router.replace("/dashboard");
+        return;
+      }
+
       const code = searchParams.get("code");
       const provider = searchParams.get("provider");
       const state = searchParams.get("state");
@@ -33,6 +57,7 @@ function OAuthCallbackContent() {
         } else if (provider === "facebook") {
           // Facebook returns code, exchange it with backend
           response = await serverHandler.post("/api/user/login_with_facebook", { code });
+          // Do NOT call /api/messanger/auth-init here; backend should handle page fetching
         } else if (provider === "instagram") {
           response = await serverHandler.post("/api/instagram/auth-init", { code });
         } else if (provider === "messenger") {
@@ -54,22 +79,27 @@ function OAuthCallbackContent() {
 
         const data: any = response?.data;
         // On success, store JWT and user info
-        if (data?.token && data?.user) {
+        if (data?.token) {
+          // Store JWT
           localStorage.setItem("serviceToken", data.token);
-          dispatch(loginAction({
-            id: data.user.id,
-            username: data.user.name,
-            email: data.user.email,
-          }));
-          localStorage.setItem('user', JSON.stringify({
-            id: data.user.id,
-            username: data.user.name,
-            email: data.user.email,
-          }));
-          router.replace("/dashboard");
-        } else if (data?.token) {
-          // Some providers may not return user object
-          localStorage.setItem("serviceToken", data.token);
+          // Fetch user info using the token
+          try {
+            const token = data.token || localStorage.getItem('serviceToken');
+            const userRes = await serverHandler.get("/api/user/get_me", {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (userRes && typeof userRes === 'object' && 'data' in userRes && userRes.data && typeof userRes.data === 'object' && 'data' in userRes.data) {
+              const user = (userRes.data as any).data;
+              dispatch(loginAction({
+                id: user.uid,
+                username: user.name,
+                email: user.email,
+              }));
+              localStorage.setItem('user', JSON.stringify(user));
+            }
+          } catch (userErr) {
+            // Optionally handle user fetch error
+          }
           router.replace("/dashboard");
         } else {
           router.replace("/onboarding");

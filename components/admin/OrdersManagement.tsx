@@ -1,46 +1,60 @@
 "use client"
 
 import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import serverHandler from "@/utils/serverHandler"
+import { useToast } from "@/hooks/use-toast"
 
 interface Order {
   id: number
-  name: string
-  email: string
-  mobile: string
-  message: string
-  date: string
+  uid: string
+  payment_mode: string
   amount: string
-  status: string
+  data: string
+  s_token: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface OrdersResponse {
+  success: boolean
+  data: Order[]
+  pagination: {
+    totalItems: number
+    totalPages: number
+    currentPage: number
+    pageSize: number
+  }
+}
+
+const fetchOrders = async (page: number, limit: number, search: string): Promise<OrdersResponse> => {
+  // If API supports search, add &search=${encodeURIComponent(search)}
+  const url = `/api/admin/get_orders?page=${page}&limit=${limit}` + (search ? `&search=${encodeURIComponent(search)}` : "")
+  const res = await serverHandler.get(url)
+  return res.data as OrdersResponse
 }
 
 export default function OrdersManagement() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [orders] = useState<Order[]>([
-    {
-      id: 1,
-      name: "John Doe",
-      email: "john@example.com",
-      mobile: "+1234567890",
-      message: "Basic Plan Purchase",
-      date: "2024-01-15",
-      amount: "500 INR",
-      status: "Completed",
+  const [page, setPage] = useState(1)
+  const [limit] = useState(10)
+  const { toast } = useToast ? useToast() : { toast: () => {} }
+
+  const { data, isLoading, isError } = useQuery<OrdersResponse>({
+    queryKey: ["get-orders", page, limit, searchTerm],
+    queryFn: () => fetchOrders(page, limit, searchTerm),
+    keepPreviousData: true,
+    onError: (error: any) => {
+      toast({ title: "Error", description: error?.response?.data?.msg || "Failed to load orders", variant: "destructive" })
     },
-    {
-      id: 2,
-      name: "Jane Smith",
-      email: "jane@example.com",
-      mobile: "+1234567891",
-      message: "Pro Plan Purchase",
-      date: "2024-01-14",
-      amount: "1000 INR",
-      status: "Pending",
-    },
-  ])
+  })
+
+  const orders = data?.data || []
+  const pagination = data?.pagination || { totalItems: 0, totalPages: 1, currentPage: 1, pageSize: limit }
 
   return (
     <div className="space-y-6">
@@ -56,7 +70,7 @@ export default function OrdersManagement() {
               <Input
                 placeholder="Search orders..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
                 className="pl-10 w-64"
               />
             </div>
@@ -67,54 +81,79 @@ export default function OrdersManagement() {
             <table className="w-full border-collapse border border-gray-200">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
-                  <th className="border border-gray-200 px-4 py-2 text-left">Email</th>
-                  <th className="border border-gray-200 px-4 py-2 text-left">Mobile</th>
-                  <th className="border border-gray-200 px-4 py-2 text-left">Message</th>
+                  <th className="border border-gray-200 px-4 py-2 text-left">ID</th>
+                  <th className="border border-gray-200 px-4 py-2 text-left">UID</th>
+                  <th className="border border-gray-200 px-4 py-2 text-left">Payment Mode</th>
                   <th className="border border-gray-200 px-4 py-2 text-left">Amount</th>
-                  <th className="border border-gray-200 px-4 py-2 text-left">Status</th>
-                  <th className="border border-gray-200 px-4 py-2 text-left">Date</th>
+                  <th className="border border-gray-200 px-4 py-2 text-left">Razorpay Order ID</th>
+                  <th className="border border-gray-200 px-4 py-2 text-left">Created At</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.map((order) => (
-                  <motion.tr
-                    key={order.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="hover:bg-gray-50"
-                  >
-                    <td className="border border-gray-200 px-4 py-2">{order.name}</td>
-                    <td className="border border-gray-200 px-4 py-2">{order.email}</td>
-                    <td className="border border-gray-200 px-4 py-2">{order.mobile}</td>
-                    <td className="border border-gray-200 px-4 py-2">{order.message}</td>
-                    <td className="border border-gray-200 px-4 py-2">{order.amount}</td>
-                    <td className="border border-gray-200 px-4 py-2">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs ${
-                          order.status === "Completed" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="border border-gray-200 px-4 py-2">{order.date}</td>
-                  </motion.tr>
-                ))}
+                {isLoading ? (
+                  <tr><td colSpan={6} className="text-center py-8">Loading...</td></tr>
+                ) : isError ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-red-500">Failed to load orders</td></tr>
+                ) : orders.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-8">No orders found.</td></tr>
+                ) : orders.map(order => {
+                  let razorpayOrderId = "-"
+                  try {
+                    const parsed = order.data ? JSON.parse(order.data) : {}
+                    razorpayOrderId = parsed.razorpay_order_id || "-"
+                  } catch {}
+                  return (
+                    <motion.tr
+                      key={order.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="hover:bg-gray-50"
+                    >
+                      <td className="border border-gray-200 px-4 py-2">{order.id}</td>
+                      <td className="border border-gray-200 px-4 py-2">{order.uid}</td>
+                      <td className="border border-gray-200 px-4 py-2">{order.payment_mode}</td>
+                      <td className="border border-gray-200 px-4 py-2">{order.amount}</td>
+                      <td className="border border-gray-200 px-4 py-2">{razorpayOrderId}</td>
+                      <td className="border border-gray-200 px-4 py-2">{new Date(order.createdAt).toLocaleString()}</td>
+                    </motion.tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="flex items-center justify-between mt-6">
-            <p className="text-sm text-gray-600">Showing 1 to 2 of 2 entries</p>
+            <p className="text-sm text-gray-600">
+              {pagination.totalItems > 0
+                ? `Showing ${(pagination.currentPage - 1) * pagination.pageSize + 1} to ${Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} of ${pagination.totalItems} entries`
+                : 'No entries'}
+            </p>
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm" disabled>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pagination.currentPage === 1}
+                onClick={() => setPage(page - 1)}
+              >
                 Previous
               </Button>
-              <Button variant="outline" size="sm" className="bg-blue-600 text-white">
-                1
-              </Button>
-              <Button variant="outline" size="sm" disabled>
+              {Array.from({ length: pagination.totalPages }, (_, i) => (
+                <Button
+                  key={i + 1}
+                  variant="outline"
+                  size="sm"
+                  className={pagination.currentPage === i + 1 ? "bg-blue-600 text-white" : ""}
+                  onClick={() => setPage(i + 1)}
+                >
+                  {i + 1}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pagination.currentPage === pagination.totalPages || pagination.totalPages === 0}
+                onClick={() => setPage(page + 1)}
+              >
                 Next
               </Button>
             </div>

@@ -11,46 +11,8 @@ import serverHandler from "@/utils/serverHandler";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AppConfiguration() {
-  const [settings, setSettings] = useState({
-    general: {
-      logo: "",
-      allowCustomHome: false,
-      enableHeaderFooter: true,
-      name: "MBG",
-      currencyCode: "PKR",
-      currencySymbol: "₨",
-      exchangeRate: "1.0",
-      seoDescription: "Business Automation Platform",
-      frontPageVideo: "",
-      chatboxScreenVideo: "",
-      broadcastScreenVideo: "",
-    },
-    webhook: {
-      verificationToken: "",
-    },
-    whatsapp: {
-      webhookUri: "http://localhost:3002/api/whatsapp/webhook",
-      clientId: "",
-      clientSecret: "",
-      graphVersion: "v18.0",
-      configurationId: "",
-    },
-    messenger: {
-      webhookUri: "http://localhost:3002/api/messanger/webhook",
-      clientId: "",
-      clientSecret: "",
-      graphVersion: "v18.0",
-      scopes: "pages_messaging",
-    },
-    instagram: {
-      webhookUri: "http://localhost:3002/api/instagram/webhook",
-      redirectAddress: "",
-      clientId: "",
-      clientSecret: "",
-      graphVersion: "v18.0",
-      scopes: "instagram_basic,instagram_manage_messages",
-    },
-  });
+  // Remove hardcoded defaults, initialize as empty object
+  const [settings, setSettings] = useState<any>({})
   const { toast } = useToast();
 
   // Fetch config on mount
@@ -58,48 +20,9 @@ export default function AppConfiguration() {
     const fetchConfig = async () => {
       try {
         const res = await serverHandler.get("/api/admin/get_web_public");
-        if (res.data && res.data.data) {
-          const d = res.data.data;
-          setSettings({
-            general: {
-              logo: d.logo || "",
-              allowCustomHome: d.allow_custom_home === 1,
-              enableHeaderFooter: d.enable_header_footer === 1,
-              name: d.app_name || "",
-              currencyCode: d.currency_code || "",
-              currencySymbol: d.currency_symbol || "",
-              exchangeRate: d.exchange_rate || "",
-              seoDescription: d.seo_description || "",
-              frontPageVideo: d.front_page_video || "",
-              chatboxScreenVideo: d.chatbox_screen_video || "",
-              broadcastScreenVideo: d.broadcast_screen_video || "",
-            },
-            webhook: {
-              verificationToken: d.webhook_verification_token || "",
-            },
-            whatsapp: {
-              webhookUri: d.whatsapp_webhook_uri || "http://localhost:3002/api/whatsapp/webhook",
-              clientId: d.whatsapp_client_id || "",
-              clientSecret: d.whatsapp_client_secret || "",
-              graphVersion: d.whatsapp_graph_version || "v18.0",
-              configurationId: d.whatsapp_configuration_id || "",
-            },
-            messenger: {
-              webhookUri: d.messenger_webhook_uri || "http://localhost:3002/api/messanger/webhook",
-              clientId: d.messenger_client_id || "",
-              clientSecret: d.messenger_client_secret || "",
-              graphVersion: d.messenger_graph_version || "v18.0",
-              scopes: d.messenger_scopes || "pages_messaging",
-            },
-            instagram: {
-              webhookUri: d.instagram_webhook_uri || "http://localhost:3002/api/instagram/webhook",
-              redirectAddress: d.instagram_redirect_address || "",
-              clientId: d.instagram_client_id || "",
-              clientSecret: d.instagram_client_secret || "",
-              graphVersion: d.instagram_graph_version || "v18.0",
-              scopes: d.instagram_scopes || "instagram_basic,instagram_manage_messages",
-            },
-          });
+        const data = (res as any).data;
+        if (data && data.data) {
+          setSettings(data.data);
         }
       } catch (err) {
         toast({ title: "Error", description: "Error fetching settings", variant: "destructive" });
@@ -112,48 +35,29 @@ export default function AppConfiguration() {
   const handleSave = async () => {
     try {
       const formData = new FormData();
-      // General
-      formData.append("logo", settings.general.logo);
-      formData.append("app_name", settings.general.name);
-      formData.append("currency_code", settings.general.currencyCode);
-      formData.append("currency_symbol", settings.general.currencySymbol);
-      formData.append("exchange_rate", settings.general.exchangeRate);
-      formData.append("seo_description", settings.general.seoDescription);
-      formData.append("front_page_video", settings.general.frontPageVideo);
-      formData.append("chatbox_screen_video", settings.general.chatboxScreenVideo);
-      formData.append("broadcast_screen_video", settings.general.broadcastScreenVideo);
-      formData.append("allow_custom_home", settings.general.allowCustomHome ? "1" : "0");
-      formData.append("enable_header_footer", settings.general.enableHeaderFooter ? "1" : "0");
-      // Webhook
-      formData.append("webhook_verification_token", settings.webhook.verificationToken);
-      // WhatsApp
-      formData.append("whatsapp_webhook_uri", settings.whatsapp.webhookUri);
-      formData.append("whatsapp_client_id", settings.whatsapp.clientId);
-      formData.append("whatsapp_client_secret", settings.whatsapp.clientSecret);
-      formData.append("whatsapp_graph_version", settings.whatsapp.graphVersion);
-      formData.append("whatsapp_configuration_id", settings.whatsapp.configurationId);
-      // Messenger
-      formData.append("messenger_webhook_uri", settings.messenger.webhookUri);
-      formData.append("messenger_client_id", settings.messenger.clientId);
-      formData.append("messenger_client_secret", settings.messenger.clientSecret);
-      formData.append("messenger_graph_version", settings.messenger.graphVersion);
-      formData.append("messenger_scopes", settings.messenger.scopes);
-      // Instagram
-      formData.append("instagram_webhook_uri", settings.instagram.webhookUri);
-      formData.append("instagram_redirect_address", settings.instagram.redirectAddress);
-      formData.append("instagram_client_id", settings.instagram.clientId);
-      formData.append("instagram_client_secret", settings.instagram.clientSecret);
-      formData.append("instagram_graph_version", settings.instagram.graphVersion);
-      formData.append("instagram_scopes", settings.instagram.scopes);
-      // Send to backend
-      console.log("Backjend URL: ", serverHandler);
+      // File upload for logo
+      if (settings.logo instanceof File) {
+        formData.append("file", settings.logo);
+      } else if (typeof settings.logo === "string" && settings.logo) {
+        formData.append("logo", settings.logo);
+      }
+      // Add all other fields from API response
+      const fields = [
+        "app_name", "custom_home", "is_custom_home", "meta_description", "currency_code", "currency_symbol", "chatbot_screen_tutorial", "broadcast_screen_tutorial", "home_page_tutorial", "login_header_footer", "exchange_rate", "google_client_id", "google_login_active", "rtl", "fb_login_app_id", "fb_login_app_sec", "fb_login_active", "facebook_client_id", "facebook_client_secret", "facebook_graph_version", "facebook_auth_scopes", "meta_webhook_verifcation_key", "instagram_client_id", "instagram_client_secret", "instagram_graph_version", "instagram_auth_scopes", "whatsapp_client_id", "whatsapp_client_secret", "whatsapp_graph_version", "whatsapp_config_id"
+      ];
+      fields.forEach((key) => {
+        let val = settings[key];
+        if (typeof val === "boolean") val = val ? 1 : 0;
+        if (val !== undefined && val !== null) formData.append(key, val);
+      });
       const res = await serverHandler.post("/api/web/update_web_config", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      if (res?.data?.success) {
-        toast({ title: "Success", description: res?.data?.msg || "Settings updated", variant: "success" });
+      const data = (res as any).data;
+      if (data && data.success) {
+        toast({ title: "Success", description: data.msg || "Settings updated", variant: "default" });
       } else {
-        toast({ title: "Error", description: res?.data?.msg || "Update failed", variant: "destructive" });
+        toast({ title: "Error", description: data?.msg || "Update failed", variant: "destructive" });
       }
     } catch (err: any) {
       toast({ title: "Error", description: err?.response?.data?.msg || "Error updating settings", variant: "destructive" });
@@ -178,11 +82,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="logo">Logo</Label>
                 <Input
                   id="logo"
-                  value={settings.general.logo}
+                  value={settings.logo || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, logo: e.target.value },
+                      logo: e.target.value,
                     })
                   }
                   placeholder="Logo URL"
@@ -191,11 +95,11 @@ export default function AppConfiguration() {
 
               <div className="flex items-center space-x-2">
                 <Switch
-                  checked={settings.general.allowCustomHome}
+                  checked={settings.custom_home || false}
                   onCheckedChange={(checked) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, allowCustomHome: checked },
+                      custom_home: checked,
                     })
                   }
                 />
@@ -204,11 +108,11 @@ export default function AppConfiguration() {
 
               <div className="flex items-center space-x-2">
                 <Switch
-                  checked={settings.general.enableHeaderFooter}
+                  checked={settings.login_header_footer || false}
                   onCheckedChange={(checked) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, enableHeaderFooter: checked },
+                      login_header_footer: checked,
                     })
                   }
                 />
@@ -219,11 +123,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"
-                  value={settings.general.name}
+                  value={settings.app_name || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, name: e.target.value },
+                      app_name: e.target.value,
                     })
                   }
                 />
@@ -233,11 +137,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="currencyCode">Currency code</Label>
                 <Input
                   id="currencyCode"
-                  value={settings.general.currencyCode}
+                  value={settings.currency_code || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, currencyCode: e.target.value },
+                      currency_code: e.target.value,
                     })
                   }
                 />
@@ -247,11 +151,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="currencySymbol">Currency symbol</Label>
                 <Input
                   id="currencySymbol"
-                  value={settings.general.currencySymbol}
+                  value={settings.currency_symbol || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, currencySymbol: e.target.value },
+                      currency_symbol: e.target.value,
                     })
                   }
                 />
@@ -261,11 +165,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="exchangeRate">Exchange rate</Label>
                 <Input
                   id="exchangeRate"
-                  value={settings.general.exchangeRate}
+                  value={settings.exchange_rate || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, exchangeRate: e.target.value },
+                      exchange_rate: e.target.value,
                     })
                   }
                 />
@@ -275,11 +179,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="seoDescription">SEO Description</Label>
                 <Textarea
                   id="seoDescription"
-                  value={settings.general.seoDescription}
+                  value={settings.meta_description || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, seoDescription: e.target.value },
+                      meta_description: e.target.value,
                     })
                   }
                   rows={3}
@@ -290,11 +194,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="frontPageVideo">Front page video</Label>
                 <Input
                   id="frontPageVideo"
-                  value={settings.general.frontPageVideo}
+                  value={settings.home_page_tutorial || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, frontPageVideo: e.target.value },
+                      home_page_tutorial: e.target.value,
                     })
                   }
                   placeholder="Video URL"
@@ -305,11 +209,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="chatboxScreenVideo">Chatbox screen video</Label>
                 <Input
                   id="chatboxScreenVideo"
-                  value={settings.general.chatboxScreenVideo}
+                  value={settings.chatbot_screen_tutorial || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, chatboxScreenVideo: e.target.value },
+                      chatbot_screen_tutorial: e.target.value,
                     })
                   }
                   placeholder="Video URL"
@@ -320,11 +224,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="broadcastScreenVideo">Broadcast screen video</Label>
                 <Input
                   id="broadcastScreenVideo"
-                  value={settings.general.broadcastScreenVideo}
+                  value={settings.broadcast_screen_tutorial || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      general: { ...settings.general, broadcastScreenVideo: e.target.value },
+                      broadcast_screen_tutorial: e.target.value,
                     })
                   }
                   placeholder="Video URL"
@@ -340,11 +244,11 @@ export default function AppConfiguration() {
               <Label htmlFor="webhookToken">Webhook verification token</Label>
               <Input
                 id="webhookToken"
-                value={settings.webhook.verificationToken}
+                value={settings.meta_webhook_verifcation_key || ""}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
-                    webhook: { ...settings.webhook, verificationToken: e.target.value },
+                    meta_webhook_verifcation_key: e.target.value,
                   })
                 }
                 placeholder="Verification token"
@@ -360,11 +264,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="whatsappWebhook">Webhook URI</Label>
                 <Input
                   id="whatsappWebhook"
-                  value={settings.whatsapp.webhookUri}
+                  value={settings.whatsapp_webhook_uri || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      whatsapp: { ...settings.whatsapp, webhookUri: e.target.value },
+                      whatsapp_webhook_uri: e.target.value,
                     })
                   }
                   readOnly
@@ -376,11 +280,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="whatsappClientId">Client ID</Label>
                 <Input
                   id="whatsappClientId"
-                  value={settings.whatsapp.clientId}
+                  value={settings.whatsapp_client_id || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      whatsapp: { ...settings.whatsapp, clientId: e.target.value },
+                      whatsapp_client_id: e.target.value,
                     })
                   }
                 />
@@ -391,11 +295,11 @@ export default function AppConfiguration() {
                 <Input
                   id="whatsappClientSecret"
                   type="password"
-                  value={settings.whatsapp.clientSecret}
+                  value={settings.whatsapp_client_secret || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      whatsapp: { ...settings.whatsapp, clientSecret: e.target.value },
+                      whatsapp_client_secret: e.target.value,
                     })
                   }
                 />
@@ -405,11 +309,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="whatsappGraphVersion">Graph version</Label>
                 <Input
                   id="whatsappGraphVersion"
-                  value={settings.whatsapp.graphVersion}
+                  value={settings.whatsapp_graph_version || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      whatsapp: { ...settings.whatsapp, graphVersion: e.target.value },
+                      whatsapp_graph_version: e.target.value,
                     })
                   }
                 />
@@ -419,11 +323,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="whatsappConfigId">Configuration ID</Label>
                 <Input
                   id="whatsappConfigId"
-                  value={settings.whatsapp.configurationId}
+                  value={settings.whatsapp_config_id || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      whatsapp: { ...settings.whatsapp, configurationId: e.target.value },
+                      whatsapp_config_id: e.target.value,
                     })
                   }
                 />
@@ -439,11 +343,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="messengerWebhook">Webhook URI</Label>
                 <Input
                   id="messengerWebhook"
-                  value={settings.messenger.webhookUri}
+                  value={settings.messenger_webhook_uri || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      messenger: { ...settings.messenger, webhookUri: e.target.value },
+                      messenger_webhook_uri: e.target.value,
                     })
                   }
                   readOnly
@@ -455,11 +359,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="messengerClientId">Client ID</Label>
                 <Input
                   id="messengerClientId"
-                  value={settings.messenger.clientId}
+                  value={settings.messenger_client_id || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      messenger: { ...settings.messenger, clientId: e.target.value },
+                      messenger_client_id: e.target.value,
                     })
                   }
                 />
@@ -470,11 +374,11 @@ export default function AppConfiguration() {
                 <Input
                   id="messengerClientSecret"
                   type="password"
-                  value={settings.messenger.clientSecret}
+                  value={settings.messenger_client_secret || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      messenger: { ...settings.messenger, clientSecret: e.target.value },
+                      messenger_client_secret: e.target.value,
                     })
                   }
                 />
@@ -484,11 +388,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="messengerGraphVersion">Graph version</Label>
                 <Input
                   id="messengerGraphVersion"
-                  value={settings.messenger.graphVersion}
+                  value={settings.messenger_graph_version || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      messenger: { ...settings.messenger, graphVersion: e.target.value },
+                      messenger_graph_version: e.target.value,
                     })
                   }
                 />
@@ -498,11 +402,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="messengerScopes">Scopes</Label>
                 <Input
                   id="messengerScopes"
-                  value={settings.messenger.scopes}
+                  value={settings.messenger_scopes || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      messenger: { ...settings.messenger, scopes: e.target.value },
+                      messenger_scopes: e.target.value,
                     })
                   }
                 />
@@ -518,11 +422,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="instagramWebhook">Webhook URI</Label>
                 <Input
                   id="instagramWebhook"
-                  value={settings.instagram.webhookUri}
+                  value={settings.instagram_webhook_uri || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      instagram: { ...settings.instagram, webhookUri: e.target.value },
+                      instagram_webhook_uri: e.target.value,
                     })
                   }
                   readOnly
@@ -534,11 +438,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="instagramRedirect">Redirect address</Label>
                 <Input
                   id="instagramRedirect"
-                  value={settings.instagram.redirectAddress}
+                  value={settings.instagram_redirect_address || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      instagram: { ...settings.instagram, redirectAddress: e.target.value },
+                      instagram_redirect_address: e.target.value,
                     })
                   }
                 />
@@ -548,11 +452,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="instagramClientId">Client ID</Label>
                 <Input
                   id="instagramClientId"
-                  value={settings.instagram.clientId}
+                  value={settings.instagram_client_id || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      instagram: { ...settings.instagram, clientId: e.target.value },
+                      instagram_client_id: e.target.value,
                     })
                   }
                 />
@@ -563,11 +467,11 @@ export default function AppConfiguration() {
                 <Input
                   id="instagramClientSecret"
                   type="password"
-                  value={settings.instagram.clientSecret}
+                  value={settings.instagram_client_secret || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      instagram: { ...settings.instagram, clientSecret: e.target.value },
+                      instagram_client_secret: e.target.value,
                     })
                   }
                 />
@@ -577,11 +481,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="instagramGraphVersion">Graph version</Label>
                 <Input
                   id="instagramGraphVersion"
-                  value={settings.instagram.graphVersion}
+                  value={settings.instagram_graph_version || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      instagram: { ...settings.instagram, graphVersion: e.target.value },
+                      instagram_graph_version: e.target.value,
                     })
                   }
                 />
@@ -591,11 +495,11 @@ export default function AppConfiguration() {
                 <Label htmlFor="instagramScopes">Scopes</Label>
                 <Input
                   id="instagramScopes"
-                  value={settings.instagram.scopes}
+                  value={settings.instagram_scopes || ""}
                   onChange={(e) =>
                     setSettings({
                       ...settings,
-                      instagram: { ...settings.instagram, scopes: e.target.value },
+                      instagram_scopes: e.target.value,
                     })
                   }
                 />
