@@ -15,6 +15,14 @@ export const metadata: Metadata = {
   generator: 'v0.dev'
 }
 
+// Add favicon links for colorful SVG and fallback ICO
+export const viewport = {
+  icons: [
+    { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+    { rel: 'alternate icon', href: '/favicon.ico' }
+  ]
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -24,6 +32,9 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+        {/* Add favicon links for colorful SVG and fallback ICO */}
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="alternate icon" href="/favicon.ico" />
       </head>
       <body className={inter.className}>
         <Providers>

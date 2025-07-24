@@ -11,6 +11,7 @@ export async function GET() {
     });
 
     if (!response.ok) {
+      console.error('Failed to fetch web config:', response.status, response.statusText);
       throw new Error('Failed to fetch web config');
     }
 
@@ -34,8 +35,14 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error fetching OAuth config:', error);
+    let errorMessage = '';
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      errorMessage = (error as any).message;
+    } else {
+      errorMessage = String(error);
+    }
     return NextResponse.json(
-      { error: 'Failed to load OAuth configuration' },
+      { error: 'Failed to load OAuth configuration', details: errorMessage },
       { status: 500 }
     );
   }
