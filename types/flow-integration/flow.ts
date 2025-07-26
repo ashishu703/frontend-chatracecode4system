@@ -26,6 +26,10 @@ export interface NodeData extends Record<string, unknown> {
       // add other fields as needed
     }
   }
+  title?: string
+  messageNumber?: number
+  message?: string
+  options?: string[]
 }
 
 export interface FlowData {

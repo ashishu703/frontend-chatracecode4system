@@ -22,19 +22,23 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-interface Chatbot {
-  id: string
+interface Flow {
+  id: number
+  uid: string
+  flow_id: string
   title: string
-  status: boolean
-  flow: string
-  flow_title?: string
-  chats: string[]
-  for_all: boolean
+  createdAt: string
+  prevent_list: any
+  ai_list: any
 }
 
-interface Flow {
-  id: string
+interface Chatbot {
+  id: number
   title: string
+  status: boolean
+  flow: Flow
+  chats: string[]
+  for_all: boolean
 }
 
 interface Chat {
@@ -83,7 +87,7 @@ export default function ChatbotView() {
   const [editBot, setEditBot] = useState<Chatbot | null>(null)
   const [chatbotForm, setChatbotForm] = useState({
     title: "",
-    flow: "",
+    flow: null as Flow | null,
     chats: [] as string[],
     for_all: false,
   })
@@ -132,9 +136,10 @@ export default function ChatbotView() {
     try {
       const res = await serverHandler.get(`/api/chat_flow/get_mine?page=${page}&size=${size}&search=${encodeURIComponent(search)}&sort=${sort}&order=${order}`);
       console.log('API /api/chat_flow/get_mine response:', res.data);
-      if (res.data && res.data.success) {
+      const data = res.data as any;
+      if (data && data.success) {
         // Map the API data to the Chatbot table format if needed
-        const apiData = res.data.data || [];
+        const apiData = data.data || [];
         const mapped = apiData.map((item: any) => ({
           id: item.id,
           title: item.title,
@@ -146,16 +151,16 @@ export default function ChatbotView() {
         }));
         setChatbots(mapped);
         setChatbotPagination({
-          page: res.data.pagination?.currentPage || page,
-          size: res.data.pagination?.pageSize || size,
-          total: res.data.pagination?.totalItems || mapped.length,
-          totalPages: res.data.pagination?.totalPages || 1,
+          page: data.pagination?.currentPage || page,
+          size: data.pagination?.pageSize || size,
+          total: data.pagination?.totalItems || mapped.length,
+          totalPages: data.pagination?.totalPages || 1,
         });
       } else {
         setChatbots([]);
         setChatbotPagination((prev) => ({ ...prev, total: 0, totalPages: 1 }));
-        toast({ title: 'Error', description: res.data?.msg || 'Failed to fetch chatbots', variant: 'destructive' });
-        console.error('API /api/chat_flow/get_mine error:', res.data);
+        toast({ title: 'Error', description: data?.msg || 'Failed to fetch chatbots', variant: 'destructive' });
+        console.error('API /api/chat_flow/get_mine error:', data);
       }
     } catch (error: any) {
       setChatbots([]);
@@ -169,10 +174,17 @@ export default function ChatbotView() {
 
   const fetchFlows = async () => {
     try {
-      const res = await serverHandler.get('/api/flow/get_flows');
-      setFlows(res.data.data || []);
-    } catch (error) {
+      const res = await serverHandler.get('/api/chat_flow/get_mine');
+      const data = res.data as any;
+      if (data && data.success) {
+        setFlows(data.data || []);
+      } else {
+        setFlows([]);
+        toast({ title: 'Error', description: 'Failed to fetch flows', variant: 'destructive' });
+      }
+    } catch (error: any) {
       setFlows([]);
+      toast({ title: 'Error', description: error?.message || 'Failed to fetch flows', variant: 'destructive' });
     }
   }
 
@@ -196,32 +208,47 @@ export default function ChatbotView() {
       })
     } else {
       setEditBot(null)
-      setChatbotForm({ title: "", flow: "", chats: [], for_all: false })
+      setChatbotForm({ title: "", flow: null, chats: [], for_all: false })
     }
     setShowChatbotForm(true)
   }
 
   // Update CRUD actions to use real API endpoints
   const saveChatbot = async () => {
+    if (!chatbotForm.title || !chatbotForm.flow) {
+      toast({ title: 'Error', description: 'Please fill all required fields', variant: 'destructive' });
+      return;
+    }
+
     setChatbotSaving(true);
     try {
-      // Find the full flow object by ID
-      const selectedFlow = flows.find(f => f.id === chatbotForm.flow);
       const payload = {
         chats: chatbotForm.chats,
-        for_all: chatbotForm.for_all,
-        flow: selectedFlow ? selectedFlow : chatbotForm.flow, // fallback to ID if not found
+        for_all: chatbotForm.for_all ? 1 : 0,
+        flow_id: chatbotForm.flow.id, // Use database ID (integer) instead of flow_id (string)
         title: chatbotForm.title,
       };
+
       if (editBot) {
-        await serverHandler.post('/api/chatbot/update_chatbot', { id: editBot.id, ...payload });
+        const updatePayload = { ...payload, id: editBot.id };
+        const res = await serverHandler.post('/api/chatbot/update_chatbot', updatePayload);
+        if (res.data.success) {
+          toast({ title: 'Success', description: 'Chatbot updated successfully' });
+        } else {
+          toast({ title: 'Error', description: res.data.message || 'Failed to update chatbot', variant: 'destructive' });
+        }
       } else {
-        await serverHandler.post('/api/chatbot/add_chatbot', payload);
+        const res = await serverHandler.post('/api/chatbot/add_chatbot', payload);
+        if (res.data.success) {
+          toast({ title: 'Success', description: 'Chatbot created successfully' });
+        } else {
+          toast({ title: 'Error', description: res.data.message || 'Failed to create chatbot', variant: 'destructive' });
+        }
       }
       setShowChatbotForm(false);
       fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
-    } catch (error) {
-      // handle error
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to save chatbot', variant: 'destructive' });
     } finally {
       setChatbotSaving(false);
     }
@@ -229,17 +256,34 @@ export default function ChatbotView() {
 
   const toggleChatbotStatus = async (bot: Chatbot) => {
     try {
-      await serverHandler.post('/api/chatbot/update_chatbot', { id: bot.id, status: !bot.status });
-      fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
-    } catch (error) {}
+      const res = await serverHandler.post('/api/chatbot/change_bot_status', { 
+        id: bot.id.toString(), 
+        status: bot.status ? 0 : 1 
+      });
+      if (res.data.success) {
+        toast({ title: 'Success', description: res.data.msg || 'Status updated successfully' });
+        fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
+      } else {
+        toast({ title: 'Error', description: res.data.message || 'Failed to update status', variant: 'destructive' });
+      }
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to update status', variant: 'destructive' });
+    }
   };
 
   const deleteChatbot = async (bot: Chatbot) => {
     if (!window.confirm('Delete this chatbot?')) return;
     try {
-      await serverHandler.post('/api/chatbot/del_chatbot', { id: bot.id });
-      fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
-    } catch (error) {}
+      const res = await serverHandler.post('/api/chatbot/del_chatbot', { id: bot.id.toString() });
+      if (res.data.success) {
+        toast({ title: 'Success', description: res.data.msg || 'Chatbot deleted successfully' });
+        fetchChatbots(chatbotPagination.page, chatbotPagination.size, chatbotSearch, chatbotSort, chatbotOrder);
+      } else {
+        toast({ title: 'Error', description: res.data.message || 'Failed to delete chatbot', variant: 'destructive' });
+      }
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to delete chatbot', variant: 'destructive' });
+    }
   };
 
   // Canned Responses Functions
@@ -379,7 +423,7 @@ export default function ChatbotView() {
                       <TableCell>{(chatbotPagination.page - 1) * chatbotPagination.size + index + 1}</TableCell>
                       <TableCell>{bot.title}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{bot.flow_title || bot.flow}</Badge>
+                        <Badge variant="outline">{bot.flow?.title || bot.flow_title || 'No Flow'}</Badge>
                       </TableCell>
                       <TableCell>
                         <Switch checked={bot.status} onCheckedChange={() => toggleChatbotStatus(bot)} />
@@ -554,14 +598,14 @@ export default function ChatbotView() {
 
       {/* Chatbot Form Dialog */}
       <Dialog open={showChatbotForm} onOpenChange={setShowChatbotForm}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editBot ? "Edit Chatbot" : "Add New Chatbot"}</DialogTitle>
           </DialogHeader>
-          <DialogDescription>Dialog to add or edit a chatbot configuration.</DialogDescription>
+          <DialogDescription>Configure your chatbot settings and select a flow.</DialogDescription>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Title</label>
+              <label className="block text-sm font-medium mb-1">Title *</label>
               <Input
                 value={chatbotForm.title}
                 onChange={(e) => setChatbotForm((f) => ({ ...f, title: e.target.value }))}
@@ -569,14 +613,20 @@ export default function ChatbotView() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Select Flow</label>
-              <Select value={chatbotForm.flow} onValueChange={(val) => setChatbotForm((f) => ({ ...f, flow: val }))}>
+              <label className="block text-sm font-medium mb-1">Select Flow *</label>
+              <Select 
+                value={chatbotForm.flow?.id?.toString() || ""} 
+                onValueChange={(val) => {
+                  const selectedFlow = flows.find(f => f.id.toString() === val);
+                  setChatbotForm((f) => ({ ...f, flow: selectedFlow || null }));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a flow" />
                 </SelectTrigger>
                 <SelectContent>
                   {flows.map((flow) => (
-                    <SelectItem key={flow.id} value={flow.id}>
+                    <SelectItem key={flow.id} value={flow.id.toString()}>
                       {flow.title}
                     </SelectItem>
                   ))}

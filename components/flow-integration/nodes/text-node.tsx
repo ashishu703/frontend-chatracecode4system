@@ -1,156 +1,299 @@
 "use client"
+
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import { Card } from "@/components/ui/card"
-import { MessageSquare, ChevronRight } from "lucide-react"
-import type { NodeData } from "@/types/flow-integration/flow"
-import NodeActions, { NodeActionType } from "./NodeActions";
-import { useState } from "react";
-import { useNodeContext } from "../node-context";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { useEffect } from "react";
-import { toast } from "sonner";
-import { NodeContentPreview } from "../NodeContentPreview"
-
-// Content type label mapping (should match node-config-panel)
-const contentTypes = [
-  { value: "text", label: "Text" },
-  { value: "image", label: "Image" },
-  { value: "card", label: "Card" },
-  { value: "carousel", label: "Carousel" },
-  { value: "audio", label: "Audio" },
-  { value: "getUserData", label: "Get User Data" },
-  { value: "video", label: "Video" },
-  { value: "optionsList", label: "Options List" },
-  { value: "videoTemplate", label: "Video Template" },
-  { value: "messagePro", label: "Message Pro" },
-  { value: "gif", label: "GIF" },
-  { value: "typingNotification", label: "Typing Notification" },
-  { value: "requestFile", label: "Request File" },
-  { value: "actions", label: "Actions" },
-  { value: "whatsappFlows", label: "WhatsApp Flows" },
-  { value: "viewCatalog", label: "View Catalog" },
-  { value: "sendProducts", label: "Send Products" },
-  { value: "location", label: "Location" },
-  { value: "whatsappMessenger", label: "WhatsApp Messenger" },
-];
+import { Save, X, Plus, Trash2, Edit } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { useToast } from "@/components/ui/use-toast"
+import { useNodeContext } from "../node-context"
+import serverHandler from "@/utils/serverHandler"
 
 export function TextNode({ data, selected, id }: NodeProps<any>) {
-  const state = data.data?.state || {};
-  const quickRepliesCount = state.quickReplies?.length || 0;
-  const [hovered, setHovered] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showRename, setShowRename] = useState(false);
-  const [renameValue, setRenameValue] = useState(state.label || "Send Message");
-  const { updateNode, deleteNode, setStartNode } = useNodeContext();
+  const [message, setMessage] = useState(data?.message || "")
+  const [options, setOptions] = useState(data?.options || [""])
+  const [isSaved, setIsSaved] = useState(false)
+  const [showDialog, setShowDialog] = useState(false)
+  const [templateName, setTemplateName] = useState("")
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [title, setTitle] = useState(data?.title || "Simple Message")
+  const [messageNumber, setMessageNumber] = useState(data?.messageNumber || 1)
+  const [isSaving, setIsSaving] = useState(false)
+  const { toast } = useToast()
+  const { deleteNode, updateNode } = useNodeContext()
 
-  // Get the label for the current content type
-  const contentTypeLabel = contentTypes.find((t) => t.value === state.contentType)?.label || "Send Message";
-
+  // Initialize state from data if not already set
   useEffect(() => {
-    setRenameValue(state.label || "Send Message");
-  }, [state.label]);
-
-  const handleAction = (action: NodeActionType) => {
-    switch (action) {
-      case "preview":
-        setShowPreview(true);
-        break;
-      case "rename":
-        setShowRename(true);
-        break;
-      case "delete":
-        deleteNode(id);
-        toast.success("Node deleted");
-        break;
-      case "setStart":
-        setStartNode(id);
-        toast.success("Set as starting step");
-        break;
-      case "getLink":
-        navigator.clipboard.writeText(window.location.href + "#" + id);
-        toast.success("Link copied!");
-        break;
-      case "getId":
-        navigator.clipboard.writeText(id);
-        toast.success("Step ID copied!");
-        break;
-      default:
-        break;
+    if (data?.title && !title) {
+      setTitle(data.title)
     }
-  };
+    if (data?.messageNumber && !messageNumber) {
+      setMessageNumber(data.messageNumber)
+    }
+    if (data?.message && !message) {
+      setMessage(data.message)
+    }
+    if (data?.options && !options.length) {
+      setOptions(data.options)
+    }
+  }, [data, title, messageNumber, message, options])
 
-  const handleRenameSave = () => {
-    updateNode(id, {
-      ...data,
-      data: {
-        ...data.data,
-        state: {
-          ...state,
-          label: renameValue,
+  const addOption = () => {
+    const newOptions = [...options, ""]
+    setOptions(newOptions)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        options: newOptions
+      })
+    }
+  }
+
+  const updateOption = (index: number, value: string) => {
+    const newOptions = [...options]
+    newOptions[index] = value
+    setOptions(newOptions)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        options: newOptions
+      })
+    }
+  }
+
+  const removeOption = (index: number) => {
+    if (options.length > 1) {
+      const newOptions = options.filter((_: string, i: number) => i !== index)
+      setOptions(newOptions)
+      if (updateNode) {
+        updateNode(id, {
+          ...data,
+          options: newOptions
+        })
+      }
+    }
+  }
+
+  const handleSave = () => {
+    setShowDialog(true)
+  }
+
+  const handleDialogSave = async () => {
+    if (templateName.trim()) {
+      setIsSaving(true)
+      
+      // Prepare the payload according to the required format
+      const payload = {
+        content: {
+          type: "text",
+          text: {
+            preview_url: true,
+            body: message || ""
+          }
         },
-      },
-    });
-    setShowRename(false);
-    toast.success("Node renamed");
-  };
+        title: templateName,
+        type: "TEXT"
+      };
+
+      try {
+        // Make API call to save template
+        const response = await serverHandler.post('/api/templet/add_new', payload);
+        
+        if ((response.data as any).success) {
+          setIsSaved(true)
+          setShowDialog(false)
+          toast({ title: "Template saved successfully!", variant: "default" })
+          setTimeout(() => setIsSaved(false), 2000)
+        } else {
+          toast({ title: "Error", description: (response.data as any).msg || "Failed to save template", variant: "destructive" })
+        }
+      } catch (error: any) {
+        console.error('Error saving template:', error);
+        console.error('Error response:', error.response?.data);
+        console.error('Payload sent:', payload);
+        toast({ 
+          title: "Error", 
+          description: error.response?.data?.msg || error.message || "Failed to save template", 
+          variant: "destructive" 
+        })
+      } finally {
+        setIsSaving(false)
+      }
+    } else {
+      toast({ title: "Template name is required.", variant: "destructive" })
+    }
+  }
+
+  const handleClose = () => {
+    deleteNode(id)
+  }
+
+  const handleTitleEdit = () => {
+    setIsEditingTitle(true)
+  }
+
+  const handleTitleSave = () => {
+    setIsEditingTitle(false)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        title
+      })
+    }
+  }
+
+  const handleTitleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleTitleSave()
+    }
+  }
 
   return (
-    <Card
-      className={`min-w-[200px] relative ${selected ? "ring-2 ring-blue-500" : ""} ${data.data?.isStart ? "ring-4 ring-green-500" : ""}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-blue-500" />
-      {hovered && (
-        <NodeActions onAction={handleAction} />
-      )}
-      <div className="p-4">
-        <div className="flex items-center space-x-2 mb-2">
-          <div className="p-1 bg-blue-500 rounded">
-            <MessageSquare className="h-3 w-3 text-white" />
+    <div className="relative">
+      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-800 border-0" />
+
+      <Card className={`w-[280px] overflow-hidden ${selected ? "ring-2 ring-blue-500" : ""}`}>
+        {/* Header */}
+        <div className="bg-red-400 text-white px-3 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isEditingTitle ? (
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyPress={handleTitleKeyPress}
+                className="bg-white text-gray-800 px-2 py-1 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white"
+                autoFocus
+              />
+            ) : (
+              <span className="font-medium text-sm">{title} #{messageNumber}</span>
+            )}
+            <button 
+              onClick={handleTitleEdit} 
+              className="p-1 hover:bg-red-500 rounded transition-colors"
+              title="Edit title"
+            >
+              <Edit className="w-3 h-3" />
+            </button>
           </div>
-          <span className="font-medium text-sm">{contentTypeLabel}</span>
-          <ChevronRight className="h-4 w-4 text-gray-400 ml-1" />
+          <div className="flex items-center gap-1">
+            <button onClick={handleSave} className="p-1" title="Save">
+              <Save className={`w-4 h-4 ${isSaved ? "text-green-200" : "text-white"}`} />
+            </button>
+            <button onClick={handleClose} className="p-1" title="Close">
+              <X className="w-4 h-4" />
+            </button>
+            <Dialog open={showDialog} onOpenChange={setShowDialog}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Save Template</DialogTitle>
+                </DialogHeader>
+                <input
+                  className="border rounded px-2 py-1 w-full"
+                  placeholder="Enter template name"
+                  value={templateName}
+                  onChange={e => setTemplateName(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !isSaving) {
+                      handleDialogSave()
+                    }
+                  }}
+                  autoFocus
+                />
+                <DialogFooter>
+                  <button
+                    className="bg-green-500 text-white rounded px-3 py-1 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleDialogSave}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? "Saving..." : "Save"}
+                  </button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-        {/* Live content preview inside node */}
-        <NodeContentPreview state={state} selectedContentType={state.contentType || "text"} />
-        {quickRepliesCount > 0 && <p className="text-xs text-gray-500 mt-1">{quickRepliesCount} quick replies</p>}
-        {state.delay && <p className="text-xs text-gray-500 mt-1">Delay: {state.delay}ms</p>}
-      </div>
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-blue-500" />
-      {/* Preview Dialog */}
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Preview Message</DialogTitle>
-            <DialogClose />
-          </DialogHeader>
-          <div className="p-4">
-            <div className="font-bold mb-2">{state.label || "Send Message"}</div>
-            <div className="text-gray-700">{state.content}</div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Rename Dialog */}
-      <Dialog open={showRename} onOpenChange={setShowRename}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename Node</DialogTitle>
-            <DialogClose />
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <input
-              className="border rounded px-2 py-1"
-              value={renameValue}
-              onChange={e => setRenameValue(e.target.value)}
-              autoFocus
+
+        {/* Content */}
+        <div className="p-3 space-y-2">
+                      <textarea
+              value={message}
+              onChange={(e) => {
+                const newMessage = e.target.value
+                setMessage(newMessage)
+                if (updateNode) {
+                  updateNode(id, {
+                    ...data,
+                    message: newMessage
+                  })
+                }
+              }}
+              className="w-full h-16 p-2 border border-gray-300 rounded text-sm resize-none text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Enter your message here"
             />
-            <button className="bg-blue-500 text-white rounded px-3 py-1 mt-2" onClick={handleRenameSave}>Save</button>
+
+          <div className="space-y-1">
+            {options.map((option: string, index: number) => (
+              <div key={index} className="flex items-center gap-1 relative">
+                {/* Connection handle for each option */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`option-${index}`}
+                  className="w-3 h-3 bg-blue-500 border-0 absolute right-0 top-1/2 transform -translate-y-1/2"
+                  style={{ right: '-6px' }}
+                />
+                
+                <input
+                  value={option}
+                  onChange={(e) => updateOption(index, e.target.value)}
+                  className="flex-1 p-2 border border-gray-300 rounded text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 pr-8"
+                  placeholder="Enter an option"
+                />
+                {options.length > 1 && (
+                  <button
+                    onClick={() => removeOption(index)}
+                    className="bg-red-400 hover:bg-red-500 text-white p-2 rounded transition-colors"
+                    title="Remove"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+                {index === options.length - 1 && (
+                  <button
+                    onClick={addOption}
+                    className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded transition-colors"
+                    title="Add"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-        </DialogContent>
-      </Dialog>
-    </Card>
-  );
+        </div>
+      </Card>
+
+      {/* Dynamic keyword handles for edge connections */}
+      {(data?.state?.keyword || []).map((keyword: string, idx: number) => (
+        <Handle
+          key={keyword}
+          type="source"
+          position={Position.Right}
+          id={keyword}
+          style={{ top: 80 + idx * 16, background: '#2563eb' }}
+        />
+      ))}
+      {/* Always render the catch-all handle */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="{{OTHER_MSG}}"
+        style={{ top: 80 + ((data?.state?.keyword?.length || 0) * 16), background: '#10b981' }}
+      />
+    </div>
+  )
 }
 
-export default TextNode;
+export default TextNode

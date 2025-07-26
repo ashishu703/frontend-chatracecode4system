@@ -23,6 +23,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { login as loginAction } from '@/store/slices/authSlice';
 import serverHandler from '@/utils/serverHandler';
+import AllFlowsPage from "@/components/dashboard/allflows"
+import { FlowTriggerManager } from "@/components/flow-integration/flow-trigger-manager"
 
 const stats = [
   { title: "Total Messages", value: "3,196", change: "+12%", icon: MessageSquare },
@@ -122,6 +124,10 @@ export default function DashboardPage() {
         return <FeaturesView />
       case "flows":
         return <FlowBuilder />
+      case "allflows":
+        return <AllFlowsPage />
+      case "triggers":
+        return <FlowTriggerManager />
       default:
         return <DashboardView />
     }

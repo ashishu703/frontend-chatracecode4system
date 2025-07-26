@@ -16,6 +16,7 @@ import {
   CheckCheck,
   Check,
   Mic,
+  RefreshCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,10 +26,47 @@ import { cn } from "@/lib/utils"
 import serverHandler from "@/utils/serverHandler"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import type { Socket } from "socket.io-client"
-import { io } from "socket.io-client"
+import { useSocket } from "@/contexts/socket-context"
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFacebookMessenger, faWhatsapp, faInstagram, faTelegram } from '@fortawesome/free-brands-svg-icons';
+import { toast } from "@/components/ui/use-toast";
+import axios from "axios";
+
+// Function to get all available chats
+const getAvailableChats = async () => {
+  try {
+    const response = await axios.get('/api/messanger/list-chats', {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Error fetching chats:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// Function to send message using the chat IDs
+const sendMessageToChat = async (chatId: string, senderId: string, messageText: string) => {
+  try {
+    const response = await axios.post('/api/messanger/send', {
+      text: messageText,
+      chatId: chatId,
+      senderId: senderId
+    }, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Error sending message:', error.response?.data || error.message);
+    throw error;
+  }
+};
 
 interface ContactDetails {
   name?: string
@@ -50,6 +88,7 @@ interface Message {
   message: string
   type: "text" | "image" | "video" | "audio" | "file"
   timestamp: string
+  rawTimestamp?: string // Raw timestamp for sorting
   status?: "sent" | "delivered" | "read"
   body?: any
 }
@@ -83,10 +122,20 @@ export default function ChatInterface() {
   const [filterPopoverOpen, setFilterPopoverOpen] = React.useState(false)
   const [hoveredContact, setHoveredContact] = React.useState<ContactDetails | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false)
-  const [socket, setSocket] = React.useState<Socket | null>(null)
+  const { socket, isConnected, messages: socketMessages } = useSocket()
   const [searchQuery, setSearchQuery] = React.useState("")
   const [showSearch, setShowSearch] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when messages change
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  React.useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   // Fetch chat list on mount
   React.useEffect(() => {
@@ -129,6 +178,11 @@ export default function ChatInterface() {
       }
     }
     fetchChats()
+    
+    // Set up periodic refresh every 30 seconds
+    const interval = setInterval(fetchChats, 30000)
+    
+    return () => clearInterval(interval)
   }, [filter])
 
   // Search functionality
@@ -147,114 +201,310 @@ export default function ChatInterface() {
   }, [searchQuery, conversations])
 
   // Fetch messages when a conversation is selected
-  React.useEffect(() => {
-    const fetchMessages = async () => {
-      if (!selectedConversation) return
-      try {
-        const res: any = await serverHandler.post("/api/inbox/get_convo", {
-          chat_id: selectedConversation.chat_id,
+  const fetchMessages = React.useCallback(async () => {
+    if (!selectedConversation) return
+    try {
+      const res: any = await serverHandler.post("/api/inbox/get_convo", {
+        chat_id: selectedConversation.chat_id,
+      })
+      if (res.data && res.data.data) {
+        console.log('Raw messages from API:', res.data.data);
+        
+        const messagesData = res.data.data.map((msg: any) => {
+          let messageText = ""
+          if (typeof msg.body === "string") {
+            messageText = msg.body
+          } else if (msg.body && typeof msg.body === "object") {
+            messageText = msg.body.text || msg.body.caption || JSON.stringify(msg.body)
+          } else if (msg.message && typeof msg.message === "string") {
+            messageText = msg.message
+          } else if (msg.message && typeof msg.message === "object") {
+            messageText = JSON.stringify(msg.message)
+          }
+          
+          const rawTimestamp = msg.timestamp || msg.created_at;
+          const formattedTimestamp = formatTime(rawTimestamp);
+          
+          console.log('Message timestamp processing:', {
+            message: messageText,
+            rawTimestamp,
+            formattedTimestamp,
+            msgId: msg.id,
+            timestampType: typeof rawTimestamp,
+            parsedDate: new Date(rawTimestamp * 1000),
+            currentDate: new Date()
+          });
+          
+          return {
+            id: msg.id || Math.random().toString(),
+            sender: msg.route === "outgoing" ? "user" : "other",
+            message: messageText,
+            type: msg.type || "text",
+            timestamp: formattedTimestamp,
+            rawTimestamp: rawTimestamp, // Keep raw timestamp for sorting
+            status: msg.status || "",
+            body: msg.body,
+          }
         })
-        if (res.data && res.data.data) {
-          setMessages(
-            res.data.data.map((msg: any) => {
-              let messageText = ""
-              if (typeof msg.body === "string") {
-                messageText = msg.body
-              } else if (msg.body && typeof msg.body === "object") {
-                messageText = msg.body.text || msg.body.caption || JSON.stringify(msg.body)
-              } else if (msg.message && typeof msg.message === "string") {
-                messageText = msg.message
-              } else if (msg.message && typeof msg.message === "object") {
-                messageText = JSON.stringify(msg.message)
-              }
-              return {
-                id: msg.id || Math.random().toString(),
-                sender: msg.route === "outgoing" ? "user" : "other",
-                message: messageText,
-                type: msg.type || "text",
-                timestamp: formatTime(msg.timestamp || msg.created_at),
-                status: msg.status || "",
-                body: msg.body,
-              }
-            }),
-          )
-        } else {
-          setMessages([])
-        }
-        setContactDetails({
-          ...selectedConversation,
+        
+        // Sort messages by timestamp (oldest first, newest last)
+        const sortedMessages = messagesData.sort((a: any, b: any) => {
+          const dateA = new Date(a.rawTimestamp || 0)
+          const dateB = new Date(b.rawTimestamp || 0)
+          return dateA.getTime() - dateB.getTime()
         })
-      } catch (err) {
+        
+        console.log('Sorted messages:', sortedMessages.map((m: any) => ({ message: m.message, timestamp: m.timestamp, rawTimestamp: m.rawTimestamp })));
+        
+        setMessages(sortedMessages)
+      } else {
         setMessages([])
       }
+      setContactDetails({
+        ...selectedConversation,
+      })
+    } catch (err) {
+      setMessages([])
     }
-    fetchMessages()
   }, [selectedConversation])
+
+  React.useEffect(() => {
+    fetchMessages()
+  }, [fetchMessages])
 
   // Socket.io real-time updates
   React.useEffect(() => {
-    if (!socket) {
-      let wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:6400"
-      if (wsUrl.startsWith("ws://")) wsUrl = wsUrl.replace("ws://", "http://")
-      if (wsUrl.startsWith("wss://")) wsUrl = wsUrl.replace("wss://", "https://")
-      const s = io(wsUrl, {
-        auth: { token: localStorage.getItem("serviceToken") },
-      })
-      setSocket(s)
-      s.on("new_message", (msg: any) => {
+    console.log('Setting up socket listener for conversation:', selectedConversation?.chat_id);
+    console.log('Socket connection status:', isConnected);
+    
+    if (socket && selectedConversation) {
+      const handleNewMessage = (msg: any) => {
+        console.log('Socket message received in InboxView:', msg);
+        console.log('Message chat_id:', msg.chat_id);
+        console.log('Selected conversation chat_id:', selectedConversation?.chat_id);
+        
         if (msg.chat_id === selectedConversation?.chat_id) {
+          console.log('Message matches current conversation, processing...');
+          
           const newMessage: Message = {
             id: msg.id || Math.random().toString(),
             sender: msg.route === "outgoing" ? "user" : "other",
             message: msg.body?.text || msg.body?.caption || msg.body || msg.message || "",
             type: msg.type || "text",
             timestamp: formatTime(msg.timestamp || new Date().toISOString()),
+            rawTimestamp: msg.timestamp || new Date().toISOString(),
             status: msg.status || "",
             body: msg.body,
           }
-          setMessages((prev) => [...prev, newMessage])
+          
+          console.log('Created new message from direct socket:', newMessage);
+          
+          // Add new message and maintain chronological order
+          setMessages((prev) => {
+            const updatedMessages = [...prev, newMessage]
+            // Sort by raw timestamp to maintain order
+            const sortedMessages = updatedMessages.sort((a, b) => {
+              const dateA = new Date(a.rawTimestamp || 0)
+              const dateB = new Date(b.rawTimestamp || 0)
+              return dateA.getTime() - dateB.getTime()
+            })
+            
+            console.log('Updated messages from direct socket:', sortedMessages);
+            return sortedMessages;
+          })
+        } else {
+          console.log('Message does not match current conversation');
         }
-      })
-      return () => {
-        s.disconnect()
       }
+
+      socket.on("new_message", handleNewMessage)
+      console.log('Socket event listener attached for new_message');
+      
+      return () => {
+        console.log('Removing socket event listener');
+        socket.off("new_message", handleNewMessage)
+      }
+    } else {
+      console.log('Socket or selectedConversation not available');
     }
   }, [selectedConversation, socket])
 
+  // Listen to socket messages from context
+  React.useEffect(() => {
+    console.log('Socket messages from context:', socketMessages);
+    console.log('Selected conversation:', selectedConversation);
+    
+    if (socketMessages.length > 0 && selectedConversation) {
+      const relevantMessages = socketMessages.filter(msg => 
+        msg.chat_id === selectedConversation?.chat_id
+      );
+      
+      console.log('Relevant messages for current conversation:', relevantMessages);
+      
+      if (relevantMessages.length > 0) {
+        const latestMessage = relevantMessages[relevantMessages.length - 1];
+        console.log('Processing socket message from context:', latestMessage);
+        
+        const newMessage: Message = {
+          id: latestMessage.id || Math.random().toString(),
+          sender: latestMessage.route === "outgoing" ? "user" : "other",
+          message: typeof latestMessage.body === 'string' ? latestMessage.body : 
+                   latestMessage.body?.text || latestMessage.body?.caption || 
+                   latestMessage.message || "",
+          type: (latestMessage.type || "text") as "text" | "image" | "video" | "audio" | "file",
+          timestamp: formatTime(latestMessage.timestamp || new Date().toISOString()),
+          rawTimestamp: latestMessage.timestamp || new Date().toISOString(),
+          status: (latestMessage.status || "") as "sent" | "delivered" | "read" | undefined,
+          body: latestMessage.body,
+        }
+        
+        console.log('Created new message object:', newMessage);
+        
+        // Check if message already exists
+        setMessages((prev) => {
+          const messageExists = prev.some(msg => msg.id === newMessage.id);
+          console.log('Message already exists:', messageExists);
+          
+          if (messageExists) {
+            return prev;
+          }
+          
+          const updatedMessages = [...prev, newMessage]
+          // Sort by raw timestamp to maintain order
+          const sortedMessages = updatedMessages.sort((a, b) => {
+            const dateA = new Date(a.rawTimestamp || 0)
+            const dateB = new Date(b.rawTimestamp || 0)
+            return dateA.getTime() - dateB.getTime()
+          })
+          
+          console.log('Updated messages array:', sortedMessages);
+          return sortedMessages;
+        })
+      }
+    }
+  }, [socketMessages, selectedConversation])
+
   // Format time helper
-  const formatTime = (timestamp: string | Date) => {
+  const formatTime = (timestamp: string | Date | number) => {
     if (!timestamp) return ""
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      })
-    } else if (diffInHours < 168) {
-      // Less than a week
-      return date.toLocaleDateString("en-US", { weekday: "short" })
-    } else {
-      return date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      })
+    
+    try {
+      let date: Date;
+      
+      // Handle different timestamp formats
+      if (typeof timestamp === 'number') {
+        // Unix timestamp (seconds) - convert to milliseconds
+        date = new Date(timestamp * 1000);
+      } else if (typeof timestamp === 'string') {
+        // Check if it's a Unix timestamp string
+        const numTimestamp = parseInt(timestamp);
+        if (!isNaN(numTimestamp) && numTimestamp > 1000000000) {
+          // Likely a Unix timestamp in seconds
+          date = new Date(numTimestamp * 1000);
+        } else {
+          // Regular date string
+          date = new Date(timestamp);
+        }
+      } else {
+        // Date object
+        date = timestamp;
+      }
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid timestamp:', timestamp);
+        return ""
+      }
+      
+      console.log('Date conversion debug:', {
+        originalTimestamp: timestamp,
+        convertedDate: date,
+        dateString: date.toLocaleDateString(),
+        timeString: date.toLocaleTimeString()
+      });
+      
+      const now = new Date()
+      const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+      
+      if (diffInHours < 24) {
+        // Same day - show time
+        return date.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        })
+      } else if (diffInHours < 168) {
+        // Less than a week - show day
+        return date.toLocaleDateString("en-US", { weekday: "short" })
+      } else {
+        // More than a week - show date
+        return date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        })
+      }
+    } catch (error) {
+      console.error('Error formatting timestamp:', error, timestamp)
+      return ""
     }
   }
 
   // Send message handler
   const handleSendMessage = async () => {
-    if (!message.trim() || !selectedConversation) return
+    if (!message.trim()) return;
+    const messageText = message.trim();
+    const tempMessageId = `temp-${Date.now()}`;
+    // Optimistic UI update
+    const optimisticMessage: Message = {
+      id: tempMessageId,
+      sender: "user",
+      message: messageText,
+      type: "text",
+      timestamp: formatTime(new Date().toISOString()),
+      rawTimestamp: new Date().toISOString(),
+      status: "sent",
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
+    setMessage("");
     try {
-      await serverHandler.post("/api/messanger/send", {
-        chat_id: selectedConversation.chat_id,
-        message: message.trim(),
-      })
-      setMessage("")
-    } catch (err) {
-      console.error("Failed to send message:", err)
+      // Step 1: Get all available chats
+      const chatsResponse: any = await getAvailableChats();
+      if (chatsResponse.success && chatsResponse.data.length > 0) {
+        // Step 2: Find the chat matching the selected conversation
+        const chat = chatsResponse.data.find(
+          (c: any) =>
+            c.chat_id === selectedConversation?.chat_id ||
+            c.chat_id === selectedConversation?.id
+        );
+        if (!chat) {
+          toast({ title: "No matching chat found", variant: "destructive" });
+          // Remove optimistic message
+          setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+          return;
+        }
+        // Step 3: Send message
+        await sendMessageToChat(
+          chat.chat_id,
+          chat.sender_id,
+          messageText
+        );
+        // Mark optimistic message as delivered
+        setMessages(prev => prev.map(msg =>
+          msg.id === tempMessageId ? { ...msg, status: "delivered" as const } : msg
+        ));
+        toast({ title: "Message sent!", variant: "default" });
+      } else {
+        toast({ title: "No chats available", variant: "destructive" });
+        setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+      }
+    } catch (error: any) {
+      toast({
+        title: "Failed to send message",
+        description: error.response?.data?.msg || error.message || "Network error",
+        variant: "destructive"
+      });
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+      setMessage(messageText);
     }
   }
 
@@ -486,10 +736,28 @@ export default function ChatInterface() {
                           <span>{selectedConversation.page_name}</span>
                         </>
                       )}
+                      <span>•</span>
+                      <span className={`flex items-center gap-1 ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
+                        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        {isConnected ? 'Connected' : 'Disconnected'}
+                      </span>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => {
+                      console.log('Manual refresh clicked');
+                      if (selectedConversation) {
+                        fetchMessages();
+                      }
+                    }}
+                    title="Refresh messages"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
                   <Button variant="ghost" size="icon" className="hidden sm:flex">
                     <Phone className="h-4 w-4" />
                   </Button>
@@ -552,6 +820,7 @@ export default function ChatInterface() {
                     </div>
                   ))
                 )}
+                <div ref={messagesEndRef} />
               </div>
               {/* Chat Input */}
               <div className="border-t p-4">
