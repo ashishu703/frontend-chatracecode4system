@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -120,29 +120,35 @@ function CheckoutPageContent() {
     try {
       await loadRazorpayScript()
       const orderRes = await userPlansAPI.createRazorpayOrder(plan!.id, plan!.price)
-      if (!(orderRes && orderRes.success && orderRes.order)) {
+      console.log('Razorpay orderRes:', orderRes)
+      console.log('Razorpay gateways:', gateways)
+      if (!(orderRes && orderRes.success && orderRes.order_id)) {
+        console.error('Razorpay order creation failed:', orderRes)
         toast.error('Failed to create Razorpay order')
         return
       }
       const options = {
-        key: gateways.rz_key || orderRes.key, 
-        amount: orderRes.order.amount,
-        currency: orderRes.order.currency,
-        order_id: orderRes.order.id,
+        key: orderRes.key, 
+        amount: orderRes.amount,
+        currency: orderRes.currency,
+        order_id: orderRes.order_id,
         name: 'Subscription',
         description: plan!.title,
         handler: async function (response: any) {
-          await userPlansAPI.payWithRazorpay(response.razorpay_payment_id, plan!, orderRes.order.amount)
+          console.log('Razorpay payment handler response:', response)
+          await userPlansAPI.payWithRazorpay(response.razorpay_payment_id, plan!, orderRes.amount)
           toast.success('Payment successful!')
           router.push('/dashboard')
         },
         prefill: {},
         theme: { color: '#3399cc' }
       }
+      console.log('Razorpay options:', options)
       // @ts-ignore
       const rzp = new window.Razorpay(options)
       rzp.open()
     } catch (error) {
+      console.error('Razorpay error:', error)
       toast.error('Razorpay error')
     }
   }

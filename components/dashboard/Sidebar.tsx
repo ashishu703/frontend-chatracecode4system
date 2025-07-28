@@ -5,6 +5,7 @@ import { useSelector, useDispatch } from "react-redux"
 import type { RootState } from "@/store/store"
 import { setCurrentView } from "@/store/slices/dashboardSlice"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 
 const menuItems = [
   { id: "dashboard", label: "Dashboard", icon: "fas fa-tachometer-alt" },
@@ -14,11 +15,14 @@ const menuItems = [
   { id: "api", label: "API Access", icon: "fas fa-code" },
   { id: "features", label: "More Features", icon: "fas fa-plus-circle" },
   { id: "flows", label: "Flow Integration", icon: "fas fa-project-diagram" },
+  { id: "templates", label: "All Templates", icon: "fas fa-file-text" },
   { id: "chatbot", label: "Chatbot", icon: "fas fa-robot" },
+  { id: "allflows", label: "All Flows", icon: "fas fa-folder" },
 ]
 
 export default function Sidebar() {
   const dispatch = useDispatch()
+  const router = useRouter()
   const { sidebarOpen } = useSelector((state: RootState) => state.ui)
   const { currentView } = useSelector((state: RootState) => state.dashboard)
 
@@ -47,7 +51,9 @@ export default function Sidebar() {
         {menuItems.map((item) => (
           <motion.button
             key={item.id}
-            onClick={() => dispatch(setCurrentView(item.id))}
+            onClick={() => {
+              dispatch(setCurrentView(item.id))
+            }}
             className={`w-full flex items-center px-4 py-3 text-left hover:bg-blue-50 transition-colors ${
               currentView === item.id ? "bg-blue-100 border-r-2 border-blue-600" : ""
             }`}

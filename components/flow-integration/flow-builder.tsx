@@ -17,7 +17,7 @@ import {
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 
-import { NodeSidebar } from "./node-sidebar"
+// import { NodeSidebar } from "./node-sidebar"
 import { NodeConfigPanel } from "./node-config-panel"
 import { FlowHeader } from "./flow-header"
 import { NodeContextProvider } from "./node-context"
@@ -36,18 +36,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@
 
 const initialNodes: Node<NodeData>[] = [
   {
-    id: "simpleMessage-1",
+    id: `simpleMessage-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
     type: "simpleMessageNode",
     position: { x: 250, y: 100 },
     data: {
       type: "simpleMessage",
       data: {
         state: {
-          label: "Send Message",
-          content: "Welcome! How can I help you today?",
+          message: "Welcome! How can I help you today?",
         },
       },
-    },
+      title: "Simple Message",
+      messageNumber: 1,
+      message: "Welcome! How can I help you today?",
+      options: [""],
+    } as NodeData,
   },
 ];
 
@@ -122,7 +125,11 @@ function FlowToolbar({ onAddNode, addPopoverOpen, setAddPopoverOpen, toolbarNode
   );
 }
 
-function FlowBuilderContent() {
+interface FlowBuilderContentProps {
+  initialFlowData?: any;
+}
+
+function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null)
@@ -133,66 +140,96 @@ function FlowBuilderContent() {
   // Add state for flow title and flowId
   const [flowTitle, setFlowTitle] = useState("");
   const [flowId, setFlowId] = useState("");
+  
   const { toast } = useToast();
+  
+  // Auto-generate flow ID when component mounts
+  useEffect(() => {
+    if (!flowId) {
+      const generatedId = `flow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      setFlowId(generatedId);
+    }
+  }, [flowId]);
+
+  // Load initial flow data if provided (for editing mode)
+  useEffect(() => {
+    if (initialFlowData) {
+      // Ensure nodes have unique IDs to prevent conflicts
+      const nodesWithUniqueIds = Array.isArray(initialFlowData.nodes) 
+        ? initialFlowData.nodes.map((node: any) => ({
+            ...node,
+            id: node.id.includes('-') ? node.id : `${node.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+          }))
+        : [];
+      
+      // Ensure edges have unique IDs to prevent conflicts
+      const edgesWithUniqueIds = Array.isArray(initialFlowData.edges)
+        ? initialFlowData.edges.map((edge: any) => ({
+            ...edge,
+            id: edge.id.includes('-') ? edge.id : `${edge.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+          }))
+        : [];
+      
+      setNodes(nodesWithUniqueIds);
+      setEdges(edgesWithUniqueIds);
+      setFlowTitle(initialFlowData.title || '');
+      // Handle both flowId and flow_id from API response
+      setFlowId(initialFlowData.flowId || initialFlowData.flow_id || flowId);
+      toast({ title: 'Success', description: 'Flow loaded for editing', variant: 'default' });
+    }
+  }, [initialFlowData, flowId, toast]);
   const queryClient = useQueryClient();
   const [selectedFlow, setSelectedFlow] = useState<any>(null);
   const [hasShownNoFlowsToast, setHasShownNoFlowsToast] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pendingSave, setPendingSave] = useState(false);
+  const [startNodeId, setStartNodeId] = useState<string | null>(null);
+
 
   const toolbarNodeOptions = [
-    { type: "simpleMessage", label: "Send Message" },
-    { type: "startFlow", label: "Start Flow" },
-    { type: "actions", label: "Actions" },
-    { type: "condition", label: "Condition" },
-    { type: "sendEmail", label: "Send Email" },
-    { type: "splitTraffic", label: "Split Traffic" },
-    { type: "wait", label: "Wait" },
-    { type: "landingPage", label: "Landing Page" },
-    { type: "addNotes", label: "Add Notes" },
+    { type: "simpleMessageNode", label: "Text Message", dataType: "simpleMessage" },
+    { type: "videoMessageNode", label: "Video Message", dataType: "videoMessage" },
+    { type: "imageMessageNode", label: "Image Message", dataType: "imageMessage" },
+    { type: "audioMessageNode", label: "Audio Message", dataType: "audioMessage" },
+    { type: "documentMessageNode", label: "Document Message", dataType: "documentMessage" },
+    { type: "buttonMessageNode", label: "Button Message", dataType: "buttonMessage" },
+    { type: "listMessageNode", label: "List Message", dataType: "listMessage" },
+    { type: "disableChatTillNode", label: "Disable Chat", dataType: "disableChatTill" },
+    { type: "requestAPINode", label: "API Request", dataType: "requestAPI" },
+    { type: "assignAgentNode", label: "Assign Agent", dataType: "assignAgent" },
+    { type: "conditionNode", label: "Condition", dataType: "condition" },
   ];
   const [addPopoverOpen, setAddPopoverOpen] = useState(false);
 
   const handleAddNode = (nodeType: string) => {
     const centerX = 400 + Math.random() * 200;
     const centerY = 200 + Math.random() * 200;
-    let defaultState = getDefaultConfig(nodeType as NodeData["type"]);
-    if (nodeType === "sendEmail") {
-      defaultState = {
-        label: "Send Email",
-        from: "",
-        to: "",
-        subject: "",
-        preheader: "",
-        headline: "",
-        text: "",
-        image: "",
-        button: "",
-      };
-    }
-    if (nodeType === "startFlow") {
-      // Render a box like the Send Message node, but with type 'startFlowNode'
-      const newNode: Node<NodeData> = {
-        id: `startFlow-${Date.now()}`,
-        type: `startFlowNode`,
-        position: { x: centerX, y: centerY },
-        data: {
-          type: "startFlow",
-          data: { state: { label: "Start Flow", content: "Click to select a flow" } },
-        },
-      };
-      setNodes((nds) => nds.concat(newNode));
-      setAddPopoverOpen(false);
-      return;
-    }
+    const option = toolbarNodeOptions.find(opt => opt.type === nodeType);
+    if (!option) return;
+    let defaultState = getDefaultConfig(option.dataType as NodeData["type"]);
+    
+    // Get the next message number for sequential numbering
+    const existingMessageNodes = nodes.filter(node => 
+      node.type === 'simpleMessageNode' || 
+      node.type === 'imageMessageNode' || 
+      node.type === 'videoMessageNode' || 
+      node.type === 'audioMessageNode' || 
+      node.type === 'documentMessageNode' || 
+      node.type === 'buttonMessageNode' || 
+      node.type === 'listMessageNode'
+    );
+    const nextMessageNumber = existingMessageNodes.length + 1;
+    
     const newNode: Node<NodeData> = {
       id: `${nodeType}-${Date.now()}`,
-      type: `${nodeType}Node`,
+      type: nodeType,
       position: { x: centerX, y: centerY },
-      data: {
-        type: nodeType as NodeData["type"],
-        data: { state: defaultState },
-      },
+          data: {
+      type: option.dataType as NodeData["type"],
+      data: { state: defaultState },
+      title: option.label,
+      messageNumber: nextMessageNumber,
+    } as NodeData,
     };
     setNodes((nds) => nds.concat(newNode));
     setAddPopoverOpen(false);
@@ -202,24 +239,100 @@ function FlowBuilderContent() {
   const addFlowMutation = useMutation({
     mutationFn: async (payload: any) => {
       try {
+        console.log('Sending payload to /api/chat_flow/add_new:', JSON.stringify(payload, null, 2));
         const res = await serverHandler.post('/api/chat_flow/add_new', payload);
         console.log('API response:', res.data);
         return res.data as any;
-      } catch (error) {
-        console.error('API error:', error);
+      } catch (error: any) {
+        console.error('API error details:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          config: error.config
+        });
+        throw error;
+      }
+    },
+    onSuccess: (data: any) => {
+      console.log('Flow save response:', data);
+      if (data.success) {
+        // The backend returns a simple success response, so we need to extract info from the request
+        const savedFlowId = data.id || data.flowId || flowId;
+        const savedTitle = data.title || flowTitle;
+        
+        toast({ title: 'Success', description: `Flow saved successfully`, variant: 'default' });
+        queryClient.invalidateQueries({ queryKey: ['chat-flows'] });
+        
+        // Log the saved flow details for debugging
+        console.log('Flow saved successfully:', {
+          databaseFlowId: savedFlowId,
+          flowIdString: flowId,
+          title: savedTitle,
+          nodesCount: nodes.length,
+          edgesCount: edges.length,
+          edges: edges,
+          fullResponse: data,
+          message: data.msg
+        });
+        
+        // The backend doesn't return the database ID, so we keep the frontend flowId
+        // The backend logs show it's using the correct flow ID internally
+      } else {
+        toast({ title: 'Error', description: data.msg || 'Please subscribe a plan to proceed', variant: 'destructive' });
+        console.error('Save failed:', data);
+      }
+    },
+    onError: (err: any) => {
+      console.error('Mutation error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      toast({ title: 'Error', description: `API error: ${err?.message || err}`, variant: 'destructive' });
+      console.error('Mutation error:', err);
+    },
+  });
+
+  // Update flow
+  const updateFlowMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      try {
+        console.log('Sending payload to /api/chat_flow/update:', JSON.stringify(payload, null, 2));
+        const res = await serverHandler.post('/api/chat_flow/update', payload);
+        console.log('API response:', res.data);
+        return res.data as any;
+      } catch (error: any) {
+        console.error('API error details:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          config: error.config
+        });
         throw error;
       }
     },
     onSuccess: (data: any) => {
       if (data.success) {
-        toast({ title: 'Success', description: 'Flow saved', variant: 'default' });
+        toast({ title: 'Success', description: 'Flow updated successfully', variant: 'default' });
         queryClient.invalidateQueries({ queryKey: ['chat-flows'] });
+        
+        console.log('Flow updated successfully:', {
+          message: data.msg,
+          fullResponse: data
+        });
       } else {
-        toast({ title: 'Error', description: `Failed to save flow: ${data.msg || 'Unknown error'}`, variant: 'destructive' });
-        console.error('Save failed:', data);
+        toast({ title: 'Error', description: data.msg || 'Failed to update flow', variant: 'destructive' });
+        console.error('Update failed:', data);
       }
     },
     onError: (err: any) => {
+      console.error('Mutation error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       toast({ title: 'Error', description: `API error: ${err?.message || err}`, variant: 'destructive' });
       console.error('Mutation error:', err);
     },
@@ -262,11 +375,43 @@ function FlowBuilderContent() {
 
   const onConnect = useCallback(
     (params: Connection) => {
-      if (validateConnection(params, nodes)) {
-        setEdges((eds) => addEdge(params, eds))
+      console.log('Connection attempt:', params);
+      
+      // Validation - allow connections between different nodes and prevent multiple connections from same source
+      if (params.source && params.target && params.source !== params.target) {
+        // Check if there's already a connection from this source handle
+        const existingConnection = edges.find(edge => 
+          edge.source === params.source && 
+          edge.sourceHandle === params.sourceHandle
+        );
+        
+        if (existingConnection) {
+          console.log('Connection already exists from this source handle, removing old connection');
+          // Remove the existing connection
+          setEdges((eds) => eds.filter(edge => 
+            !(edge.source === params.source && edge.sourceHandle === params.sourceHandle)
+          ));
+          toast({ 
+            title: 'Connection Updated', 
+            description: 'Previous connection removed and new connection created.', 
+            variant: 'default' 
+          });
+        }
+        
+        console.log('Connection validated, creating edge');
+        const newEdge: Edge = {
+          id: `e${params.source}-${params.target}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          source: params.source,
+          target: params.target,
+          sourceHandle: params.sourceHandle,
+          type: 'smoothstep',
+        };
+        setEdges((eds) => eds.concat(newEdge));
+      } else {
+        console.log('Connection validation failed:', { source: params.source, target: params.target });
       }
     },
-    [nodes, setEdges],
+    [setEdges, edges, toast],
   )
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node<NodeData>) => {
@@ -302,8 +447,8 @@ function FlowBuilderContent() {
         position,
         data: {
           type: type as NodeData["type"],
-          config: getDefaultConfig(type as NodeData["type"]),
-        },
+          data: { state: getDefaultConfig(type as NodeData["type"]) },
+        } as NodeData,
       }
 
       setNodes((nds) => nds.concat(newNode))
@@ -406,6 +551,15 @@ function FlowBuilderContent() {
             responseMapping: {}
           }
         };
+      case "condition":
+        return {
+          state: {
+            conditions: [],
+            onTrueGoTo: "",
+            onFalseGoTo: "",
+            delayInSeconds: 0
+          }
+        };
       default:
         return { state: {} };
     }
@@ -413,25 +567,181 @@ function FlowBuilderContent() {
 
   // Save flow handler
   const saveFlow = async () => {
-    if (!(flowTitle || '').trim() || !(flowId || '').trim() || !Array.isArray(nodes) || nodes.length === 0 || !Array.isArray(edges)) {
-      toast({ title: 'Error', description: 'Please fill all fields: Title, Flow ID, at least one node, and edges.', variant: 'destructive' });
+    if (!(flowTitle || '').trim() || !Array.isArray(nodes) || nodes.length === 0 || !Array.isArray(edges)) {
+      toast({ title: 'Error', description: 'Please fill the title and ensure you have at least one node in your flow.', variant: 'destructive' });
       console.error('Validation failed:', { flowTitle, flowId, nodes, edges });
       return;
     }
-    const cleanedNodes = nodes.map((node) => ({
-      id: node.id,
-      type: node.type,
-      position: node.position,
-      data: node.data,
-    }));
+    
+    console.log('Original nodes before cleaning:', nodes);
+    
+    const cleanedNodes = nodes.map((node) => {
+      // Ensure we have the node type - try multiple sources
+      let nodeType = node.data?.type;
+      
+      // Fallback: if data.type is not available, try to extract from node.type
+      if (!nodeType && node.type) {
+        // Remove "Node" suffix from node.type to get the business type
+        const extractedType = node.type.replace('Node', '');
+        // Convert camelCase to the expected format
+        if (extractedType === 'simpleMessage') nodeType = 'simpleMessage';
+        else if (extractedType === 'imageMessage') nodeType = 'imageMessage';
+        else if (extractedType === 'videoMessage') nodeType = 'videoMessage';
+        else if (extractedType === 'audioMessage') nodeType = 'audioMessage';
+        else if (extractedType === 'documentMessage') nodeType = 'documentMessage';
+        else if (extractedType === 'buttonMessage') nodeType = 'buttonMessage';
+        else if (extractedType === 'listMessage') nodeType = 'listMessage';
+        else if (extractedType === 'disableChatTill') nodeType = 'disableChatTill';
+        else if (extractedType === 'requestAPI') nodeType = 'requestAPI';
+        else if (extractedType === 'assignAgent') nodeType = 'assignAgent';
+        else if (extractedType === 'condition') nodeType = 'condition';
+      }
+      
+      if (!nodeType) {
+        console.error('Node missing type information:', node);
+        toast({ title: 'Error', description: `Node ${node.id} is missing type information`, variant: 'destructive' });
+        return null;
+      }
+      
+      const cleanedNode = {
+        id: node.id,
+        type: node.type,
+        nodeType: nodeType,
+        position: node.position,
+        data: node.data,
+      };
+      
+      console.log(`Cleaned node ${node.id}:`, cleanedNode);
+      return cleanedNode;
+    }).filter(Boolean) as any[]; // Remove any null nodes
+    
+    if (cleanedNodes.length === 0) {
+      toast({ title: 'Error', description: 'No valid nodes to save', variant: 'destructive' });
+      return;
+    }
+    
+    // Create edges from node options if no manual edges exist
+    let cleanedEdges = [];
+    
+    if (edges.length === 0) {
+             // Auto-create edges from node options
+       nodes.forEach((node, nodeIndex) => {
+         const nodeOptions = node.data?.options || [];
+         if (Array.isArray(nodeOptions) && nodeOptions.length > 0) {
+           nodeOptions.forEach((option, optionIndex) => {
+             if (option.value && option.value.trim()) {
+               // Find the next node to connect to (or create a fallback)
+               const targetNode = nodes[nodeIndex + 1] || node; // Connect to next node or self
+               
+               cleanedEdges.push({
+                 id: `auto-edge-${node.id}-${option.id}-${Date.now()}`,
+                 source: node.id,
+                 target: targetNode.id,
+                 sourceHandle: option.value.trim(),
+               });
+             }
+           });
+         }
+       });
+       
+       // Add fallback edge for unmatched messages
+       if (nodes.length > 0) {
+         const firstNode = nodes[0];
+         cleanedEdges.push({
+           id: `fallback-edge-${firstNode.id}-${Date.now()}`,
+           source: firstNode.id,
+           target: firstNode.id, // Loop back to same node
+           sourceHandle: "{{OTHER_MSG}}",
+         });
+       }
+          } else {
+        // Process manual edges
+        cleanedEdges = edges.map((edge) => {
+          // Find the source node to get the option text
+          const sourceNode = nodes.find(node => node.id === edge.source);
+          let sourceHandle = "{{OTHER_MSG}}"; // Default fallback
+          
+          if (sourceNode && edge.sourceHandle) {
+            // Extract option text from the node's options
+            const nodeOptions = sourceNode.data?.options || [];
+            if (Array.isArray(nodeOptions)) {
+              // Find the option that matches the sourceHandle ID
+              for (const option of nodeOptions) {
+                if (typeof option === 'object' && option.id === edge.sourceHandle && option.value) {
+                  sourceHandle = option.value;
+                  break;
+                }
+              }
+            }
+          }
+          
+          return {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            sourceHandle: sourceHandle,
+          };
+        });
+        
+        // Add fallback edge for unmatched messages if not already present
+        const hasFallbackEdge = cleanedEdges.some(edge => edge.sourceHandle === "{{OTHER_MSG}}");
+        if (!hasFallbackEdge && nodes.length > 0) {
+          const firstNode = nodes[0];
+          cleanedEdges.push({
+            id: `fallback-edge-${firstNode.id}-${Date.now()}`,
+            source: firstNode.id,
+            target: firstNode.id, // Loop back to same node
+            sourceHandle: "{{OTHER_MSG}}",
+          });
+        }
+      }
+
     const payload = {
       title: (flowTitle || '').trim(),
       flowId: (flowId || '').trim(),
       nodes: cleanedNodes,
-      edges,
+      edges: cleanedEdges,
+      // Add a flag to indicate this is a new flow creation
+      isNewFlow: !initialFlowData || !initialFlowData.flowId,
     };
-    console.log('Saving flow with payload:', payload);
-    addFlowMutation.mutate(payload);
+    
+    console.log('Saving flow with payload:', JSON.stringify(payload, null, 2));
+    
+    // Test payload structure
+    console.log('Testing payload structure:');
+    payload.nodes.forEach((node, index) => {
+      if (node) {
+        console.log(`Node ${index}:`, {
+          id: node.id,
+          type: node.type,
+          nodeType: node.nodeType,
+          has_nodeType: 'nodeType' in node,
+          nodeType_value: node.nodeType
+        });
+      }
+    });
+    
+    // Debug edges structure
+    console.log('Testing edges structure:');
+    payload.edges.forEach((edge, index) => {
+      console.log(`Edge ${index}:`, {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        has_sourceHandle: 'sourceHandle' in edge,
+        sourceHandle_value: edge.sourceHandle
+      });
+    });
+    
+    // Determine if this is a new flow or updating existing flow
+    if (initialFlowData && (initialFlowData.flowId || initialFlowData.flow_id)) {
+      // Update existing flow
+      updateFlowMutation.mutate(payload);
+    } else {
+      // Create new flow
+      addFlowMutation.mutate(payload);
+    }
   };
 
   // Load flow by ID
@@ -469,7 +779,7 @@ function FlowBuilderContent() {
   }, []);
 
   const handleSaveClick = () => {
-    if (!(flowTitle || '').trim() || !(flowId || '').trim()) {
+    if (!(flowTitle || '').trim()) {
       setShowSaveDialog(true);
       setPendingSave(true);
       return;
@@ -478,8 +788,8 @@ function FlowBuilderContent() {
   };
 
   const handleDialogSave = () => {
-    if (!(flowTitle || '').trim() || !(flowId || '').trim()) {
-      // Optionally show a toast or error in the dialog
+    if (!(flowTitle || '').trim()) {
+      toast({ title: 'Error', description: 'Please enter a flow title', variant: 'destructive' });
       return;
     }
     setShowSaveDialog(false);
@@ -487,41 +797,51 @@ function FlowBuilderContent() {
     saveFlow();
   };
 
+
+
   // Flows list UI
   return (
     <div>
-      {/* Save Dialog for Title and Flow ID */}
+      {/* Save Dialog for Title Only */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enter Flow Title and Flow ID</DialogTitle>
+            <DialogTitle>Enter Flow Title</DialogTitle>
             <DialogClose />
           </DialogHeader>
           <div className="flex flex-col gap-4">
-            <input
-              className="border rounded px-2 py-1"
-              placeholder="Flow Title"
-              value={flowTitle}
-              onChange={e => setFlowTitle(e.target.value)}
-              autoFocus
-            />
-            <input
-              className="border rounded px-2 py-1"
-              placeholder="Flow ID"
-              value={flowId}
-              onChange={e => setFlowId(e.target.value)}
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Flow Title</label>
+              <input
+                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter flow title"
+                value={flowTitle}
+                onChange={e => setFlowTitle(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Flow ID (Auto-generated)</label>
+              <input
+                className="w-full border rounded px-3 py-2 bg-gray-50 text-gray-600"
+                value={flowId}
+                readOnly
+              />
+              <p className="text-xs text-gray-500 mt-1">This ID is automatically generated and cannot be changed</p>
+            </div>
             <button
-              className="bg-blue-500 text-white rounded px-3 py-1 mt-2"
+              className="bg-blue-500 text-white rounded px-4 py-2 mt-2 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleDialogSave}
-              disabled={!(flowTitle || '').trim() || !(flowId || '').trim()}
+              disabled={!(flowTitle || '').trim()}
             >
-              Save
+              Save Flow
             </button>
           </div>
         </DialogContent>
       </Dialog>
-      <NodeContextProvider nodes={nodes} setNodes={setNodes} edges={edges} setEdges={setEdges}>
+
+
+      <NodeContextProvider nodes={nodes} setNodes={setNodes} edges={edges} setEdges={setEdges} startNodeId={startNodeId} setStartNodeId={setStartNodeId}>
         <div className="h-full flex flex-col bg-gray-50">
           <div className="flex-1 flex relative">
             {/* Canvas */}
@@ -562,7 +882,7 @@ function FlowBuilderContent() {
               {/* Floating toolbar centered at bottom */}
               <FlowToolbar onAddNode={handleAddNode} addPopoverOpen={addPopoverOpen} setAddPopoverOpen={setAddPopoverOpen} toolbarNodeOptions={toolbarNodeOptions} onSave={handleSaveClick} />
             </div>
-            {selectedNode && <NodeConfigPanel node={selectedNode} onClose={() => setSelectedNode(null)} />}
+            {/* NodeConfigPanel sidebar removed as requested */}
           </div>
         </div>
       </NodeContextProvider>
@@ -570,10 +890,14 @@ function FlowBuilderContent() {
   )
 }
 
-export function FlowBuilder() {
+interface FlowBuilderProps {
+  initialFlowData?: any;
+}
+
+export function FlowBuilder({ initialFlowData }: FlowBuilderProps) {
   return (
     <ReactFlowProvider>
-      <FlowBuilderContent />
+      <FlowBuilderContent initialFlowData={initialFlowData} />
     </ReactFlowProvider>
   )
 }

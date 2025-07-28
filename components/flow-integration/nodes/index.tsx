@@ -12,6 +12,7 @@ import { ApiRequestNode } from "./api-request-node";
 import { StartNode } from "./start-node";
 import { MailNode } from "./mail-node";
 import { StartFlowNode } from "./start-node";
+import { ConditionNode } from "./condition-node";
 import React from "react";
 
 // Generic fallback node
@@ -38,6 +39,7 @@ export const nodeTypes = {
   disableChatTillNode: DisableChatNode,
   requestAPINode: ApiRequestNode,
   sendEmailNode: MailNode,
+  conditionNode: ConditionNode,
   // fallback for all other types
   genericNode: GenericNode,
 };
