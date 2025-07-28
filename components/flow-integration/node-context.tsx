@@ -13,6 +13,8 @@ interface NodeContextType {
   updateNode: (id: string, data: NodeData) => void
   deleteNode: (id: string) => void
   setStartNode: (id: string) => void
+  setStartNodeId: (id: string) => void
+  startNodeId: string | null
   duplicateNode: (id: string) => void
 }
 
@@ -24,12 +26,16 @@ export function NodeContextProvider({
   setNodes,
   edges,
   setEdges,
+  startNodeId,
+  setStartNodeId,
 }: {
   children: ReactNode
   nodes: Node<NodeData>[]
   setNodes: React.Dispatch<React.SetStateAction<Node<NodeData>[]>>
   edges: Edge[]
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>
+  startNodeId: string | null
+  setStartNodeId: (id: string) => void
 }) {
   const updateNode = (id: string, data: NodeData) => {
     setNodes((nds) => nds.map((node) => (node.id === id ? { ...node, data } : node)))
@@ -78,6 +84,8 @@ export function NodeContextProvider({
         updateNode,
         deleteNode,
         setStartNode,
+        setStartNodeId,
+        startNodeId,
         duplicateNode,
       }}
     >

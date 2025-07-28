@@ -24,7 +24,7 @@ import { useEffect, useState } from 'react';
 import { login as loginAction } from '@/store/slices/authSlice';
 import serverHandler from '@/utils/serverHandler';
 import AllFlowsPage from "@/components/dashboard/allflows"
-import { FlowTriggerManager } from "@/components/flow-integration/flow-trigger-manager"
+import AllTemplatesPage from "@/components/flow-integration/alltemplates"
 
 const stats = [
   { title: "Total Messages", value: "3,196", change: "+12%", icon: MessageSquare },
@@ -126,8 +126,8 @@ export default function DashboardPage() {
         return <FlowBuilder />
       case "allflows":
         return <AllFlowsPage />
-      case "triggers":
-        return <FlowTriggerManager />
+      case "templates":
+        return <AllTemplatesPage />
       default:
         return <DashboardView />
     }

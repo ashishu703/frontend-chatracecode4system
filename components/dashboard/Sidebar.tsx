@@ -15,7 +15,7 @@ const menuItems = [
   { id: "api", label: "API Access", icon: "fas fa-code" },
   { id: "features", label: "More Features", icon: "fas fa-plus-circle" },
   { id: "flows", label: "Flow Integration", icon: "fas fa-project-diagram" },
-  { id: "triggers", label: "Flow Triggers", icon: "fas fa-bolt" },
+  { id: "templates", label: "All Templates", icon: "fas fa-file-text" },
   { id: "chatbot", label: "Chatbot", icon: "fas fa-robot" },
   { id: "allflows", label: "All Flows", icon: "fas fa-folder" },
 ]

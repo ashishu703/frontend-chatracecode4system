@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { Upload, Lock, X, Plus, Save } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Upload, Lock, X, Plus, Save, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -12,15 +12,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useToast } from "@/components/ui/use-toast"
 import { useNodeContext } from "../node-context"
 
-export function VideoNode({ id }: any) {
-  const [captions, setCaptions] = useState("")
-  const [option, setOption] = useState("")
+export function VideoNode({ data, selected, id }: any) {
+  const [captions, setCaptions] = useState(data?.captions || "")
+  const [options, setOptions] = useState(data?.options || [""])
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isSaved, setIsSaved] = useState(false);
   const [showDialog, setShowDialog] = useState(false)
   const [templateName, setTemplateName] = useState("")
   const { toast } = useToast()
-  const { deleteNode } = useNodeContext()
+  const { deleteNode, updateNode } = useNodeContext()
+
+  // Initialize state from data if not already set
+  useEffect(() => {
+    if (data?.captions && !captions) {
+      setCaptions(data.captions)
+    }
+    if (data?.options && !options.length) {
+      setOptions(data.options)
+    }
+  }, [data, captions, options])
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -29,11 +39,39 @@ export function VideoNode({ id }: any) {
     }
   }
 
-  const handleAddOption = () => {
-    if (option.trim()) {
-      // Handle adding the option
-      console.log("Adding option:", option)
-      setOption("")
+  const addOption = () => {
+    const newOptions = [...options, ""]
+    setOptions(newOptions)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        options: newOptions
+      })
+    }
+  }
+
+  const updateOption = (index: number, value: string) => {
+    const newOptions = [...options]
+    newOptions[index] = value
+    setOptions(newOptions)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        options: newOptions
+      })
+    }
+  }
+
+  const removeOption = (index: number) => {
+    if (options.length > 1) {
+      const newOptions = options.filter((_: string, i: number) => i !== index)
+      setOptions(newOptions)
+      if (updateNode) {
+        updateNode(id, {
+          ...data,
+          options: newOptions
+        })
+      }
     }
   }
 
@@ -57,7 +95,7 @@ export function VideoNode({ id }: any) {
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-800 border-0" />
-      <div className="w-[320px] bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+      <div className={`w-[320px] bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm ${selected ? "ring-2 ring-blue-500" : ""}`}>
         {/* Header */}
         <div className="bg-blue-500 text-white px-4 py-3 flex items-center justify-between">
           <span className="font-medium">Video Message</span>
@@ -86,36 +124,62 @@ export function VideoNode({ id }: any) {
             <Textarea
               placeholder="Captions (Optional)"
               value={captions}
-              onChange={(e) => setCaptions(e.target.value)}
+              onChange={(e) => {
+                const newCaptions = e.target.value
+                setCaptions(newCaptions)
+                if (updateNode) {
+                  updateNode(id, {
+                    ...data,
+                    captions: newCaptions
+                  })
+                }
+              }}
               className="min-h-[80px] resize-none border-gray-300"
             />
           </div>
 
-          {/* Option Input */}
-          <div className="mt-4 flex items-center space-x-2">
-            <Input
-              placeholder="Enter an option"
-              value={option}
-              onChange={(e) => setOption(e.target.value)}
-              className="flex-1"
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  handleAddOption()
-                }
-              }}
-            />
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={handleAddOption}
-              className="h-10 w-10 rounded-full bg-gray-100 hover:bg-gray-200"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+          {/* Options */}
+          <div className="mt-4 space-y-2">
+            {options.map((option: string, index: number) => (
+              <div key={index} className="flex items-center gap-2 relative">
+                {/* Connection handle for each option */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`option-${index}`}
+                  className="w-3 h-3 bg-blue-500 border-0 absolute right-0 top-1/2 transform -translate-y-1/2"
+                  style={{ right: '-6px' }}
+                />
+                
+                <Input
+                  placeholder="Enter an option"
+                  value={option}
+                  onChange={(e) => updateOption(index, e.target.value)}
+                  className="flex-1 pr-8"
+                />
+                {options.length > 1 && (
+                  <button
+                    onClick={() => removeOption(index)}
+                    className="bg-red-400 hover:bg-red-500 text-white p-2 rounded transition-colors"
+                    title="Remove"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+                {index === options.length - 1 && (
+                  <button
+                    onClick={addOption}
+                    className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded transition-colors"
+                    title="Add"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-gray-800 border-0" />
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>

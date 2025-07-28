@@ -36,7 +36,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@
 
 const initialNodes: Node<NodeData>[] = [
   {
-    id: "simpleMessage-1",
+    id: `simpleMessage-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
     type: "simpleMessageNode",
     position: { x: 250, y: 100 },
     data: {
@@ -125,7 +125,11 @@ function FlowToolbar({ onAddNode, addPopoverOpen, setAddPopoverOpen, toolbarNode
   );
 }
 
-function FlowBuilderContent() {
+interface FlowBuilderContentProps {
+  initialFlowData?: any;
+}
+
+function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null)
@@ -137,6 +141,8 @@ function FlowBuilderContent() {
   const [flowTitle, setFlowTitle] = useState("");
   const [flowId, setFlowId] = useState("");
   
+  const { toast } = useToast();
+  
   // Auto-generate flow ID when component mounts
   useEffect(() => {
     if (!flowId) {
@@ -144,16 +150,41 @@ function FlowBuilderContent() {
       setFlowId(generatedId);
     }
   }, [flowId]);
-  const { toast } = useToast();
+
+  // Load initial flow data if provided (for editing mode)
+  useEffect(() => {
+    if (initialFlowData) {
+      // Ensure nodes have unique IDs to prevent conflicts
+      const nodesWithUniqueIds = Array.isArray(initialFlowData.nodes) 
+        ? initialFlowData.nodes.map((node: any) => ({
+            ...node,
+            id: node.id.includes('-') ? node.id : `${node.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+          }))
+        : [];
+      
+      // Ensure edges have unique IDs to prevent conflicts
+      const edgesWithUniqueIds = Array.isArray(initialFlowData.edges)
+        ? initialFlowData.edges.map((edge: any) => ({
+            ...edge,
+            id: edge.id.includes('-') ? edge.id : `${edge.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+          }))
+        : [];
+      
+      setNodes(nodesWithUniqueIds);
+      setEdges(edgesWithUniqueIds);
+      setFlowTitle(initialFlowData.title || '');
+      // Handle both flowId and flow_id from API response
+      setFlowId(initialFlowData.flowId || initialFlowData.flow_id || flowId);
+      toast({ title: 'Success', description: 'Flow loaded for editing', variant: 'default' });
+    }
+  }, [initialFlowData, flowId, toast]);
   const queryClient = useQueryClient();
   const [selectedFlow, setSelectedFlow] = useState<any>(null);
   const [hasShownNoFlowsToast, setHasShownNoFlowsToast] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pendingSave, setPendingSave] = useState(false);
-  const [showEdgeDialog, setShowEdgeDialog] = useState(false);
-  const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
-  const [edgeKeyword, setEdgeKeyword] = useState("{{OTHER_MSG}}");
-  const [edgeKeywords, setEdgeKeywords] = useState<string[]>(["{{OTHER_MSG}}"]);
+  const [startNodeId, setStartNodeId] = useState<string | null>(null);
+
 
   const toolbarNodeOptions = [
     { type: "simpleMessageNode", label: "Text Message", dataType: "simpleMessage" },
@@ -166,6 +197,7 @@ function FlowBuilderContent() {
     { type: "disableChatTillNode", label: "Disable Chat", dataType: "disableChatTill" },
     { type: "requestAPINode", label: "API Request", dataType: "requestAPI" },
     { type: "assignAgentNode", label: "Assign Agent", dataType: "assignAgent" },
+    { type: "conditionNode", label: "Condition", dataType: "condition" },
   ];
   const [addPopoverOpen, setAddPopoverOpen] = useState(false);
 
@@ -223,12 +255,76 @@ function FlowBuilderContent() {
       }
     },
     onSuccess: (data: any) => {
+      console.log('Flow save response:', data);
       if (data.success) {
-        toast({ title: 'Success', description: 'Flow saved', variant: 'default' });
+        // The backend returns a simple success response, so we need to extract info from the request
+        const savedFlowId = data.id || data.flowId || flowId;
+        const savedTitle = data.title || flowTitle;
+        
+        toast({ title: 'Success', description: `Flow saved successfully`, variant: 'default' });
         queryClient.invalidateQueries({ queryKey: ['chat-flows'] });
+        
+        // Log the saved flow details for debugging
+        console.log('Flow saved successfully:', {
+          databaseFlowId: savedFlowId,
+          flowIdString: flowId,
+          title: savedTitle,
+          nodesCount: nodes.length,
+          edgesCount: edges.length,
+          edges: edges,
+          fullResponse: data,
+          message: data.msg
+        });
+        
+        // The backend doesn't return the database ID, so we keep the frontend flowId
+        // The backend logs show it's using the correct flow ID internally
       } else {
         toast({ title: 'Error', description: data.msg || 'Please subscribe a plan to proceed', variant: 'destructive' });
         console.error('Save failed:', data);
+      }
+    },
+    onError: (err: any) => {
+      console.error('Mutation error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      toast({ title: 'Error', description: `API error: ${err?.message || err}`, variant: 'destructive' });
+      console.error('Mutation error:', err);
+    },
+  });
+
+  // Update flow
+  const updateFlowMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      try {
+        console.log('Sending payload to /api/chat_flow/update:', JSON.stringify(payload, null, 2));
+        const res = await serverHandler.post('/api/chat_flow/update', payload);
+        console.log('API response:', res.data);
+        return res.data as any;
+      } catch (error: any) {
+        console.error('API error details:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          config: error.config
+        });
+        throw error;
+      }
+    },
+    onSuccess: (data: any) => {
+      if (data.success) {
+        toast({ title: 'Success', description: 'Flow updated successfully', variant: 'default' });
+        queryClient.invalidateQueries({ queryKey: ['chat-flows'] });
+        
+        console.log('Flow updated successfully:', {
+          message: data.msg,
+          fullResponse: data
+        });
+      } else {
+        toast({ title: 'Error', description: data.msg || 'Failed to update flow', variant: 'destructive' });
+        console.error('Update failed:', data);
       }
     },
     onError: (err: any) => {
@@ -280,19 +376,42 @@ function FlowBuilderContent() {
   const onConnect = useCallback(
     (params: Connection) => {
       console.log('Connection attempt:', params);
-      console.log('Available nodes:', nodes.map(n => ({ id: n.id, type: n.type, dataType: n.data?.type })));
       
-      // More permissive validation - allow most connections
+      // Validation - allow connections between different nodes and prevent multiple connections from same source
       if (params.source && params.target && params.source !== params.target) {
-        console.log('Connection validated, showing dialog');
-        setPendingConnection(params);
-        setEdgeKeywords(["{{OTHER_MSG}}"]);
-        setShowEdgeDialog(true);
+        // Check if there's already a connection from this source handle
+        const existingConnection = edges.find(edge => 
+          edge.source === params.source && 
+          edge.sourceHandle === params.sourceHandle
+        );
+        
+        if (existingConnection) {
+          console.log('Connection already exists from this source handle, removing old connection');
+          // Remove the existing connection
+          setEdges((eds) => eds.filter(edge => 
+            !(edge.source === params.source && edge.sourceHandle === params.sourceHandle)
+          ));
+          toast({ 
+            title: 'Connection Updated', 
+            description: 'Previous connection removed and new connection created.', 
+            variant: 'default' 
+          });
+        }
+        
+        console.log('Connection validated, creating edge');
+        const newEdge: Edge = {
+          id: `e${params.source}-${params.target}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          source: params.source,
+          target: params.target,
+          sourceHandle: params.sourceHandle,
+          type: 'smoothstep',
+        };
+        setEdges((eds) => eds.concat(newEdge));
       } else {
         console.log('Connection validation failed:', { source: params.source, target: params.target });
       }
     },
-    [nodes],
+    [setEdges, edges, toast],
   )
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node<NodeData>) => {
@@ -432,6 +551,15 @@ function FlowBuilderContent() {
             responseMapping: {}
           }
         };
+      case "condition":
+        return {
+          state: {
+            conditions: [],
+            onTrueGoTo: "",
+            onFalseGoTo: "",
+            delayInSeconds: 0
+          }
+        };
       default:
         return { state: {} };
     }
@@ -466,6 +594,7 @@ function FlowBuilderContent() {
         else if (extractedType === 'disableChatTill') nodeType = 'disableChatTill';
         else if (extractedType === 'requestAPI') nodeType = 'requestAPI';
         else if (extractedType === 'assignAgent') nodeType = 'assignAgent';
+        else if (extractedType === 'condition') nodeType = 'condition';
       }
       
       if (!nodeType) {
@@ -477,7 +606,7 @@ function FlowBuilderContent() {
       const cleanedNode = {
         id: node.id,
         type: node.type,
-        nodeType: nodeType, // Change to camelCase to match backend expectation
+        nodeType: nodeType,
         position: node.position,
         data: node.data,
       };
@@ -491,18 +620,89 @@ function FlowBuilderContent() {
       return;
     }
     
-    const cleanedEdges = edges.map((edge) => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      sourceHandle: edge.sourceHandle || "{{OTHER_MSG}}",
-    }));
+    // Create edges from node options if no manual edges exist
+    let cleanedEdges = [];
+    
+    if (edges.length === 0) {
+             // Auto-create edges from node options
+       nodes.forEach((node, nodeIndex) => {
+         const nodeOptions = node.data?.options || [];
+         if (Array.isArray(nodeOptions) && nodeOptions.length > 0) {
+           nodeOptions.forEach((option, optionIndex) => {
+             if (option.value && option.value.trim()) {
+               // Find the next node to connect to (or create a fallback)
+               const targetNode = nodes[nodeIndex + 1] || node; // Connect to next node or self
+               
+               cleanedEdges.push({
+                 id: `auto-edge-${node.id}-${option.id}-${Date.now()}`,
+                 source: node.id,
+                 target: targetNode.id,
+                 sourceHandle: option.value.trim(),
+               });
+             }
+           });
+         }
+       });
+       
+       // Add fallback edge for unmatched messages
+       if (nodes.length > 0) {
+         const firstNode = nodes[0];
+         cleanedEdges.push({
+           id: `fallback-edge-${firstNode.id}-${Date.now()}`,
+           source: firstNode.id,
+           target: firstNode.id, // Loop back to same node
+           sourceHandle: "{{OTHER_MSG}}",
+         });
+       }
+          } else {
+        // Process manual edges
+        cleanedEdges = edges.map((edge) => {
+          // Find the source node to get the option text
+          const sourceNode = nodes.find(node => node.id === edge.source);
+          let sourceHandle = "{{OTHER_MSG}}"; // Default fallback
+          
+          if (sourceNode && edge.sourceHandle) {
+            // Extract option text from the node's options
+            const nodeOptions = sourceNode.data?.options || [];
+            if (Array.isArray(nodeOptions)) {
+              // Find the option that matches the sourceHandle ID
+              for (const option of nodeOptions) {
+                if (typeof option === 'object' && option.id === edge.sourceHandle && option.value) {
+                  sourceHandle = option.value;
+                  break;
+                }
+              }
+            }
+          }
+          
+          return {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            sourceHandle: sourceHandle,
+          };
+        });
+        
+        // Add fallback edge for unmatched messages if not already present
+        const hasFallbackEdge = cleanedEdges.some(edge => edge.sourceHandle === "{{OTHER_MSG}}");
+        if (!hasFallbackEdge && nodes.length > 0) {
+          const firstNode = nodes[0];
+          cleanedEdges.push({
+            id: `fallback-edge-${firstNode.id}-${Date.now()}`,
+            source: firstNode.id,
+            target: firstNode.id, // Loop back to same node
+            sourceHandle: "{{OTHER_MSG}}",
+          });
+        }
+      }
 
     const payload = {
       title: (flowTitle || '').trim(),
       flowId: (flowId || '').trim(),
       nodes: cleanedNodes,
       edges: cleanedEdges,
+      // Add a flag to indicate this is a new flow creation
+      isNewFlow: !initialFlowData || !initialFlowData.flowId,
     };
     
     console.log('Saving flow with payload:', JSON.stringify(payload, null, 2));
@@ -521,7 +721,27 @@ function FlowBuilderContent() {
       }
     });
     
-    addFlowMutation.mutate(payload);
+    // Debug edges structure
+    console.log('Testing edges structure:');
+    payload.edges.forEach((edge, index) => {
+      console.log(`Edge ${index}:`, {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        has_sourceHandle: 'sourceHandle' in edge,
+        sourceHandle_value: edge.sourceHandle
+      });
+    });
+    
+    // Determine if this is a new flow or updating existing flow
+    if (initialFlowData && (initialFlowData.flowId || initialFlowData.flow_id)) {
+      // Update existing flow
+      updateFlowMutation.mutate(payload);
+    } else {
+      // Create new flow
+      addFlowMutation.mutate(payload);
+    }
   };
 
   // Load flow by ID
@@ -577,54 +797,7 @@ function FlowBuilderContent() {
     saveFlow();
   };
 
-  const handleEdgeCreate = () => {
-    if (pendingConnection && edgeKeywords.length > 0) {
-      setEdges((eds) => {
-        const newEdges = edgeKeywords
-          .filter((keyword) =>
-            !eds.some(
-              (e) =>
-                e.source === pendingConnection.source &&
-                e.target === pendingConnection.target &&
-                e.sourceHandle === keyword
-            )
-          )
-          .map((keyword) => ({
-            ...pendingConnection,
-            id: `${pendingConnection.source}-${pendingConnection.target}-${keyword}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-            sourceHandle: keyword,
-          }));
-        return [...eds, ...newEdges];
-      });
 
-      const keywordList = edgeKeywords.join(", ");
-      toast({
-        title: "Edges Created",
-        description: `Created ${edgeKeywords.length} edge(s) with keywords: ${keywordList}`,
-        variant: "default",
-      });
-    }
-    setShowEdgeDialog(false);
-    setPendingConnection(null);
-    setEdgeKeywords(["{{OTHER_MSG}}"]);
-  };
-
-  const handleEdgeCancel = () => {
-    setShowEdgeDialog(false);
-    setPendingConnection(null);
-    setEdgeKeywords(["{{OTHER_MSG}}"]);
-  };
-
-  const addKeyword = () => {
-    if (edgeKeyword.trim() && !edgeKeywords.includes(edgeKeyword.trim())) {
-      setEdgeKeywords([...edgeKeywords, edgeKeyword.trim()]);
-      setEdgeKeyword("");
-    }
-  };
-
-  const removeKeyword = (keywordToRemove: string) => {
-    setEdgeKeywords(edgeKeywords.filter(k => k !== keywordToRemove));
-  };
 
   // Flows list UI
   return (
@@ -667,98 +840,8 @@ function FlowBuilderContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Edge Creation Dialog */}
-      <Dialog open={showEdgeDialog} onOpenChange={setShowEdgeDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Set Edge Keyword</DialogTitle>
-            <DialogClose />
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Add Keyword/Trigger</label>
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter keyword (e.g., hii, hello, welcome)"
-                  value={edgeKeyword}
-                  onChange={e => setEdgeKeyword(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && addKeyword()}
-                />
-                <button
-                  className="bg-blue-500 text-white rounded px-3 py-2 hover:bg-blue-600 disabled:opacity-50"
-                  onClick={addKeyword}
-                  disabled={!edgeKeyword.trim()}
-                >
-                  Add
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Press Enter or click Add to add keywords. Use <code className="bg-gray-100 px-1 rounded">{"{{OTHER_MSG}}"}</code> to catch any message.
-              </p>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Current Keywords</label>
-              <div className="flex flex-wrap gap-1 min-h-[40px] p-2 border rounded bg-gray-50">
-                {edgeKeywords.length === 0 ? (
-                  <span className="text-gray-400 text-sm">No keywords added yet</span>
-                ) : (
-                  edgeKeywords.map((keyword, index) => (
-                    <span key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs flex items-center gap-1">
-                      {keyword}
-                      <button
-                        onClick={() => removeKeyword(keyword)}
-                        className="text-blue-600 hover:text-blue-800 font-bold"
-                        title="Remove keyword"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
 
-            <div className="mt-2">
-              <p className="text-xs text-gray-600 mb-1">Quick keywords:</p>
-              <div className="flex flex-wrap gap-1">
-                {["hii", "hello", "welcome", "hi", "hey", "start", "help", "{{OTHER_MSG}}"].map((keyword) => (
-                  <button
-                    key={keyword}
-                    className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                    onClick={() => {
-                      if (!edgeKeywords.includes(keyword)) {
-                        setEdgeKeywords([...edgeKeywords, keyword]);
-                      }
-                    }}
-                    disabled={edgeKeywords.includes(keyword)}
-                  >
-                    {keyword}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                className="bg-green-500 text-white rounded px-4 py-2 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleEdgeCreate}
-                disabled={edgeKeywords.length === 0}
-              >
-                Create Edges ({edgeKeywords.length})
-              </button>
-              <button
-                className="bg-gray-300 text-gray-700 rounded px-4 py-2 hover:bg-gray-400"
-                onClick={handleEdgeCancel}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <NodeContextProvider nodes={nodes} setNodes={setNodes} edges={edges} setEdges={setEdges}>
+      <NodeContextProvider nodes={nodes} setNodes={setNodes} edges={edges} setEdges={setEdges} startNodeId={startNodeId} setStartNodeId={setStartNodeId}>
         <div className="h-full flex flex-col bg-gray-50">
           <div className="flex-1 flex relative">
             {/* Canvas */}
@@ -807,10 +890,14 @@ function FlowBuilderContent() {
   )
 }
 
-export function FlowBuilder() {
+interface FlowBuilderProps {
+  initialFlowData?: any;
+}
+
+export function FlowBuilder({ initialFlowData }: FlowBuilderProps) {
   return (
     <ReactFlowProvider>
-      <FlowBuilderContent />
+      <FlowBuilderContent initialFlowData={initialFlowData} />
     </ReactFlowProvider>
   )
 }

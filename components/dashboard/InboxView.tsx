@@ -35,7 +35,7 @@ import axios from "axios";
 // Function to get all available chats
 const getAvailableChats = async () => {
   try {
-    const response = await axios.get('/api/messanger/list-chats', {
+    const response = await serverHandler.get('/api/messanger/list-chats', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'application/json'
@@ -51,7 +51,7 @@ const getAvailableChats = async () => {
 // Function to send message using the chat IDs
 const sendMessageToChat = async (chatId: string, senderId: string, messageText: string) => {
   try {
-    const response = await axios.post('/api/messanger/send', {
+    const response = await serverHandler.post('/api/messanger/send', {
       text: messageText,
       chatId: chatId,
       senderId: senderId

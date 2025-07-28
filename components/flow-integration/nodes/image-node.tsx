@@ -4,19 +4,67 @@ import { Handle, Position, type NodeProps } from "@xyflow/react"
 import { Card } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
-import { Upload, Square, Check, HelpCircle, Save, X } from "lucide-react"
+import { Upload, Square, Check, HelpCircle, Save, X, Plus, Trash2 } from "lucide-react"
 import type { NodeData } from "@/types/flow"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { useNodeContext } from "../node-context"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 export function ImageNode({ data, selected, id }: NodeProps<NodeData>) {
+  const [captions, setCaptions] = useState(data?.captions || "")
+  const [options, setOptions] = useState(data?.options || [""])
   const [isSaved, setIsSaved] = useState(false);
   const [showDialog, setShowDialog] = useState(false)
   const [templateName, setTemplateName] = useState("")
   const { toast } = useToast()
-  const { deleteNode } = useNodeContext()
+  const { deleteNode, updateNode } = useNodeContext()
+
+  // Initialize state from data if not already set
+  useEffect(() => {
+    if (data?.captions && !captions) {
+      setCaptions(data.captions)
+    }
+    if (data?.options && !options.length) {
+      setOptions(data.options)
+    }
+  }, [data, captions, options])
+
+  const addOption = () => {
+    const newOptions = [...options, ""]
+    setOptions(newOptions)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        options: newOptions
+      })
+    }
+  }
+
+  const updateOption = (index: number, value: string) => {
+    const newOptions = [...options]
+    newOptions[index] = value
+    setOptions(newOptions)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        options: newOptions
+      })
+    }
+  }
+
+  const removeOption = (index: number) => {
+    if (options.length > 1) {
+      const newOptions = options.filter((_: string, i: number) => i !== index)
+      setOptions(newOptions)
+      if (updateNode) {
+        updateNode(id, {
+          ...data,
+          options: newOptions
+        })
+      }
+    }
+  }
 
   const handleSave = () => {
     setShowDialog(true)
@@ -36,47 +84,91 @@ export function ImageNode({ data, selected, id }: NodeProps<NodeData>) {
   }
 
   return (
-    <Card className={`w-[320px] bg-white border border-gray-200 ${selected ? "ring-2 ring-blue-500" : ""}`}>
+    <div className="relative">
       <Handle type="target" position={Position.Left} className="w-3 h-3 bg-purple-500" />
-
-      {/* Header */}
-      <div className="bg-blue-500 text-white px-4 py-2 rounded-t-lg flex items-center justify-between">
-        <span className="font-medium text-sm">Image Message</span>
-        <div className="flex items-center gap-1">
-          <button onClick={handleSave} className="p-1" title="Save">
-            <Save className={`w-4 h-4 ${isSaved ? "text-green-200" : "text-white"}`} />
-          </button>
-          <button onClick={handleClose} className="p-1" title="Close">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-4">
-        {/* Upload Area */}
-        <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center justify-center min-h-[120px]">
-          <Upload className="h-8 w-8 text-gray-400 mb-2" />
-          <span className="text-gray-500 font-medium">Upload</span>
+      <Card className={`w-[320px] bg-white border border-gray-200 ${selected ? "ring-2 ring-blue-500" : ""}`}>
+        {/* Header */}
+        <div className="bg-blue-500 text-white px-4 py-2 rounded-t-lg flex items-center justify-between">
+          <span className="font-medium text-sm">Image Message</span>
+          <div className="flex items-center gap-1">
+            <button onClick={handleSave} className="p-1" title="Save">
+              <Save className={`w-4 h-4 ${isSaved ? "text-green-200" : "text-white"}`} />
+            </button>
+            <button onClick={handleClose} className="p-1" title="Close">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Captions Textarea */}
-        <div className="space-y-2">
-          <label className="text-sm text-gray-600">Captions (Optional)</label>
-          <Textarea
-            placeholder=""
-            className="min-h-[80px] resize-none border-gray-300"
-            defaultValue={data?.config?.caption || ""}
-          />
-        </div>
+        <div className="p-4 space-y-4">
+          {/* Upload Area */}
+          <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center justify-center min-h-[120px]">
+            <Upload className="h-8 w-8 text-gray-400 mb-2" />
+            <span className="text-gray-500 font-medium">Upload</span>
+          </div>
 
-        {/* Option Input */}
-        <div className="flex items-center space-x-2">
-          <Input placeholder="Enter an option" className="flex-1 border-gray-300" defaultValue="" />
-          <HelpCircle className="h-5 w-5 text-gray-400" />
-        </div>
-      </div>
+          {/* Captions Textarea */}
+          <div className="space-y-2">
+            <label className="text-sm text-gray-600">Captions (Optional)</label>
+            <Textarea
+              placeholder=""
+              value={captions}
+              onChange={(e) => {
+                const newCaptions = e.target.value
+                setCaptions(newCaptions)
+                if (updateNode) {
+                  updateNode(id, {
+                    ...data,
+                    captions: newCaptions
+                  })
+                }
+              }}
+              className="min-h-[80px] resize-none border-gray-300"
+            />
+          </div>
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-purple-500" />
+          {/* Options */}
+          <div className="space-y-2">
+            {options.map((option: string, index: number) => (
+              <div key={index} className="flex items-center gap-2 relative">
+                {/* Connection handle for each option */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`option-${index}`}
+                  className="w-3 h-3 bg-blue-500 border-0 absolute right-0 top-1/2 transform -translate-y-1/2"
+                  style={{ right: '-6px' }}
+                />
+                
+                <Input
+                  placeholder="Enter an option"
+                  value={option}
+                  onChange={(e) => updateOption(index, e.target.value)}
+                  className="flex-1 border-gray-300 pr-8"
+                />
+                {options.length > 1 && (
+                  <button
+                    onClick={() => removeOption(index)}
+                    className="bg-red-400 hover:bg-red-500 text-white p-2 rounded transition-colors"
+                    title="Remove"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+                {index === options.length - 1 && (
+                  <button
+                    onClick={addOption}
+                    className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded transition-colors"
+                    title="Add"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
@@ -100,7 +192,7 @@ export function ImageNode({ data, selected, id }: NodeProps<NodeData>) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   )
 }
 

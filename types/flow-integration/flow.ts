@@ -12,6 +12,7 @@ export interface NodeData extends Record<string, unknown> {
     | "assignAgent"
     | "disableChatTill"
     | "requestAPI"
+    | "condition"
   data: {
     state?: {
       messageType?: string

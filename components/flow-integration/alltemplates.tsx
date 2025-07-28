@@ -1,14 +1,12 @@
 "use client"
+
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useSelector } from "react-redux"
-import type { RootState } from "@/store/store"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Edit, Trash2, Plus, Search, Filter } from "lucide-react"
+import { Edit, Trash2, Plus, Search, Filter, X } from "lucide-react"
 import {
   Pagination,
   PaginationContent,
@@ -18,15 +16,24 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from '@/components/ui/pagination'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import serverHandler from '@/utils/serverHandler'
+import { useToast } from '@/hooks/use-toast'
 
-interface Flow {
+interface Template {
   id: number
   uid: string
-  flow_id: string
+  content: string
+  type: string
   title: string
-  prevent_list: any
-  ai_list: any
   createdAt: string
   updatedAt: string
 }
@@ -41,8 +48,8 @@ interface Pagination {
 // Page size options for selector
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
-export default function AllFlowsPage() {
-  const [flows, setFlows] = useState<Flow[]>([])
+export default function AllTemplatesPage() {
+  const [templates, setTemplates] = useState<Template[]>([])
   const [pagination, setPagination] = useState<Pagination>({
     totalItems: 0,
     totalPages: 1,
@@ -53,10 +60,17 @@ export default function AllFlowsPage() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('createdAt')
   const [sortOrder, setSortOrder] = useState('desc')
-  const router = useRouter()
-  const { sidebarOpen } = useSelector((state: RootState) => state.ui)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
+  const [editForm, setEditForm] = useState({
+    title: '',
+    type: '',
+    content: ''
+  })
+  const [editLoading, setEditLoading] = useState(false)
+  const { toast } = useToast()
 
-  const fetchFlows = async () => {
+  const fetchTemplates = async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -67,11 +81,11 @@ export default function AllFlowsPage() {
         order: sortOrder
       })
       
-      const response = await serverHandler.get(`/api/chat_flow/get_mine?${params}`)
+      const response = await serverHandler.get(`/api/templet/get_templets?${params}`)
       const data = response.data as any
       
       if (data.success) {
-        setFlows(data.data || [])
+        setTemplates(data.data || [])
         setPagination(data.pagination || {
           totalItems: 0,
           totalPages: 1,
@@ -79,12 +93,12 @@ export default function AllFlowsPage() {
           pageSize: pagination.pageSize
         })
       } else {
-        console.error('Failed to fetch flows:', data)
-        setFlows([])
+        console.error('Failed to fetch templates:', data)
+        setTemplates([])
       }
     } catch (error: any) {
-      console.error('Error fetching flows:', error)
-      setFlows([])
+      console.error('Error fetching templates:', error)
+      setTemplates([])
       setPagination((prev) => ({ ...prev, totalItems: 0, totalPages: 1 }))
     } finally {
       setLoading(false)
@@ -92,7 +106,7 @@ export default function AllFlowsPage() {
   }
 
   useEffect(() => {
-    fetchFlows()
+    fetchTemplates()
   }, [pagination.currentPage, pagination.pageSize, search, sortBy, sortOrder])
 
   const handlePageChange = (page: number) => {
@@ -128,38 +142,133 @@ export default function AllFlowsPage() {
     })
   }
 
-  const deleteFlow = async (id: number, flowId: string) => {
+  const deleteTemplate = async (id: number) => {
     const isConfirmed = window.confirm(
-      'Are you sure you want to delete this flow?'
+      'Are you sure you want to delete this template?'
     );
     
     if (isConfirmed) {
       try {
-        const response = await serverHandler.post(`/api/chat_flow/del_flow`, {
-          id, 
-          flowId
+        const response = await serverHandler.post(`/api/templet/del_templets`, {
+          selected: [id]
         });
         
         if ((response.data as any).success) {
-          // Refresh the flow list
-          fetchFlows();
+          toast({
+            title: "Success",
+            description: "Template deleted successfully",
+            variant: "default"
+          })
+          // Refresh the template list
+          fetchTemplates();
         } else {
-          console.error('Failed to delete flow:', response.data);
+          console.error('Failed to delete template:', response.data);
+          toast({
+            title: "Error",
+            description: "Failed to delete template",
+            variant: "destructive"
+          })
         }
       } catch (error: any) {
-        console.error('Error deleting flow:', error);
+        console.error('Error deleting template:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete template",
+          variant: "destructive"
+        })
       }
     }
   };
 
-  const getStatusBadge = (flow: Flow) => {
-    // You can add logic here to determine if flow is active based on your requirements
+  const openEditModal = (template: Template) => {
+    setEditingTemplate(template)
+    setEditForm({
+      title: template.title,
+      type: template.type,
+      content: formatContentForEdit(template.content)
+    })
+    setEditModalOpen(true)
+  }
+
+  const closeEditModal = () => {
+    setEditModalOpen(false)
+    setEditingTemplate(null)
+    setEditForm({
+      title: '',
+      type: '',
+      content: ''
+    })
+  }
+
+  const updateTemplate = async () => {
+    if (!editingTemplate) return
+
+    setEditLoading(true)
+    try {
+      const response = await serverHandler.post('/api/templet/update', {
+        id: editingTemplate.id,
+        title: editForm.title,
+        type: editForm.type,
+        content: editForm.content
+      })
+
+      if ((response.data as any).success) {
+        toast({
+          title: "Success",
+          description: "Template updated successfully",
+          variant: "default"
+        })
+        closeEditModal()
+        fetchTemplates() // Refresh the list
+      } else {
+        console.error('Failed to update template:', response.data)
+        toast({
+          title: "Error",
+          description: "Failed to update template",
+          variant: "destructive"
+        })
+      }
+    } catch (error: any) {
+      console.error('Error updating template:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update template",
+        variant: "destructive"
+      })
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  const getStatusBadge = (template: Template) => {
+    // You can add logic here to determine if template is active based on your requirements
     const isActive = true // Placeholder - implement your logic
     return (
       <Badge variant={isActive ? "default" : "secondary"}>
         {isActive ? "Active" : "Inactive"}
       </Badge>
     )
+  }
+
+  const parseTemplateContent = (content: string) => {
+    try {
+      const parsed = JSON.parse(content)
+      if (parsed.type === 'text' && parsed.text?.body) {
+        return parsed.text.body
+      }
+      return content
+    } catch {
+      return content
+    }
+  }
+
+  const formatContentForEdit = (content: string) => {
+    try {
+      const parsed = JSON.parse(content)
+      return JSON.stringify(parsed, null, 2)
+    } catch {
+      return content
+    }
   }
 
   return (
@@ -169,25 +278,25 @@ export default function AllFlowsPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
               </div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                All Flows
+                All Templates
               </h1>
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            <Button onClick={() => router.push('/flow-integration')} className="bg-blue-600 hover:bg-blue-700">
+            <Button className="bg-green-600 hover:bg-green-700">
               <Plus className="h-4 w-4 mr-2" />
-              Create New Flow
+              Create New Template
             </Button>
           </div>
         </div>
@@ -200,14 +309,14 @@ export default function AllFlowsPage() {
           <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200/60">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">Flow Management</h2>
-                <p className="text-sm text-slate-600 mt-1">Manage and monitor your chat flows</p>
+                <h2 className="text-lg font-semibold text-slate-800">Template Management</h2>
+                <p className="text-sm text-slate-600 mt-1">Manage and monitor your message templates</p>
               </div>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
                   <Search className="h-4 w-4 text-slate-400" />
                   <Input
-                    placeholder="Search flows..."
+                    placeholder="Search templates..."
                     value={search}
                     onChange={(e) => handleSearch(e.target.value)}
                     className="w-64"
@@ -223,6 +332,7 @@ export default function AllFlowsPage() {
                       <SelectItem value="createdAt">Created Date</SelectItem>
                       <SelectItem value="updatedAt">Updated Date</SelectItem>
                       <SelectItem value="title">Title</SelectItem>
+                      <SelectItem value="type">Type</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -247,7 +357,19 @@ export default function AllFlowsPage() {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead>Flow ID</TableHead>
+                  <TableHead>Template ID</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-slate-50"
+                    onClick={() => handleSort('type')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Type</span>
+                      {sortBy === 'type' && (
+                        <span className="text-xs">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead>Content Preview</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-slate-50"
@@ -277,16 +399,16 @@ export default function AllFlowsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-16">
+                    <TableCell colSpan={8} className="text-center py-16">
                       <div className="flex flex-col items-center justify-center space-y-4">
-                        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                        <p className="text-slate-500 font-medium">Loading flows...</p>
+                        <div className="w-8 h-8 border-4 border-green-200 border-t-green-600 rounded-full animate-spin"></div>
+                        <p className="text-slate-500 font-medium">Loading templates...</p>
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : flows.length === 0 ? (
+                ) : templates.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-16">
+                    <TableCell colSpan={8} className="text-center py-16">
                       <div className="flex flex-col items-center justify-center space-y-4">
                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
                           <svg
@@ -304,20 +426,20 @@ export default function AllFlowsPage() {
                           </svg>
                         </div>
                         <div>
-                          <p className="text-slate-600 font-medium text-lg">No flows found</p>
+                          <p className="text-slate-600 font-medium text-lg">No templates found</p>
                           <p className="text-slate-500 text-sm mt-1">
-                            {search ? 'Try adjusting your search criteria' : 'Create your first flow to get started'}
+                            {search ? 'Try adjusting your search criteria' : 'Create your first template to get started'}
                           </p>
                         </div>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  flows.map((flow, index) => (
-                    <TableRow key={flow.id} className="hover:bg-slate-50/50">
+                  templates.map((template, index) => (
+                    <TableRow key={template.id} className="hover:bg-slate-50/50">
                       <TableCell>
                         <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-gradient-to-r from-blue-100 to-purple-100 rounded-lg flex items-center justify-center">
+                          <div className="w-10 h-10 bg-gradient-to-r from-green-100 to-emerald-100 rounded-lg flex items-center justify-center">
                             <span className="text-sm font-bold text-slate-700">
                               {String((pagination.currentPage - 1) * pagination.pageSize + index + 1).padStart(2, "0")}
                             </span>
@@ -326,29 +448,40 @@ export default function AllFlowsPage() {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-semibold text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
-                             onClick={() => router.push(`/allflows/${flow.flow_id}`)}>
-                            {flow.title}
+                          <p className="font-semibold text-slate-800 hover:text-green-600 transition-colors cursor-pointer">
+                            {template.title}
                           </p>
-                          <p className="text-sm text-slate-500 mt-1">Chat Flow Configuration</p>
+                          <p className="text-sm text-slate-500 mt-1">Message Template</p>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="font-mono text-sm text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                          {flow.flow_id.slice(0, 8)}...
+                          {template.id}
                         </div>
                       </TableCell>
                       <TableCell>
-                        {getStatusBadge(flow)}
+                        <Badge variant="outline" className="capitalize">
+                          {template.type.toLowerCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="max-w-xs">
+                          <p className="text-sm text-slate-600 truncate">
+                            {parseTemplateContent(template.content)}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(template)}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-slate-600">
-                          {formatDate(flow.createdAt)}
+                          {formatDate(template.createdAt)}
                         </span>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-slate-600">
-                          {formatDate(flow.updatedAt)}
+                          {formatDate(template.updatedAt)}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -356,14 +489,14 @@ export default function AllFlowsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => router.push(`/allflows/${flow.flow_id}`)}
+                            onClick={() => openEditModal(template)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteFlow(flow.id, flow.flow_id)}
+                            onClick={() => deleteTemplate(template.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -457,6 +590,86 @@ export default function AllFlowsPage() {
           </div>
         </div>
       </main>
+
+      {/* Edit Template Modal */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Edit className="h-5 w-5" />
+              <span>Edit Template</span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Template Title</Label>
+              <Input
+                id="title"
+                value={editForm.title}
+                onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="Enter template title"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="type">Template Type</Label>
+              <Select 
+                value={editForm.type} 
+                onValueChange={(value) => setEditForm(prev => ({ ...prev, type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select template type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TEXT">Text</SelectItem>
+                  <SelectItem value="IMAGE">Image</SelectItem>
+                  <SelectItem value="VIDEO">Video</SelectItem>
+                  <SelectItem value="AUDIO">Audio</SelectItem>
+                  <SelectItem value="DOCUMENT">Document</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="content">Template Content</Label>
+              <Textarea
+                id="content"
+                value={editForm.content}
+                onChange={(e) => setEditForm(prev => ({ ...prev, content: e.target.value }))}
+                placeholder="Enter template content (JSON format for complex templates)"
+                className="min-h-[120px] font-mono text-sm"
+              />
+              <p className="text-xs text-slate-500">
+                For text templates, use simple text. For complex templates, use JSON format.
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={closeEditModal}
+              disabled={editLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={updateTemplate}
+              disabled={editLoading || !editForm.title || !editForm.type || !editForm.content}
+            >
+              {editLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Updating...
+                </>
+              ) : (
+                'Update Template'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
-}
+} 

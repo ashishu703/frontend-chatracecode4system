@@ -2,22 +2,29 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
-import { Upload, Lock, X, Plus, Save } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { Upload, Lock, X, Plus, Save, Trash2 } from "lucide-react"
 import { Handle, Position } from "@xyflow/react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { useNodeContext } from "../node-context"
 
-export function AudioNode({ id }: any) {
+export function AudioNode({ data, selected, id }: any) {
   const [audioFile, setAudioFile] = useState<File | null>(null)
-  const [optionText, setOptionText] = useState("")
+  const [options, setOptions] = useState(data?.options || [""])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isSaved, setIsSaved] = useState(false);
   const [showDialog, setShowDialog] = useState(false)
   const [templateName, setTemplateName] = useState("")
   const { toast } = useToast()
-  const { deleteNode } = useNodeContext()
+  const { deleteNode, updateNode } = useNodeContext()
+
+  // Initialize state from data if not already set
+  useEffect(() => {
+    if (data?.options && !options.length) {
+      setOptions(data.options)
+    }
+  }, [data, options])
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -28,6 +35,42 @@ export function AudioNode({ id }: any) {
 
   const handleUploadClick = () => {
     fileInputRef.current?.click()
+  }
+
+  const addOption = () => {
+    const newOptions = [...options, ""]
+    setOptions(newOptions)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        options: newOptions
+      })
+    }
+  }
+
+  const updateOption = (index: number, value: string) => {
+    const newOptions = [...options]
+    newOptions[index] = value
+    setOptions(newOptions)
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        options: newOptions
+      })
+    }
+  }
+
+  const removeOption = (index: number) => {
+    if (options.length > 1) {
+      const newOptions = options.filter((_: string, i: number) => i !== index)
+      setOptions(newOptions)
+      if (updateNode) {
+        updateNode(id, {
+          ...data,
+          options: newOptions
+        })
+      }
+    }
   }
 
   const handleSave = () => {
@@ -47,17 +90,10 @@ export function AudioNode({ id }: any) {
     deleteNode(id)
   }
 
-  const handleAddOption = () => {
-    if (optionText.trim()) {
-      console.log("Adding option:", optionText)
-      setOptionText("")
-    }
-  }
-
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-800 border-0" />
-      <div className="w-[400px] bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className={`w-[400px] bg-white border border-gray-200 rounded-lg overflow-hidden ${selected ? "ring-2 ring-blue-500" : ""}`}>
         {/* Header */}
         <div className="bg-pink-400 px-4 py-3 flex items-center justify-between">
           <span className="text-white font-medium">Audio Message</span>
@@ -84,24 +120,46 @@ export function AudioNode({ id }: any) {
           <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
         </div>
 
-        {/* Input Section */}
-        <div className="px-4 pb-4">
-          <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              placeholder="Enter an option"
-              value={optionText}
-              onChange={(e) => setOptionText(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent"
-              onKeyPress={(e) => e.key === "Enter" && handleAddOption()}
-            />
-            <button
-              onClick={handleAddOption}
-              className="w-8 h-8 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center transition-colors"
-            >
-              <Plus className="h-4 w-4 text-white" />
-            </button>
-          </div>
+        {/* Options Section */}
+        <div className="px-4 pb-4 space-y-2">
+          {options.map((option: string, index: number) => (
+            <div key={index} className="flex items-center gap-2 relative">
+              {/* Connection handle for each option */}
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`option-${index}`}
+                className="w-3 h-3 bg-pink-500 border-0 absolute right-0 top-1/2 transform -translate-y-1/2"
+                style={{ right: '-6px' }}
+              />
+              
+              <input
+                type="text"
+                placeholder="Enter an option"
+                value={option}
+                onChange={(e) => updateOption(index, e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent pr-8"
+              />
+              {options.length > 1 && (
+                <button
+                  onClick={() => removeOption(index)}
+                  className="bg-red-400 hover:bg-red-500 text-white p-2 rounded transition-colors"
+                  title="Remove"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+              {index === options.length - 1 && (
+                <button
+                  onClick={addOption}
+                  className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded transition-colors"
+                  title="Add"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          ))}
         </div>
 
         {/* Audio Player (if file is uploaded) */}
@@ -114,7 +172,6 @@ export function AudioNode({ id }: any) {
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-gray-800 border-0" />
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
