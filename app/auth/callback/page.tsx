@@ -123,12 +123,14 @@ function OAuthCallbackContent() {
 // The main page component that wraps the content in Suspense
 export default function OAuthCallbackPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-700">Loading...</div>
-      </div>
-    }>
-      <OAuthCallbackContent />
-    </Suspense>
+    <div suppressHydrationWarning={true}>
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-lg text-gray-700">Loading...</div>
+        </div>
+      }>
+        <OAuthCallbackContent />
+      </Suspense>
+    </div>
   );
 }

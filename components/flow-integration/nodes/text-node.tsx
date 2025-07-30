@@ -169,8 +169,7 @@ export function TextNode({ data, selected, id }: NodeProps<any>) {
                   {options.length > 1 && (<button onClick={() => removeOption(index)} className="bg-red-400 hover:bg-red-500 text-white p-2 rounded transition-colors" title="Remove"><Trash2 className="w-3 h-3" /></button>)}
                   {index === options.length - 1 && (<button onClick={addOption} className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded transition-colors ml-1" title="Add"><Plus className="w-3 h-3" /></button>)}
                 </div>
-                {/* FIX: The handle 'id' is now unique and stable, fixing the connection bug. */}
-                {/* STYLE: Changed handle color to a neutral dark gray. */}
+
                 <Handle
                   type="source"
                   position={Position.Right}

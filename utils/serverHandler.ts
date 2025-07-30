@@ -9,14 +9,17 @@ const serverHandler = axios.create({
   },
 });
 
-serverHandler.interceptors.request.use((config) => {
-  // Try serviceToken first, then adminToken
-  const token = localStorage.getItem('serviceToken') || localStorage.getItem('adminToken');
-  if (token) {
-    if (!config.headers) config.headers = {};
-    config.headers['Authorization'] = `Bearer ${token}`;
-  }
-  return config;
-});
+// Client-side interceptor (only runs in browser)
+if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+  serverHandler.interceptors.request.use((config) => {
+    // Try serviceToken first, then adminToken
+    const token = localStorage.getItem('serviceToken') || localStorage.getItem('adminToken');
+    if (token) {
+      if (!config.headers) config.headers = {};
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  });
+}
 
 export default serverHandler; 

@@ -163,10 +163,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       if ((response.data as any).success) {
         setTemplates((response.data as any).data)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching templates:', error)
+      
+      // Handle 401 Unauthorized - clear token and disconnect
+      if (error.response?.status === 401) {
+        console.log('Token expired or invalid, clearing authentication');
+        localStorage.removeItem("serviceToken");
+        if (socket) {
+          socket.disconnect();
+          setSocket(null);
+        }
+        setIsConnected(false);
+        setTemplates([]);
+        setFlows([]);
+        setMessages([]);
+        return;
+      }
+      
       setTemplates([])
-      if (retryCount === 0 && (error as any).message === 'Network Error') {
+      if (retryCount === 0 && error.message === 'Network Error') {
         console.log('Retrying template fetch in 5 seconds...')
         setTimeout(() => fetchTemplates(1), 5000)
       }
@@ -183,10 +199,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       if ((response.data as any).success) {
         setFlows((response.data as any).data || [])
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching flows:', error)
+      
+      // Handle 401 Unauthorized - clear token and disconnect
+      if (error.response?.status === 401) {
+        console.log('Token expired or invalid, clearing authentication');
+        localStorage.removeItem("serviceToken");
+        if (socket) {
+          socket.disconnect();
+          setSocket(null);
+        }
+        setIsConnected(false);
+        setTemplates([]);
+        setFlows([]);
+        setMessages([]);
+        return;
+      }
+      
       setFlows([])
-      if (retryCount === 0 && (error as any).message === 'Network Error') {
+      if (retryCount === 0 && error.message === 'Network Error') {
         console.log('Retrying flows fetch in 5 seconds...')
         setTimeout(() => fetchFlows(1), 5000)
       }

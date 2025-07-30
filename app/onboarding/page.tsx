@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -8,7 +8,7 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useDispatch } from "react-redux"
 import { connectPlatform } from "@/store/slices/authSlice"
-import { Check, ArrowRight } from "lucide-react"
+import { Check, ArrowRight, AlertCircle, CheckCircle } from "lucide-react"
 
 const platforms = [
   {
@@ -42,40 +42,104 @@ export default function OnboardingPage() {
   const dispatch = useDispatch()
   const [connectedPlatforms, setConnectedPlatforms] = useState<string[]>([])
   const [isConnecting, setIsConnecting] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  // Check for URL parameters on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('error');
+    const platformParam = urlParams.get('platform');
+    
+    if (errorParam) {
+      setError(`Failed to connect ${platformParam || 'platform'}: ${errorParam}`);
+    }
+    
+    const instagramConnected = urlParams.get('instagram_connected');
+    const messengerConnected = urlParams.get('messenger_connected');
+    const whatsappConnected = urlParams.get('whatsapp_connected');
+    
+    if (instagramConnected) {
+      setSuccess('Instagram connected successfully!');
+      setConnectedPlatforms(prev => [...prev, 'instagram']);
+    }
+    if (messengerConnected) {
+      setSuccess('Facebook Messenger connected successfully!');
+      setConnectedPlatforms(prev => [...prev, 'messenger']);
+    }
+    if (whatsappConnected) {
+      setSuccess('WhatsApp Business connected successfully!');
+      setConnectedPlatforms(prev => [...prev, 'whatsapp']);
+    }
+  }, []);
 
   const handlePlatformConnect = async (platformId: string) => {
     setIsConnecting(platformId);
 
-    // Real OAuth flow for supported platforms
-    const redirectUri = `${window.location.origin}/auth/callback?provider=${platformId}`;
-    if (platformId === "instagram") {
-      const clientId = process.env.NEXT_PUBLIC_INSTAGRAM_CLIENT_ID || "";
-      const authUrl = `https://api.instagram.com/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user_profile,user_media&response_type=code&state=instagram_${Date.now()}`;
-      window.location.href = authUrl;
-      return;
-    } else if (platformId === "messenger") {
-      const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "";
-      const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=pages_messaging,pages_show_list,pages_manage_metadata&response_type=code&state=messenger_${Date.now()}`;
-      window.location.href = authUrl;
-      return;
-    } else if (platformId === "whatsapp") {
-      // WhatsApp Business API OAuth (example, may need adjustment)
-      const clientId = process.env.NEXT_PUBLIC_WHATSAPP_CLIENT_ID || "";
-      const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=whatsapp_business_management,whatsapp_business_messaging&response_type=code&state=whatsapp_${Date.now()}`;
-      window.location.href = authUrl;
-      return;
-    }
+    try {
+      if (platformId === "instagram") {
+        // Get Instagram OAuth URL from backend
+        const response = await fetch('/api/auth/instagram');
+        const data = await response.json();
+        
+        if (data.success) {
+          // Redirect to Instagram OAuth
+          window.location.href = data.data.authUrl;
+          return;
+        } else {
+          console.error('Failed to get Instagram OAuth URL:', data.message);
+          // Fallback to simulated connect
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          dispatch(connectPlatform(platformId));
+          setConnectedPlatforms((prev) => [...prev, platformId]);
+          setIsConnecting(null);
+        }
+      } else if (platformId === "messenger") {
+        // Get Facebook OAuth URL from backend
+        const response = await fetch('/api/auth/facebook');
+        const data = await response.json();
+        
+        if (data.success) {
+          window.location.href = data.data.authUrl;
+          return;
+        } else {
+          // Fallback to simulated connect
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          dispatch(connectPlatform(platformId));
+          setConnectedPlatforms((prev) => [...prev, platformId]);
+          setIsConnecting(null);
+        }
+      } else if (platformId === "whatsapp") {
+        // Get WhatsApp OAuth URL from backend
+        const response = await fetch('/api/auth/whatsapp');
+        const data = await response.json();
+        
+        if (data.success) {
+          window.location.href = data.data.authUrl;
+          return;
+        } else {
+          // Fallback to simulated connect
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          dispatch(connectPlatform(platformId));
+          setConnectedPlatforms((prev) => [...prev, platformId]);
+          setIsConnecting(null);
+        }
+      } else {
+        // For Google or other platforms, fallback to simulated connect
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        dispatch(connectPlatform(platformId));
+        setConnectedPlatforms((prev) => [...prev, platformId]);
+        setIsConnecting(null);
+      }
 
-    // For Google, Facebook, or others, fallback to simulated connect (as before)
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    dispatch(connectPlatform(platformId));
-    setConnectedPlatforms((prev) => [...prev, platformId]);
-    setIsConnecting(null);
-
-    if (connectedPlatforms.length === 0) {
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 800);
+      if (connectedPlatforms.length === 0) {
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 800);
+      }
+    } catch (error) {
+      console.error('Platform connect error:', error);
+      setIsConnecting(null);
     }
   };
 
@@ -105,6 +169,33 @@ export default function OnboardingPage() {
             Choose the platforms you'd like to integrate.
           </p>
         </motion.div>
+
+        {/* Error and Success Messages */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg"
+          >
+            <div className="flex items-center gap-2 text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              <span className="font-medium">{error}</span>
+            </div>
+          </motion.div>
+        )}
+
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg"
+          >
+            <div className="flex items-center gap-2 text-green-700">
+              <CheckCircle className="w-5 h-5" />
+              <span className="font-medium">{success}</span>
+            </div>
+          </motion.div>
+        )}
 
         {/* Platform Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">

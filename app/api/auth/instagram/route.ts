@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get Facebook credentials from backend server directly
+    // Get Instagram credentials from backend server directly
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:6400';
+    console.log('Fetching Instagram credentials from:', `${baseUrl}/api/admin/get_social_login`);
+    
     const socialLoginRes = await fetch(`${baseUrl}/api/admin/get_social_login`, {
       method: 'GET',
       headers: {
@@ -11,43 +13,58 @@ export async function GET(request: NextRequest) {
       },
     });
     
+    console.log('Social login response status:', socialLoginRes.status);
+    
     if (!socialLoginRes.ok) {
+      const errorText = await socialLoginRes.text();
+      console.error('Social login error:', errorText);
       return NextResponse.json({ 
         success: false, 
-        message: "Failed to fetch Facebook credentials from backend" 
+        message: "Failed to fetch Instagram credentials from backend" 
       }, { status: 500 });
     }
 
     const socialLoginData = await socialLoginRes.json();
+    console.log('Social login data:', socialLoginData);
     
     if (!socialLoginData.success) {
       return NextResponse.json({ 
         success: false, 
-        message: "Failed to fetch Facebook credentials from backend" 
+        message: "Failed to fetch Instagram credentials from backend" 
       }, { status: 500 });
     }
 
     const settings = socialLoginData.data;
-    const clientId = settings.facebook_client_id;
+    console.log('Instagram OAuth settings:', {
+      facebookClientId: settings.facebook_client_id,
+      hasFacebookClientSecret: !!settings.facebook_client_secret,
+      graphVersion: settings.facebook_graph_version || "v18.0",
+      scopes: settings.instagram_auth_scopes || "instagram_business_basic,instagram_business_manage_messages"
+    });
+    
+    // For Instagram Business API, we need to use Facebook App ID, not Instagram Client ID
+    const clientId = settings.facebook_client_id; // Use Facebook App ID for Instagram OAuth
     const clientSecret = settings.facebook_client_secret;
     const graphVersion = settings.facebook_graph_version || "v18.0";
-    const scopes = settings.facebook_auth_scopes || "pages_messaging,pages_show_list,pages_manage_metadata";
+    const scopes = settings.instagram_auth_scopes || "instagram_business_basic,instagram_business_manage_messages";
 
     if (!clientId) {
+      console.error('Facebook App ID not configured');
       return NextResponse.json({ 
         success: false, 
-        message: "Facebook Client ID not configured" 
+        message: "Facebook App ID not configured" 
       }, { status: 400 });
     }
 
     // Generate state parameter for security
-    const state = `messenger_${Math.random().toString(36).substring(2, 15)}`;
+    const state = `instagram_${Math.random().toString(36).substring(2, 15)}`;
     const loggerId = Math.random().toString(36).substring(2, 15);
+    const timestamp = Date.now();
 
-    // Create redirect URI
+    // Create redirect URI - first to localhost, then to ngrok
     const redirectUri = `https://ee4e18950dc1.ngrok-free.app/api/user/auth/meta/callback`;
 
-    // Build Facebook OAuth URL
+    // Build Instagram OAuth URL
     const authUrl = new URL(`https://www.facebook.com/${graphVersion}/dialog/oauth`);
     const params = new URLSearchParams();
     params.append('client_id', clientId);
@@ -72,10 +89,10 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Facebook OAuth error:', error);
+    console.error('Instagram OAuth error:', error);
     return NextResponse.json({ 
       success: false, 
-      message: "Failed to generate Facebook OAuth URL",
+      message: "Failed to generate Instagram OAuth URL",
       error: error.message 
     }, { status: 500 });
   }

@@ -29,14 +29,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning={true}>
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
         {/* Add favicon links for colorful SVG and fallback ICO */}
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="alternate icon" href="/favicon.ico" />
       </head>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning={true}>
         <Providers>
           <AppProvider>
             {children}
