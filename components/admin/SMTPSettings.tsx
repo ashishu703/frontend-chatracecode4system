@@ -5,23 +5,100 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { Loader2, Mail, Save, TestTube } from "lucide-react"
+import serverHandler from "@/utils/serverHandler"
 
 export default function SMTPSettings() {
+  const { toast } = useToast()
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
+  const [testEmail, setTestEmail] = useState("")
+  
   const [settings, setSettings] = useState({
-    emailAddress: "",
-    emailServer: "",
-    port: "587",
-    password: "",
+    email: "info@omnichat.karobar.org",
+    host: "omnichat.karobar.org",
+    password: "Karobar42044$",
+    port: "465",
   })
 
-  const handleUpdate = () => {
-    console.log("SMTP settings updated:", settings)
-    // Implement update logic
+  const handleUpdate = async () => {
+    setIsUpdating(true)
+    try {
+      const response = await serverHandler.post("/api/admin/update_smtp", settings)
+      
+      if (response.data.success) {
+        toast({
+          title: "Success",
+          description: "SMTP settings updated successfully",
+          variant: "default",
+          className: "bg-green-50 border-green-200 text-green-800"
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: response.data.message || "Failed to update SMTP settings",
+          variant: "destructive",
+          className: "bg-red-50 border-red-200 text-red-800"
+        })
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update SMTP settings",
+        variant: "destructive",
+        className: "bg-red-50 border-red-200 text-red-800"
+      })
+    } finally {
+      setIsUpdating(false)
+    }
   }
 
-  const handleTestEmail = () => {
-    console.log("Testing email settings...")
-    // Implement test email logic
+  const handleTestEmail = async () => {
+    if (!testEmail) {
+      toast({
+        title: "Error",
+        description: "Please enter a test email address",
+        variant: "destructive",
+        className: "bg-red-50 border-red-200 text-red-800"
+      })
+      return
+    }
+
+    setIsTesting(true)
+    try {
+      const testPayload = {
+        ...settings,
+        to: testEmail
+      }
+      
+      const response = await serverHandler.post("/api/admin/send_test_email", testPayload)
+      
+      if (response.data.success) {
+        toast({
+          title: "Success",
+          description: "Test email sent successfully",
+          variant: "default",
+          className: "bg-green-50 border-green-200 text-green-800"
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: response.data.message || "Failed to send test email",
+          variant: "destructive",
+          className: "bg-red-50 border-red-200 text-red-800"
+        })
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send test email",
+        variant: "destructive",
+        className: "bg-red-50 border-red-200 text-red-800"
+      })
+    } finally {
+      setIsTesting(false)
+    }
   }
 
   return (
@@ -37,23 +114,23 @@ export default function SMTPSettings() {
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="emailAddress">Email address</Label>
+              <Label htmlFor="email">Email address</Label>
               <Input
-                id="emailAddress"
+                id="email"
                 type="email"
-                value={settings.emailAddress}
-                onChange={(e) => setSettings({ ...settings, emailAddress: e.target.value })}
-                placeholder="your-email@domain.com"
+                value={settings.email}
+                onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                placeholder="info@omnichat.karobar.org"
               />
             </div>
 
             <div>
-              <Label htmlFor="emailServer">Email server</Label>
+              <Label htmlFor="host">Host</Label>
               <Input
-                id="emailServer"
-                value={settings.emailServer}
-                onChange={(e) => setSettings({ ...settings, emailServer: e.target.value })}
-                placeholder="smtp.gmail.com"
+                id="host"
+                value={settings.host}
+                onChange={(e) => setSettings({ ...settings, host: e.target.value })}
+                placeholder="omnichat.karobar.org"
               />
             </div>
 
@@ -63,7 +140,7 @@ export default function SMTPSettings() {
                 id="port"
                 value={settings.port}
                 onChange={(e) => setSettings({ ...settings, port: e.target.value })}
-                placeholder="587"
+                placeholder="465"
               />
             </div>
 
@@ -80,18 +157,49 @@ export default function SMTPSettings() {
             </div>
           </div>
 
+          {/* Test Email Section */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">Test Email Configuration</h3>
+            <div className="flex gap-4 items-end">
+              <div className="flex-1">
+                <Label htmlFor="testEmail">Test Email Address</Label>
+                <Input
+                  id="testEmail"
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  placeholder="abc123@abc.com"
+                  className="mt-1"
+                />
+              </div>
+              <Button
+                onClick={handleTestEmail}
+                disabled={isTesting}
+                variant="outline"
+                className="border-green-300 text-green-600 hover:bg-green-50 bg-transparent"
+              >
+                {isTesting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <TestTube className="h-4 w-4 mr-2" />
+                )}
+                {isTesting ? "Testing..." : "Send Test Email"}
+              </Button>
+            </div>
+          </div>
+
           <div className="flex space-x-4">
-            <Button onClick={handleUpdate} className="bg-blue-600 hover:bg-blue-700 text-white">
-              <i className="fas fa-save mr-2"></i>
-              Update
-            </Button>
-            <Button
-              onClick={handleTestEmail}
-              variant="outline"
-              className="border-green-300 text-green-600 hover:bg-green-50 bg-transparent"
+            <Button 
+              onClick={handleUpdate} 
+              disabled={isUpdating}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              <i className="fas fa-envelope mr-2"></i>
-              Check Email Setting
+              {isUpdating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              {isUpdating ? "Updating..." : "Update SMTP Settings"}
             </Button>
           </div>
         </CardContent>

@@ -3,30 +3,28 @@
 import { motion } from "framer-motion"
 import { useSelector, useDispatch } from "react-redux"
 import type { RootState } from "@/store/store"
-import { setCurrentView } from "@/store/slices/dashboardSlice"
+import { setCurrentView } from "@/store/slices/agentDashboardSlice"
+import { useAgentAuth } from '@/hooks/useAgentAuth';
+import { useRouter } from 'next/navigation';
 import Image from "next/image"
-import { useRouter } from "next/navigation"
 
 const menuItems = [
-  { id: "dashboard", label: "Analytics", icon: "fas fa-tachometer-alt" },
+  { id: "dashboard", label: "Dashboard", icon: "fas fa-tachometer-alt" },
   { id: "inbox", label: "Inbox", icon: "fas fa-inbox" },
-  { id: "phonebook", label: "Contacts", icon: "fas fa-address-book" },
-  { id: "broadcast", label: "Broadcast", icon: "fas fa-broadcast-tower" },
-  { id: "api", label: "Integration", icon: "fas fa-code" },
-  { id: "flows", label: " Flows", icon: "fas fa-project-diagram" },
-  { id: "templates", label: "Meta Templates", icon: "fas fa-file-text" },
-  { id: "features", label: "Chat Widget", icon: "fas fa-plus-circle" },
-  { id: "chatbot", label: "Auto Response", icon: "fas fa-robot" },
-  { id: "allflows", label: "All Flows", icon: "fas fa-folder" },
-  { id: "automation", label: "Automation Tools", icon: "fas fa-cogs" },
-  { id: "settings", label: "Settings", icon: "fas fa-cog" },
+  { id: "tasks", label: "Tasks", icon: "fas fa-tasks" },
 ]
 
-export default function Sidebar() {
+export default function AgentSidebar() {
   const dispatch = useDispatch()
   const router = useRouter()
+  const { logout } = useAgentAuth()
   const { sidebarOpen } = useSelector((state: RootState) => state.ui)
-  const { currentView } = useSelector((state: RootState) => state.dashboard)
+  const { currentView } = useSelector((state: RootState) => state.agentDashboard)
+
+  const handleLogout = () => {
+    logout()
+    router.push('/agent/login')
+  }
 
   return (
     <motion.div
@@ -83,6 +81,5 @@ export default function Sidebar() {
         </div>
       )}
     </motion.div>
-
   )
-}
+} 

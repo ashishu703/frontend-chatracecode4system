@@ -6,6 +6,44 @@ import { useDispatch } from "react-redux";
 import { login as loginAction } from "@/store/slices/authSlice";
 import serverHandler from "@/utils/serverHandler";
 
+// Function to exchange authorization code for ID token
+const exchangeCodeForToken = async (code: string, googleClientId: string) => {
+  try {
+    // Hardcoded client secret and redirect URI as requested
+    const googleClientSecret = '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';
+    const redirectUri = 'http://localhost:3000/auth/callback?provider=google';
+
+    if (!googleClientId) {
+      throw new Error('Google Client ID not found');
+    }
+
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code: code,
+        client_id: googleClientId,
+        client_secret: googleClientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.text();
+      throw new Error(`Token exchange failed: ${tokenResponse.status} - ${errorData}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    return tokenData.id_token; 
+  } catch (error) {
+    console.error('Token exchange error:', error);
+    throw error;
+  }
+};
+
 // This component will contain the actual OAuth logic and use client-side hooks
 function OAuthCallbackContent() {
   const router = useRouter();
@@ -52,8 +90,35 @@ function OAuthCallbackContent() {
       try {
         let response;
         if (provider === "google") {
-          // Google returns code, exchange it with backend
-          response = await serverHandler.post("/api/user/login_with_google", { code });
+          // Google returns code, exchange it for ID token first
+          console.log('Google OAuth code received:', code);
+          
+          if (!code) {
+            throw new Error('No authorization code received from Google');
+          }
+
+          // Fetch Google Client ID from API using serverHandler
+          const configResponse: any = await serverHandler.get('/api/web/get_web_public');
+          const googleClientId = configResponse.data?.data?.google_client_id;
+          
+          console.log('Fetched Google Client ID:', googleClientId);
+
+          // Exchange authorization code for ID token
+          const idToken = await exchangeCodeForToken(code, googleClientId);
+          console.log('ID token obtained from Google');
+          
+          // Get any existing token for authorization
+          const existingToken = localStorage.getItem('serviceToken') || localStorage.getItem('adminToken');
+          const headers: any = {};
+          if (existingToken) {
+            headers['Authorization'] = `Bearer ${existingToken}`;
+          }
+          
+          // Send ID token to backend instead of authorization code
+          response = await serverHandler.post("/api/user/login_with_google", { 
+            token: idToken 
+          }, { headers });
+          console.log('Backend response:', response);
         } else if (provider === "facebook") {
           // Facebook returns code, exchange it with backend
           response = await serverHandler.post("/api/user/login_with_facebook", { code });
@@ -104,8 +169,13 @@ function OAuthCallbackContent() {
         } else {
           router.replace("/onboarding");
         }
-      } catch (err) {
-        // console.error("OAuth error:", err); // Log the error for debugging
+      } catch (err: any) {
+        console.error("OAuth error:", err);
+        console.error("Error details:", {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status
+        });
         router.replace("/onboarding");
       }
     };

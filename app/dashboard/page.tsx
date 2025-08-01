@@ -25,6 +25,8 @@ import { login as loginAction } from '@/store/slices/authSlice';
 import serverHandler from '@/utils/serverHandler';
 import AllFlowsPage from "@/components/dashboard/allflows"
 import AllTemplatesPage from "@/components/flow-integration/alltemplates"
+import AutomationToolsView from "@/components/dashboard/AutomationToolsView"
+import SettingsView from "@/components/dashboard/SettingsView"
 
 const stats = [
   { title: "Total Messages", value: "3,196", change: "+12%", icon: MessageSquare },
@@ -128,6 +130,10 @@ export default function DashboardPage() {
         return <AllFlowsPage />
       case "templates":
         return <AllTemplatesPage />
+      case "automation":
+        return <AutomationToolsView />
+      case "settings":
+        return <SettingsView />
       default:
         return <DashboardView />
     }
