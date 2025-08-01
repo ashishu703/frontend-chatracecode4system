@@ -73,7 +73,7 @@ export function useAuth(): AuthReturn {
     setLoading(true);
     setError(null);
     try {
-      const response: any = await serverHandler.post('/login_with_google', { token });
+      const response: any = await serverHandler.post('/api/user/login_with_google', { token });
       localStorage.setItem('serviceToken', response.data.token);
       dispatch(loginAction({
         id: response.data.user.id,
