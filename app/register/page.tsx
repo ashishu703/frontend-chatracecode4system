@@ -53,7 +53,7 @@ export default function RegisterPage() {
       const clientId = (socialConfig.facebook_client_id || socialConfig.fb_login_app_id || '').trim();
       const scopes = socialConfig.facebook_auth_scopes || "email,public_profile,pages_show_list,pages_read_engagement";
       // Hardcoded backend URL for redirect_uri
-      const redirectUri = `https://32034955e8f3.ngrok-free.app/api/user/auth/meta/callback`;
+      const redirectUri = `https://9986caf1c1ec.ngrok-free.app/api/user/auth/meta/callback`;
       const state = `state_${Math.random().toString(36).substring(2, 15)}`;
       const loggerId = Math.random().toString(36).substring(2, 15);
       const timestamp = Date.now();

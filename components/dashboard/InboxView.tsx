@@ -292,16 +292,8 @@ export default function ChatInterface() {
     };
     loadChats();
     
-    // Set up periodic refresh every 30 seconds
-    const interval = setInterval(() => {
-      if (isMounted) {
-        loadChats();
-      }
-    }, 30000);
-    
     return () => { 
       isMounted = false; 
-      clearInterval(interval);
     };
   }, []);
 
@@ -1014,7 +1006,7 @@ export default function ChatInterface() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen w-full bg-background overflow-hidden">
+      <div className="flex w-full bg-background overflow-hidden" style={{height: '83vh'}}>
         {/* Left Sidebar - Conversations */}
         <div
           className={cn(
@@ -1079,7 +1071,7 @@ export default function ChatInterface() {
             )}
           </div>
           {/* Conversations List with Custom Scrollbar */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
+          <div className="flex-1 permanent-scrollbar">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center text-muted-foreground">
@@ -1220,7 +1212,7 @@ export default function ChatInterface() {
                 </div>
               </header>
               {/* Chat Messages with Messenger-like styling */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 bg-gray-50">
+              <div className="flex-1 permanent-scrollbar p-4 space-y-3 bg-gray-50">
                 {isLoadingMessages ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-muted-foreground">

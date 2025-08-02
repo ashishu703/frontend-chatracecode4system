@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function FacebookCallback() {
+function FacebookCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -40,4 +40,12 @@ export default function FacebookCallback() {
 
   if (error) return <div style={{ color: 'red', padding: 24 }}>Facebook login failed: {error}</div>;
   return <div style={{ padding: 24 }}>Logging you in with Facebook...</div>;
+}
+
+export default function FacebookCallback() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>Loading...</div>}>
+      <FacebookCallbackContent />
+    </Suspense>
+  );
 } 
