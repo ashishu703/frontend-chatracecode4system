@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const loggerId = Math.random().toString(36).substring(2, 15);
 
     // Create redirect URI
-    const redirectUri = `https://32034955e8f3.ngrok-free.app/api/user/auth/meta/callback`;
+    const redirectUri = `https://7e61ad963202.ngrok-free.app/api/user/auth/meta/callback`;
 
     // Build WhatsApp OAuth URL
     const authUrl = new URL(`https://www.facebook.com/${graphVersion}/dialog/oauth`);
