@@ -57,3 +57,21 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Permanent, always-visible, grey scrollbars for chat sidebar and chat area */
+.permanent-scrollbar {
+  overflow-y: scroll !important;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+.permanent-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  background: #f1f5f9;
+}
+.permanent-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.permanent-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}

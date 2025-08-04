@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,14 +13,33 @@ export default function SMTPSettings() {
   const { toast } = useToast()
   const [isUpdating, setIsUpdating] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [testEmail, setTestEmail] = useState("")
   
   const [settings, setSettings] = useState({
-    email: "info@omnichat.karobar.org",
-    host: "omnichat.karobar.org",
-    password: "Karobar42044$",
-    port: "465",
+    email: "",
+    host: "",
+    password: "",
+    port: "",
   })
+
+  // Load SMTP settings from database
+  useEffect(() => {
+    const loadSMTPSettings = async () => {
+      try {
+        const response = await serverHandler.get("/api/admin/get_smtp_settings")
+        if (response.data.success) {
+          setSettings(response.data.data)
+        }
+      } catch (error: any) {
+        console.error('Failed to load SMTP settings:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadSMTPSettings()
+  }, [])
 
   const handleUpdate = async () => {
     setIsUpdating(true)
@@ -101,6 +120,21 @@ export default function SMTPSettings() {
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card className="bg-white shadow-sm">
+          <CardContent className="flex items-center justify-center py-12">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span>Loading SMTP settings...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Card className="bg-white shadow-sm">
@@ -120,7 +154,7 @@ export default function SMTPSettings() {
                 type="email"
                 value={settings.email}
                 onChange={(e) => setSettings({ ...settings, email: e.target.value })}
-                placeholder="info@omnichat.karobar.org"
+                placeholder="Enter email address"
               />
             </div>
 
@@ -130,7 +164,7 @@ export default function SMTPSettings() {
                 id="host"
                 value={settings.host}
                 onChange={(e) => setSettings({ ...settings, host: e.target.value })}
-                placeholder="omnichat.karobar.org"
+                placeholder="Enter SMTP host"
               />
             </div>
 
@@ -140,7 +174,7 @@ export default function SMTPSettings() {
                 id="port"
                 value={settings.port}
                 onChange={(e) => setSettings({ ...settings, port: e.target.value })}
-                placeholder="465"
+                placeholder="Enter port number"
               />
             </div>
 
@@ -151,7 +185,7 @@ export default function SMTPSettings() {
                 type="password"
                 value={settings.password}
                 onChange={(e) => setSettings({ ...settings, password: e.target.value })}
-                placeholder="Your email password"
+                placeholder="Enter email password"
                 autoComplete="current-password"
               />
             </div>
@@ -168,7 +202,7 @@ export default function SMTPSettings() {
                   type="email"
                   value={testEmail}
                   onChange={(e) => setTestEmail(e.target.value)}
-                  placeholder="abc123@abc.com"
+                  placeholder="Enter test email address"
                   className="mt-1"
                 />
               </div>
