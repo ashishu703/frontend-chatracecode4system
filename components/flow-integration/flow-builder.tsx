@@ -194,6 +194,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     { type: "documentMessageNode", label: "Document Message", dataType: "documentMessage" },
     { type: "buttonMessageNode", label: "Button Message", dataType: "buttonMessage" },
     { type: "listMessageNode", label: "List Message", dataType: "listMessage" },
+    { type: "sendEmailNode", label: "Mail Node", dataType: "mailMessage" },
     { type: "disableChatTillNode", label: "Disable Chat", dataType: "disableChatTill" },
     { type: "requestAPINode", label: "API Request", dataType: "requestAPI" },
     { type: "assignAgentNode", label: "Assign Agent", dataType: "assignAgent" },
@@ -216,7 +217,8 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
       node.type === 'audioMessageNode' || 
       node.type === 'documentMessageNode' || 
       node.type === 'buttonMessageNode' || 
-      node.type === 'listMessageNode'
+      node.type === 'listMessageNode' ||
+      node.type === 'sendEmailNode'
     );
     const nextMessageNumber = existingMessageNodes.length + 1;
     
@@ -524,6 +526,20 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
                 action: { button: "", sections: [] }
               }
             }
+          }
+        };
+      case "mailMessage":
+        return {
+          state: {
+            label: "Send Email",
+            from: "",
+            to: "",
+            subject: "",
+            preheader: "",
+            headline: "",
+            text: "",
+            image: "",
+            button: ""
           }
         };
       case "assignAgent":

@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     const clientId = settings.facebook_client_id; // Use Facebook App ID for Instagram OAuth
     const clientSecret = settings.facebook_client_secret;
     const graphVersion = settings.facebook_graph_version || "v18.0";
-    const redirectUri = `https://32034955e8f3.ngrok-free.app/api/user/auth/meta/callback`;
+    const redirectUri = `https://7e61ad963202.ngrok-free.app/api/user/auth/meta/callback`;
 
     if (!clientId || !clientSecret) {
       return NextResponse.redirect(new URL('/onboarding?error=credentials_incomplete', request.url));

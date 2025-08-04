@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     const timestamp = Date.now();
 
     // Create redirect URI - first to localhost, then to ngrok
-    const redirectUri = `https://32034955e8f3.ngrok-free.app/api/user/auth/meta/callback`;
+    const redirectUri = `https://7e61ad963202.ngrok-free.app/api/user/auth/meta/callback`;
 
     // Build Instagram OAuth URL
     const authUrl = new URL(`https://www.facebook.com/${graphVersion}/dialog/oauth`);

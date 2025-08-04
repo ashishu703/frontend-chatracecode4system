@@ -1,158 +1,483 @@
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import type { NodeData } from "@/types/flow-integration/flow";
-import { Card } from "@/components/ui/card";
-import { Mail, ChevronRight } from "lucide-react";
-import NodeActions, { NodeActionType } from "./NodeActions";
-import { useState, useEffect } from "react";
-import { useNodeContext } from "../node-context";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { toast } from "sonner";
+"use client"
 
-// Define a type for mail node state
-export type MailNodeState = {
-  label?: string;
-  from?: string;
-  to?: string;
-  subject?: string;
-  preheader?: string;
-  headline?: string;
-  text?: string;
-  image?: string;
-  button?: string;
-};
+import type React from "react"
+import { useState, useEffect, useCallback } from "react"
+import { Mail, X, Upload, Plus, Save, Trash2, Edit, Star, Link2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Handle, Position } from "@xyflow/react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { useToast } from "@/components/ui/use-toast"
+import { useNodeContext } from "../node-context"
+import serverHandler from "@/utils/serverHandler"
 
-export function MailNode({ data }: NodeProps<Node<NodeData>>) {
-  // Type-cast state to MailNodeState for mail-specific fields
-  const state = (data.data && (data.data as any).data?.state) ? (data.data as any).data.state as MailNodeState : {} as MailNodeState;
-  const [hovered, setHovered] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showRename, setShowRename] = useState(false);
-  const [renameValue, setRenameValue] = useState(state.label || "Send Email");
-  const [isStart, setIsStart] = useState(false);
-  const { updateNode, deleteNode, duplicateNode, setStartNode } = useNodeContext();
-
-  useEffect(() => {
-    setRenameValue(state.label || "Send Email");
-  }, [state.label]);
-
-  const handleAction = (action: NodeActionType) => {
-    switch (action) {
-      case "preview":
-        setShowPreview(true);
-        break;
-      case "rename":
-        setShowRename(true);
-        break;
-      case "duplicate":
-        duplicateNode(data.id as string);
-        toast.success("Node duplicated");
-        break;
-      case "delete":
-        deleteNode(data.id as string);
-        toast.success("Node deleted");
-        break;
-      case "setStart":
-        setStartNode(data.id as string);
-        setIsStart(true);
-        toast.success("Set as starting step");
-        break;
-      case "getLink":
-        navigator.clipboard.writeText(window.location.href + "#" + data.id);
-        toast.success("Link copied!");
-        break;
-      case "getId":
-        navigator.clipboard.writeText(String(data.id));
-        toast.success("Step ID copied!");
-        break;
-      default:
-        break;
+const initializeOptions = (optionsData: any[]) => {
+  if (!optionsData || !Array.isArray(optionsData) || optionsData.length === 0) {
+    return [{ id: `opt-${Date.now()}`, value: "" }]
+  }
+  return optionsData.map((opt, index) => {
+    if (typeof opt === "object" && opt.id && typeof opt.value !== "undefined") return opt
+    return {
+      id: `opt-${Date.now()}-${index}`,
+      value: typeof opt === "string" ? opt : ""
     }
-  };
-
-  const handleRenameSave = () => {
-    updateNode(String(data.id), {
-      type: data.type,
-      data: {
-        ...(data.data && (data.data as any).data),
-        state: {
-          ...((data.data && (data.data as any).data?.state) || {}),
-          ...( { label: renameValue } as MailNodeState ),
-        },
-      },
-    });
-    setShowRename(false);
-    toast.success("Node renamed");
-  };
-
-  return (
-    <Card
-      className={`min-w-[240px] relative ${data.selected ? "ring-2 ring-blue-500" : ""} ${isStart ? "ring-4 ring-green-500" : ""}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-blue-500" />
-      {hovered && (
-        <NodeActions onAction={handleAction} />
-      )}
-      <div className="p-4">
-        <div className="flex items-center space-x-2 mb-2">
-          <div className="p-1 bg-green-600 rounded">
-            <Mail className="h-3 w-3 text-white" />
-          </div>
-          <span className="font-medium text-sm">{state.label || "Send Email"}</span>
-          <ChevronRight className="h-4 w-4 text-gray-400 ml-1" />
-        </div>
-        <div className="text-xs text-gray-600">
-          <div><b>From:</b> {state.from || "-"}</div>
-          <div><b>To:</b> {state.to || "-"}</div>
-          <div><b>Subject:</b> {state.subject || "-"}</div>
-          <div><b>Preheader:</b> {state.preheader || "-"}</div>
-          <div><b>Headline:</b> {state.headline || "-"}</div>
-          <div><b>Text:</b> {state.text || "-"}</div>
-          <div><b>Image:</b> {state.image || "-"}</div>
-          <div><b>Button:</b> {state.button || "-"}</div>
-        </div>
-      </div>
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-blue-500" />
-      {/* Preview Dialog */}
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Preview Email</DialogTitle>
-            <DialogClose />
-          </DialogHeader>
-          <div className="p-4 space-y-2">
-            <div className="font-bold">{state.subject || "No Subject"}</div>
-            <div className="text-gray-700">{state.text || "No Content"}</div>
-            <div><b>From:</b> {state.from || "-"}</div>
-            <div><b>To:</b> {state.to || "-"}</div>
-            <div><b>Preheader:</b> {state.preheader || "-"}</div>
-            <div><b>Headline:</b> {state.headline || "-"}</div>
-            <div><b>Image:</b> {state.image || "-"}</div>
-            <div><b>Button:</b> {state.button || "-"}</div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Rename Dialog */}
-      <Dialog open={showRename} onOpenChange={setShowRename}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename Node</DialogTitle>
-            <DialogClose />
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <input
-              className="border rounded px-2 py-1"
-              value={renameValue}
-              onChange={e => setRenameValue(e.target.value)}
-              autoFocus
-            />
-            <button className="bg-blue-500 text-white rounded px-3 py-1 mt-2" onClick={handleRenameSave}>Save</button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </Card>
-  );
+  })
 }
 
-export default MailNode; 
+const buildNodeData = (
+  fromEmail: string,
+  toEmail: string,
+  subject: string,
+  preheader: string,
+  headline: string,
+  text: string,
+  imageUrl: string,
+  title: string,
+  messageNumber: number,
+  options: any[],
+  uploadedFile: File | null = null
+) => ({
+  type: "mailMessage" as const,
+  data: {
+    state: {
+      label: "Send Email",
+      from: fromEmail || "",
+      to: toEmail || "",
+      subject: subject || "",
+      preheader: preheader || "",
+      headline: headline || "",
+      text: text || "",
+      image: imageUrl || ""
+    }
+  },
+  title,
+  messageNumber,
+  fromEmail,
+  toEmail,
+  subject,
+  preheader,
+  headline,
+  text,
+  imageUrl,
+  imageFile: uploadedFile,
+  options
+})
+
+export function MailNode({ data, selected, id }: any) {
+  const [fromEmail, setFromEmail] = useState("")
+  const [toEmail, setToEmail] = useState("")
+  const [subject, setSubject] = useState("")
+  const [preheader, setPreheader] = useState("")
+  const [headline, setHeadline] = useState("")
+  const [text, setText] = useState("")
+  const [imageUrl, setImageUrl] = useState("")
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [isSaved, setIsSaved] = useState(false)
+  const [showDialog, setShowDialog] = useState(false)
+  const [templateName, setTemplateName] = useState("")
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [title, setTitle] = useState("Mail Node")
+  const [messageNumber, setMessageNumber] = useState(1)
+  const [isSaving, setIsSaving] = useState(false)
+  const [useUrlInput, setUseUrlInput] = useState(false)
+  const { toast } = useToast()
+  const { deleteNode, updateNode, startNodeId, setStartNodeId } = useNodeContext()
+  const [options, setOptions] = useState(() => initializeOptions(data?.options))
+  const isStartNode = startNodeId === id
+
+  useEffect(() => {
+    setFromEmail(data?.fromEmail || "")
+    setToEmail(data?.toEmail || "")
+    setSubject(data?.subject || "")
+    setPreheader(data?.preheader || "")
+    setHeadline(data?.headline || "")
+    setText(data?.text || "")
+    setImageUrl(data?.imageUrl || "")
+    setTitle(data?.title || "Mail Node")
+    setMessageNumber(data?.messageNumber || 1)
+    setOptions(initializeOptions(data?.options))
+  }, [data])
+
+  const syncData = useCallback((customData = {}) => {
+    const newData = buildNodeData(fromEmail, toEmail, subject, preheader, headline, text, imageUrl, title, messageNumber, options, uploadedFile)
+    updateNode?.(id, { ...newData, ...customData })
+  }, [fromEmail, toEmail, subject, preheader, headline, text, imageUrl, title, messageNumber, options, uploadedFile, updateNode, id])
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      toast({ title: "Error", description: "Invalid image file. Allowed: JPG, PNG, GIF, WEBP", variant: "destructive" })
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "Error", description: "Max file size is 10MB", variant: "destructive" })
+      return
+    }
+
+    const url = URL.createObjectURL(file)
+    setUploadedFile(file)
+    setImageUrl(url)
+    setUseUrlInput(false)
+    
+    // Sync data after state updates
+    setTimeout(() => {
+      const newData = buildNodeData(fromEmail, toEmail, subject, preheader, headline, text, url, title, messageNumber, options, file)
+      updateNode?.(id, { ...newData, imageFile: file })
+    }, 0)
+    
+    toast({ title: "Success", description: "Image uploaded", variant: "default" })
+  }
+
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const url = e.target.value
+    setImageUrl(url)
+    setUploadedFile(null)
+  }
+
+  const handleUrlBlur = () => {
+    syncData()
+  }
+
+  const handleFieldChange = (field: string, value: string) => {
+    switch (field) {
+      case 'fromEmail':
+        setFromEmail(value)
+        break
+      case 'toEmail':
+        setToEmail(value)
+        break
+      case 'subject':
+        setSubject(value)
+        break
+      case 'preheader':
+        setPreheader(value)
+        break
+      case 'headline':
+        setHeadline(value)
+        break
+      case 'text':
+        setText(value)
+        break
+    }
+  }
+
+  const handleFieldBlur = () => {
+    syncData()
+  }
+
+  const handleSave = () => setShowDialog(true)
+
+  const handleDialogSave = async () => {
+    if (!templateName.trim()) {
+      toast({ title: "Template name is required", variant: "destructive" })
+      return
+    }
+
+    setIsSaving(true)
+    const payload = {
+      content: {
+        type: "email",
+        email: {
+          from: fromEmail,
+          to: toEmail,
+          subject: subject,
+          preheader: preheader,
+          headline: headline,
+          text: text,
+          image: imageUrl
+        }
+      },
+      title: templateName,
+      type: "EMAIL"
+    }
+
+    try {
+      const response = await serverHandler.post("/api/templet/add_new", payload)
+      if ((response.data as any)?.success) {
+        setIsSaved(true)
+        setShowDialog(false)
+        toast({ title: "Template saved!", variant: "default" })
+        setTimeout(() => setIsSaved(false), 2000)
+      } else {
+        toast({ title: "Error", description: (response.data as any)?.msg || "Failed to save", variant: "destructive" })
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error?.response?.data?.msg || "Failed to save", variant: "destructive" })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleTitleEdit = () => setIsEditingTitle(true)
+  const handleTitleSave = () => {
+    setIsEditingTitle(false)
+    syncData()
+  }
+
+  const handleSetStartNode = useCallback(() => {
+    setStartNodeId?.(id)
+    toast({ title: "Start node set!", variant: "default" })
+  }, [id, setStartNodeId, toast])
+
+  const addOption = () => {
+    const newOptions = [...options, { id: `opt-${Date.now()}`, value: "" }]
+    setOptions(newOptions)
+    setTimeout(() => {
+      const newData = buildNodeData(fromEmail, toEmail, subject, preheader, headline, text, imageUrl, title, messageNumber, newOptions, uploadedFile)
+      updateNode?.(id, { ...newData, options: newOptions })
+    }, 0)
+  }
+
+  const updateOption = (index: number, value: string) => {
+    const newOptions = options.map((opt, i) => (i === index ? { ...opt, value } : opt))
+    setOptions(newOptions)
+  }
+
+  const handleOptionBlur = (index: number) => {
+    syncData()
+  }
+
+  const removeOption = (index: number) => {
+    const newOptions = options.filter((_, i) => i !== index)
+    setOptions(newOptions)
+    setTimeout(() => {
+      const newData = buildNodeData(fromEmail, toEmail, subject, preheader, headline, text, imageUrl, title, messageNumber, newOptions, uploadedFile)
+      updateNode?.(id, { ...newData, options: newOptions })
+    }, 0)
+  }
+
+  return (
+    <div className="relative">
+      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-800 border-0" />
+      <div className={`w-[320px] bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm ${selected ? "ring-2 ring-blue-500" : ""}`}>
+        {/* Header */}
+        <div className="bg-green-500 text-white px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isEditingTitle ? (
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyPress={(e) => e.key === "Enter" && handleTitleSave()}
+                className="bg-white text-gray-800 px-2 py-1 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white"
+                autoFocus
+              />
+            ) : (
+              <span className="font-medium text-sm">{title} #{messageNumber}</span>
+            )}
+            <button onClick={handleTitleEdit} className="p-1 hover:bg-green-600 rounded transition-colors" title="Edit title">
+              <Edit className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={handleSetStartNode} className="p-1 hover:bg-green-600 rounded transition-colors" title="Set Start">
+              <Star className={`w-4 h-4 ${isStartNode ? "text-yellow-400 fill-yellow-400" : "text-white"}`} />
+            </button>
+            <button onClick={handleSave} className="p-1" title="Save">
+              <Save className={`w-4 h-4 ${isSaved ? "text-green-200" : "text-white"}`} />
+            </button>
+            <button onClick={() => deleteNode(id)} className="p-1" title="Delete">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Email Form */}
+        <div className="p-4 space-y-4">
+          {/* From Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">From Email</label>
+            <Input
+              placeholder="Enter sender email..."
+              value={fromEmail}
+              onChange={(e) => handleFieldChange('fromEmail', e.target.value)}
+              onBlur={handleFieldBlur}
+              className="border-gray-300"
+            />
+          </div>
+
+          {/* To Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">To Email</label>
+            <Input
+              placeholder="Enter recipient email..."
+              value={toEmail}
+              onChange={(e) => handleFieldChange('toEmail', e.target.value)}
+              onBlur={handleFieldBlur}
+              className="border-gray-300"
+            />
+          </div>
+
+          {/* Subject */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+            <Input
+              placeholder="Enter email subject..."
+              value={subject}
+              onChange={(e) => handleFieldChange('subject', e.target.value)}
+              onBlur={handleFieldBlur}
+              className="border-gray-300"
+            />
+          </div>
+
+          {/* Preheader */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Preheader</label>
+            <Input
+              placeholder="Enter email preheader..."
+              value={preheader}
+              onChange={(e) => handleFieldChange('preheader', e.target.value)}
+              onBlur={handleFieldBlur}
+              className="border-gray-300"
+            />
+          </div>
+
+          {/* Headline */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Enter Your Headline</label>
+            <Input
+              placeholder="Enter email headline..."
+              value={headline}
+              onChange={(e) => handleFieldChange('headline', e.target.value)}
+              onBlur={handleFieldBlur}
+              className="border-gray-300"
+            />
+          </div>
+
+          {/* Image Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
+            <div className="flex justify-center gap-4 mb-2">
+              <button onClick={() => setUseUrlInput(false)} className={`text-sm px-3 py-1 rounded ${!useUrlInput ? "bg-green-500 text-white" : "bg-gray-200"}`}>
+                Upload Image
+              </button>
+              <button onClick={() => setUseUrlInput(true)} className={`text-sm px-3 py-1 rounded ${useUrlInput ? "bg-green-500 text-white" : "bg-gray-200"}`}>
+                Add Link
+              </button>
+            </div>
+
+            {!useUrlInput ? (
+              <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" id={`image-upload-${id}`} />
+                <label htmlFor={`image-upload-${id}`} className="cursor-pointer">
+                  <Upload className="h-6 w-6 text-gray-400 mx-auto mb-2" />
+                  <span className="text-gray-600 font-medium text-sm">
+                    {uploadedFile ? uploadedFile.name : "Upload Image"}
+                  </span>
+                  {uploadedFile && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Size: {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                    </div>
+                  )}
+                </label>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link2 className="text-gray-400" />
+                <Input
+                  placeholder="Paste image URL..."
+                  value={imageUrl}
+                  onChange={handleUrlChange}
+                  onBlur={handleUrlBlur}
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {/* Image Preview */}
+            {imageUrl && (
+              <div className="mt-2">
+                <img src={imageUrl} alt="Email image" className="w-full h-32 object-cover rounded-lg border border-gray-300" />
+              </div>
+            )}
+          </div>
+
+          {/* Text */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Text</label>
+            <Textarea
+              placeholder="Enter email content..."
+              value={text}
+              onChange={(e) => handleFieldChange('text', e.target.value)}
+              onBlur={handleFieldBlur}
+              className="min-h-[80px] resize-none border-gray-300"
+            />
+          </div>
+
+          {/* Unsubscribe Text */}
+          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <p className="text-xs text-gray-600">
+              You received this email from <strong>{fromEmail || "PAGENAME"}</strong>. If you would like to unsubscribe, <a href="#" className="text-green-600 underline">click here</a>.
+            </p>
+          </div>
+
+          {/* Options */}
+          <div className="mt-4 space-y-2">
+            {options.map((option, index) => (
+              <div key={option.id} className="flex items-center gap-2 relative">
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={option.id}
+                  className="w-3 h-3 bg-green-500 border-0 absolute right-0 top-1/2 transform -translate-y-1/2"
+                  style={{ right: "-6px" }}
+                />
+                <Input
+                  placeholder="Enter an option"
+                  value={option.value}
+                  onChange={(e) => updateOption(index, e.target.value)}
+                  onBlur={() => handleOptionBlur(index)}
+                  className="flex-1 pr-8"
+                />
+                {options.length > 1 && (
+                  <button onClick={() => removeOption(index)} className="bg-red-400 hover:bg-red-500 text-white p-2 rounded transition-colors" title="Remove">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+                {index === options.length - 1 && (
+                  <button onClick={addOption} className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded transition-colors" title="Add">
+                    <Plus className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Dialog for saving template */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save Template</DialogTitle>
+          </DialogHeader>
+          <input
+            className="border rounded px-2 py-1 w-full"
+            placeholder="Enter template name"
+            value={templateName}
+            onChange={(e) => setTemplateName(e.target.value)}
+            autoFocus
+          />
+          <DialogFooter>
+            <button
+              className="bg-green-500 text-white rounded px-3 py-1 mt-2 disabled:opacity-50"
+              onClick={handleDialogSave}
+              disabled={isSaving}
+            >
+              {isSaving ? "Saving..." : "Save"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+export default MailNode 

@@ -60,10 +60,21 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [flows, setFlows] = useState<Flow[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  // Only connect socket if token exists
+  // Debug environment variable
+  useEffect(() => {
+    console.log('NEXT_PUBLIC_WS_URL:', process.env.NEXT_PUBLIC_WS_URL);
+  }, []);
+
+  // Only connect socket if token exists and we're not in admin panel
   useEffect(() => {
     const token = localStorage.getItem("serviceToken");
+    const role = localStorage.getItem("role");
+    
+    console.log('Socket connection check - Token:', !!token, 'Role:', role);
+    
+    // Don't connect socket if we're in admin panel or no token
     if (!token) {
+      console.log('Skipping socket connection - No token');
       if (socket) {
         socket.disconnect();
         setSocket(null);
@@ -75,28 +86,47 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Temporarily allow admin socket connection for testing
+    if (role === 'admin') {
+      console.log('Admin socket connection allowed for testing');
+    }
+
     let wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:6400"
+    // Convert WebSocket URL to HTTP URL for Socket.IO
     if (wsUrl.startsWith("ws://")) wsUrl = wsUrl.replace("ws://", "http://")
     if (wsUrl.startsWith("wss://")) wsUrl = wsUrl.replace("wss://", "https://")
 
+    console.log('Connecting to WebSocket URL:', wsUrl)
+
     const newSocket = io(wsUrl, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'], // Allow fallback to polling
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 20000, // Increase timeout
     })
 
     setSocket(newSocket)
 
     // Connection events
     newSocket.on('connect', () => {
-      console.log('Socket connected')
+      console.log('Socket connected successfully')
       setIsConnected(true)
     })
 
-    newSocket.on('disconnect', () => {
-      console.log('Socket disconnected')
+    newSocket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason)
+      setIsConnected(false)
+    })
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error)
+      setIsConnected(false)
+    })
+
+    newSocket.on('connect_timeout', () => {
+      console.error('Socket connection timeout')
       setIsConnected(false)
     })
 
@@ -120,13 +150,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       newSocket.disconnect()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeof window !== 'undefined' ? localStorage.getItem("serviceToken") : null])
+  }, [typeof window !== 'undefined' ? localStorage.getItem("serviceToken") : null, typeof window !== 'undefined' ? localStorage.getItem("role") : null])
 
   // Listen for token changes (logout/login in other tabs)
   useEffect(() => {
     const handleStorage = () => {
       const token = localStorage.getItem("serviceToken");
-      if (!token && socket) {
+      const role = localStorage.getItem("role");
+      
+      // Disconnect if no token or if switched to admin role
+      if ((!token || role === 'admin') && socket) {
         socket.disconnect();
         setSocket(null);
         setIsConnected(false);
@@ -142,7 +175,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   // Fetch templates and flows when socket is connected and token exists
   useEffect(() => {
     const token = localStorage.getItem("serviceToken");
-    if (isConnected && token) {
+    const role = localStorage.getItem("role");
+    
+    // Skip fetching user data if we're in admin panel
+    if (isConnected && token && role !== 'admin') {
       setIsLoading(true)
       // Add a small delay to ensure the connection is stable
       const timer = setTimeout(async () => {

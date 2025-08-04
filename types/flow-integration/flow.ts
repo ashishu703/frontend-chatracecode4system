@@ -9,6 +9,7 @@ export interface NodeData extends Record<string, unknown> {
     | "documentMessage"
     | "buttonMessage"
     | "listMessage"
+    | "mailMessage"
     | "assignAgent"
     | "disableChatTill"
     | "requestAPI"
@@ -24,6 +25,21 @@ export interface NodeData extends Record<string, unknown> {
       videoCaption?: string
       audioUrl?: string
       buttons?: { name: string }[]
+      // Mail message fields
+      label?: string
+      from?: string
+      to?: string
+      subject?: string
+      preheader?: string
+      headline?: string
+      text?: string
+      image?: string
+      // Condition fields
+      channelType?: string
+      selectedChannels?: string[]
+      timeDelayType?: string
+      timeDelayValue?: number
+      timeDelayUnit?: string
       // add other fields as needed
     }
   }
