@@ -69,7 +69,7 @@ export default function DashboardPage() {
       setError(undefined);
       try {
         const res = await serverHandler.get('/api/user/dashboard');
-        setDashboardData(res.data.data);
+        setDashboardData((res.data as any).data);
       } catch (err) {
         setError('Failed to load dashboard data');
       } finally {
@@ -80,7 +80,7 @@ export default function DashboardPage() {
     // Only show admin options if adminToken exists (i.e., user was auto-logged in from admin panel)
     const hasAdminToken = !!localStorage.getItem('adminToken');
     setShowBackAsAdmin(hasAdminToken);
-    setShowLoginAsAdmin(user && user.username && localStorage.getItem('role') === 'user' && hasAdminToken);
+    setShowLoginAsAdmin(!!(user && user.username && localStorage.getItem('role') === 'user' && hasAdminToken));
     // Always restore user from localStorage on mount
     const userLS = localStorage.getItem('user');
     if (userLS) {
@@ -109,7 +109,7 @@ export default function DashboardPage() {
               ) : error ? (
                 <div className="text-center text-red-500 py-10">{error}</div>
               ) : (
-                <DashboardView data={dashboardData} />
+                <DashboardView />
               )}
             </div>
           </div>
@@ -119,6 +119,16 @@ export default function DashboardPage() {
       case "phonebook":
         return <PhonebookView />
       case "broadcast":
+        return <BroadcastView />
+      case "broadcast-analytics":
+        return <BroadcastView />
+      case "create-template":
+        return <BroadcastView />
+      case "prebuilt-template":
+        return <BroadcastView />
+      case "saved-templates":
+        return <BroadcastView />
+      case "broadcast-messages":
         return <BroadcastView />
       case "chatbot":
         return <ChatbotView />

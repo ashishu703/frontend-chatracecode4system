@@ -36,23 +36,23 @@ export async function GET(request: NextRequest) {
 
     const settings = socialLoginData.data;
     console.log('Instagram OAuth settings:', {
-      facebookClientId: settings.facebook_client_id,
-      hasFacebookClientSecret: !!settings.facebook_client_secret,
-      graphVersion: settings.facebook_graph_version || "v18.0",
+      instagramClientId: settings.instagram_client_id,
+      hasInstagramClientSecret: !!settings.instagram_client_secret,
+      graphVersion: settings.instagram_graph_version || "v18.0",
       scopes: settings.instagram_auth_scopes || "instagram_business_basic,instagram_business_manage_messages"
     });
     
-    // For Instagram Business API, we need to use Facebook App ID, not Instagram Client ID
-    const clientId = settings.facebook_client_id; // Use Facebook App ID for Instagram OAuth
-    const clientSecret = settings.facebook_client_secret;
-    const graphVersion = settings.facebook_graph_version || "v18.0";
+    // Use Instagram App ID and Secret for Instagram OAuth
+    const clientId = settings.instagram_client_id;
+    const clientSecret = settings.instagram_client_secret;
+    const graphVersion = settings.instagram_graph_version || "v18.0";
     const scopes = settings.instagram_auth_scopes || "instagram_business_basic,instagram_business_manage_messages";
 
     if (!clientId) {
-      console.error('Facebook App ID not configured');
+      console.error('Instagram App ID not configured');
       return NextResponse.json({ 
         success: false, 
-        message: "Facebook App ID not configured" 
+        message: "Instagram App ID not configured" 
       }, { status: 400 });
     }
 
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     const timestamp = Date.now();
 
     // Create redirect URI - first to localhost, then to ngrok
-    const redirectUri = `https://7e61ad963202.ngrok-free.app/api/user/auth/meta/callback`;
+    const redirectUri = `https://8c9ef71ac9b4.ngrok-free.app/api/user/auth/meta/callback`;
 
     // Build Instagram OAuth URL
     const authUrl = new URL(`https://www.facebook.com/${graphVersion}/dialog/oauth`);

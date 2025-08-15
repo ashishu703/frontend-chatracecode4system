@@ -2,36 +2,43 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get WhatsApp credentials from backend server directly
+    // Get WhatsApp credentials from backend server using the correct endpoint
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:6400';
-    const socialLoginRes = await fetch(`${baseUrl}/api/admin/get_social_login`, {
+    const credentialsRes = await fetch(`${baseUrl}/api/web/get_web_public`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
     });
     
-    if (!socialLoginRes.ok) {
+    if (!credentialsRes.ok) {
       return NextResponse.json({ 
         success: false, 
         message: "Failed to fetch WhatsApp credentials from backend" 
       }, { status: 500 });
     }
 
-    const socialLoginData = await socialLoginRes.json();
+    const credentialsData = await credentialsRes.json();
     
-    if (!socialLoginData.success) {
+    if (!credentialsData.success) {
       return NextResponse.json({ 
         success: false, 
         message: "Failed to fetch WhatsApp credentials from backend" 
       }, { status: 500 });
     }
 
-    const settings = socialLoginData.data;
+    const settings = credentialsData.data;
     const clientId = settings.whatsapp_client_id;
     const clientSecret = settings.whatsapp_client_secret;
     const graphVersion = settings.whatsapp_graph_version || "v18.0";
-    const scopes = "whatsapp_business_management,whatsapp_business_messaging";
+    const scopes = [
+      'business_management',
+      'whatsapp_business_management',
+      'whatsapp_business_messaging',
+      'pages_show_list',
+      'pages_manage_metadata',
+      'pages_messaging'
+    ].join(',');
 
     if (!clientId) {
       return NextResponse.json({ 
@@ -44,8 +51,9 @@ export async function GET(request: NextRequest) {
     const state = `whatsapp_${Math.random().toString(36).substring(2, 15)}`;
     const loggerId = Math.random().toString(36).substring(2, 15);
 
-    // Create redirect URI
-    const redirectUri = `https://7e61ad963202.ngrok-free.app/api/user/auth/meta/callback`;
+    // Redirect back to our frontend callback handler (GET) which will POST to backend
+    const { origin } = new URL(request.url);
+    const redirectUri = `${origin}/api/user/auth/whatsapp/callback`;
 
     // Build WhatsApp OAuth URL
     const authUrl = new URL(`https://www.facebook.com/${graphVersion}/dialog/oauth`);
