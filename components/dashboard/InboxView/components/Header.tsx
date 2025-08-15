@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Menu, Star, MoreVertical, Clock, UserCircle2, ShieldOff, ShieldBan } from "lucide-react";
+import { Menu, Star, MoreVertical, ShieldOff, ShieldBan, ChevronDown, Clock } from "lucide-react";
 import { Conversation } from "../types";
 import { getChannelIcon } from "../utils";
 import {
@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 
-// Digital Clock Component (shows remaining window time)
+// Digital Clock Component (horizontal pill)
 function DigitalClock({ remainingSeconds, expired }: { remainingSeconds: number; expired: boolean }) {
   const label = React.useMemo(() => {
     const s = Math.max(0, remainingSeconds || 0);
@@ -26,26 +26,9 @@ function DigitalClock({ remainingSeconds, expired }: { remainingSeconds: number;
   }, [remainingSeconds]);
 
   return (
-    <div className="relative">
-      <div className={`w-16 h-16 rounded-full border-4 ${expired ? "border-red-300" : "border-green-200"} shadow-lg ${expired ? "shadow-red-200/50" : "shadow-green-200/50"} flex items-center justify-center relative`}>
-        <div className={`absolute inset-1 rounded-full border-2 ${expired ? "border-red-600" : "border-green-600"}`}></div>
-        <div className="flex flex-col items-center justify-center text-center z-10">
-          {label.includes('d') ? (
-            <>
-              <span className={`text-xs font-bold ${expired ? "text-red-700" : "text-gray-600"}`}>
-                {label.split(' ')[0]}
-              </span>
-              <span className={`text-xs font-bold ${expired ? "text-red-700" : "text-gray-600"}`}>
-                {label.split(' ')[1]}
-              </span>
-            </>
-          ) : (
-            <span className={`text-xs font-bold ${expired ? "text-red-700" : "text-gray-600"}`}>
-              {label}
-            </span>
-          )}
-        </div>
-      </div>
+    <div className="flex items-center gap-2 text-gray-600">
+      <Clock className="h-4 w-4" />
+      <span className="text-sm font-medium">{label}</span>
     </div>
   );
 }
@@ -96,10 +79,7 @@ export function Header({
         <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setLeftSidebarOpen(true)}>
           <Menu className="h-4 w-4" />
         </Button>
-        
-        {/* Digital Clock now shows remaining time */}
-        <DigitalClock remainingSeconds={remainingSeconds} expired={expired} />
-        
+
         <div className="relative">
           <Avatar className="h-10 w-10">
             <AvatarImage src={selectedConversation.avatar || "/placeholder.svg"} />
@@ -108,34 +88,37 @@ export function Header({
           <div className="absolute -bottom-1 -right-1">{getChannelIcon(selectedConversation.platform)}</div>
         </div>
         
-        <div className="flex flex-col">
-          <h2 className="font-bold text-sm lg:text-base text-gray-500">{selectedConversation.name}</h2>
-          {/* Removed the green remaining label under the username */}
+        <div className="flex flex-col gap-y-0">
+          <h2 className="font-bold text-sm lg:text-base text-gray-900">{selectedConversation.name}</h2>
+          {/* Assign conversation inline below username (minimal text dropdown) */}
+          <div className="-mt-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="text-xs text-gray-500 hover:text-blue-600 inline-flex items-center gap-1">
+                  {assignedTo ? `Assign Conversation • ${users.find(u => u.id === assignedTo)?.name || "User"}` : "Assign Conversation"}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Assign to</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {users.map((u) => (
+                  <DropdownMenuItem key={u.id} onClick={() => onAssign(u.id)}>
+                    <span className={`mr-2 inline-block h-2 w-2 rounded-full ${u.online ? "bg-green-500" : "bg-gray-400"}`} />
+                    {u.name}
+                    {assignedTo === u.id && <span className="ml-auto text-xs text-muted-foreground">(assigned)</span>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
       
       <div className="flex items-center gap-2">
-        {/* Assign Conversation */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="hidden md:flex gap-2 bg-gray-100 border-gray-300 text-gray-700 font-bold hover:bg-gray-200 shadow-lg shadow-gray-200/50">
-              Assign User
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Assign to</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {users.map((u) => (
-              <DropdownMenuItem key={u.id} onClick={() => onAssign(u.id)}>
-                <span className={`mr-2 inline-block h-2 w-2 rounded-full ${u.online ? "bg-green-500" : "bg-gray-400"}`} />
-                {u.name}
-                {assignedTo === u.id && <span className="ml-auto text-xs text-muted-foreground">(assigned)</span>}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        
-        {/* Star and Vertical Dots in Gray Box */}
+       
+        <DigitalClock remainingSeconds={remainingSeconds} expired={expired} />
+
         <div className="flex items-center bg-gray-100 rounded-lg px-2 py-1 gap-1 shadow-lg shadow-gray-200/50">
           <Button 
             variant="ghost" 
@@ -162,20 +145,6 @@ export function Header({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="bg-gray-100 border-gray-300 text-gray-700 font-bold hover:bg-gray-200 shadow-lg shadow-gray-200/50">
-              Submit As
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={() => onChangeStatus("open")}>Open</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onChangeStatus("pending")}>Pending</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onChangeStatus("solved")}>Solved</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onChangeStatus("closed")}>Closed</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </header>
   );

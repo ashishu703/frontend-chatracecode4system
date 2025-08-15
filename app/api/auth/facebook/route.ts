@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const loggerId = Math.random().toString(36).substring(2, 15);
 
     // Create redirect URI
-    const redirectUri = `https://8c9ef71ac9b4.ngrok-free.app/api/user/auth/meta/callback`;
+    const redirectUri = process.env.NEXT_PUBLIC_META_REDIRECT_URI || `https://79a53a3720a9.ngrok-free.app/api/user/auth/meta/callback`;
 
     // Build Facebook OAuth URL
     const authUrl = new URL(`https://www.facebook.com/${graphVersion}/dialog/oauth`);

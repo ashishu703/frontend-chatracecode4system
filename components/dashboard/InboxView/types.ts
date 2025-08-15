@@ -18,7 +18,7 @@ export interface Message {
   message: string
   type: "text" | "image" | "video" | "audio" | "file" | "interactive" | "carousel" | "gif"
   timestamp: string
-  rawTimestamp?: string
+  rawTimestamp?: string | number
   status?: "sent" | "delivered" | "read" | ""
   body?: any
   reactions?: any[]

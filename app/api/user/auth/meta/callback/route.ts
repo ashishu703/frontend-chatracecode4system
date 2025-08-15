@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
     const clientId = settings.facebook_client_id;
     const clientSecret = settings.facebook_client_secret;
     const graphVersion = settings.facebook_graph_version || "v18.0";
-    const redirectUri = `https://8c9ef71ac9b4.ngrok-free.app/api/user/auth/meta/callback`;
+    const redirectUri = process.env.NEXT_PUBLIC_META_REDIRECT_URI || `https://79a53a3720a9.ngrok-free.app/api/user/auth/meta/callback`;
 
     if (!clientId || !clientSecret) {
       console.error('❌ Missing Facebook credentials:', {
