@@ -40,6 +40,5 @@ export const nodeTypes = {
   requestAPINode: ApiRequestNode,
   sendEmailNode: MailNode,
   conditionNode: ConditionNode,
-  // fallback for all other types
   genericNode: GenericNode,
 };
