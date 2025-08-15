@@ -25,7 +25,7 @@ interface SocialLoginSettings {
   facebook_client_secret: string
   facebook_graph_version: string
   facebook_auth_scopes: string
-  meta_webhook_verifcation_key: string
+  meta_webhook_verification_key: string
   instagram_client_id: string
   instagram_client_secret: string
   instagram_graph_version: string
@@ -47,7 +47,7 @@ export default function SocialLoginAdmin() {
     facebook_client_secret: "",
     facebook_graph_version: "",
     facebook_auth_scopes: "",
-    meta_webhook_verifcation_key: "",
+    meta_webhook_verification_key: "",
     instagram_client_id: "",
     instagram_client_secret: "",
     instagram_graph_version: "",
@@ -70,9 +70,9 @@ export default function SocialLoginAdmin() {
   const fetchSettings = async () => {
     try {
       setLoading(true)
-      const res = await serverHandler.get("/api/admin/get_social_login")
+      const res = await serverHandler.get<{ success: boolean; data: any }>("/api/admin/get_social_login")
       if (res.data.success) {
-        const data = res.data.data
+        const data = res.data.data as any
         setSettings({
           google_client_id: data.google_client_id || "",
           google_login_active: data.google_login_active || 0,
@@ -83,7 +83,8 @@ export default function SocialLoginAdmin() {
           facebook_client_secret: data.facebook_client_secret || "",
           facebook_graph_version: data.facebook_graph_version || "",
           facebook_auth_scopes: data.facebook_auth_scopes || "",
-          meta_webhook_verifcation_key: data.meta_webhook_verifcation_key || "",
+          // prefer correct spelling, fallback to legacy misspelling if backend still returns it
+          meta_webhook_verification_key: data.meta_webhook_verification_key || data.meta_webhook_verifcation_key || "",
           instagram_client_id: data.instagram_client_id || "",
           instagram_client_secret: data.instagram_client_secret || "",
           instagram_graph_version: data.instagram_graph_version || "",
@@ -109,8 +110,8 @@ export default function SocialLoginAdmin() {
   const handleUpdate = async () => {
     try {
       setSaving(true)
-      const res = await serverHandler.post("/api/admin/update_social_login", settings)
-      if (res.data.success) {
+      const res = await serverHandler.post<{ success: boolean; msg?: string }>("/api/admin/update_social_login", settings)
+        if (res.data.success) {
         toast({
           title: "Success",
           description: res.data.msg || "Settings updated successfully",
@@ -431,8 +432,8 @@ export default function SocialLoginAdmin() {
                   </Label>
                   <Input
                     id="meta-webhook-key"
-                    value={settings.meta_webhook_verifcation_key}
-                    onChange={(e) => updateSetting("meta_webhook_verifcation_key", e.target.value)}
+                    value={settings.meta_webhook_verification_key}
+                    onChange={(e) => updateSetting("meta_webhook_verification_key", e.target.value)}
                     placeholder="Webhook verification key"
                     className="rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 h-12"
                   />

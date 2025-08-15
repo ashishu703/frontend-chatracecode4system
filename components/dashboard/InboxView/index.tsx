@@ -303,7 +303,9 @@ export default function InboxView() {
           } catch (e) {}
         }
         
+        // Normalize timestamp for consistent sorting (store ms in rawTimestamp)
         const rawTimestamp = msg.timestamp || msg.createdAt || msg.created_at
+        const rawTsMs = toMs(rawTimestamp)
         const formattedTimestamp = formatTime(rawTimestamp)
         
         // IMPORTANT: Properly handle route field to determine sender
@@ -315,7 +317,7 @@ export default function InboxView() {
           message: messageText,
           type: messageType as Message["type"],
           timestamp: formattedTimestamp,
-          rawTimestamp: rawTimestamp,
+          rawTimestamp: rawTsMs,
           status: (msg.status || "") as any,
           body: messageBody,
           reactions: msg.reactions || [],
@@ -331,7 +333,7 @@ export default function InboxView() {
       console.log("🔍 fetchMessages: Message IDs:", sortedMessages.map(m => ({ id: m.id, message: (m.message||'').substring(0, 20), sender: m.sender })))
       
       if (append) {
-        // Append older messages (which are earlier in time). We merge then keep chronological order.
+       
         autoScrollNextRef.current = false
         setMessages((prev) => {
           const combined = [...sortedMessages, ...prev]
@@ -399,6 +401,18 @@ export default function InboxView() {
     return 7 * 24 * 60 * 60
   }, [])
 
+  // Helper to normalize timestamps to milliseconds for consistent sorting
+  const toMs = React.useCallback((raw: any): number => {
+    if (!raw) return Date.now()
+    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000
+    if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+      const n = parseInt(raw, 10)
+      return n > 1e12 ? n : n * 1000
+    }
+    const parsed = new Date(raw).getTime()
+    return Number.isNaN(parsed) ? Date.now() : parsed
+  }, [])
+
   const resetTimerFromTimestamp = React.useCallback((platform: string, timestamp?: string | number) => {
     const windowSeconds = computeWindowSeconds(platform)
     // Accept epoch seconds, epoch ms, or ISO
@@ -447,13 +461,14 @@ export default function InboxView() {
     const handleNewMessage = (msg: any) => {
       if (msg.chat_id === selectedConversation.id || msg.chat_id === selectedConversation.chat_id) {
         const route = (msg.route || '').toString().toUpperCase()
+        const rawTsMs = toMs(msg.timestamp || new Date().toISOString())
         const newMessage: Message = {
           id: msg.id || `socket-${Date.now()}-${Math.random()}`, // Ensure unique ID
           sender: route === "OUTGOING" ? "user" : "other",
           message: msg.body?.text || msg.body?.caption || msg.body || msg.message || "",
           type: (msg.type || "text") as any,
           timestamp: formatTime(msg.timestamp || new Date().toISOString()),
-          rawTimestamp: msg.timestamp || new Date().toISOString(),
+          rawTimestamp: rawTsMs,
           status: (msg.status || "") as any,
           body: msg.body,
           reactions: msg.reactions || [],
@@ -518,11 +533,7 @@ export default function InboxView() {
     console.log("🚀 remainingSeconds:", remainingSeconds)
     if (!message.trim() || !selectedConversation) return
     
-    // TEMPORARILY DISABLE TIMER CHECK FOR TESTING
-    // if (remainingSeconds <= 0) {
-    //   toast({ title: "Window expired", description: "Only template messages can be sent now.", variant: "destructive" })
-    //   return
-    // }
+    
     
     const messageText = message.trim()
     console.log("🚀 messageText:", messageText)
@@ -533,7 +544,7 @@ export default function InboxView() {
       message: messageText,
       type: "text",
       timestamp: formatTime(new Date().toISOString()),
-      rawTimestamp: new Date().toISOString(),
+      rawTimestamp: Date.now(),
       status: "sent",
     }
     
@@ -613,7 +624,7 @@ export default function InboxView() {
           message: fileType === "file" ? file.name : fileType === "image" ? "Image" : fileType === "video" ? "Video" : fileType === "audio" ? "Audio" : file.name,
           type: fileType as any,
           timestamp: formatTime(new Date().toISOString()),
-          rawTimestamp: new Date().toISOString(),
+          rawTimestamp: Date.now(),
           status: "delivered",
           body: { url, caption: file.name },
         }

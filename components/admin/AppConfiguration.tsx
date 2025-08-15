@@ -43,7 +43,7 @@ export default function AppConfiguration() {
       }
       // Add all other fields from API response
       const fields = [
-        "app_name", "custom_home", "is_custom_home", "meta_description", "currency_code", "currency_symbol", "chatbot_screen_tutorial", "broadcast_screen_tutorial", "home_page_tutorial", "login_header_footer", "exchange_rate", "google_client_id", "google_login_active", "rtl", "fb_login_app_id", "fb_login_app_sec", "fb_login_active", "facebook_client_id", "facebook_client_secret", "facebook_graph_version", "facebook_auth_scopes", "meta_webhook_verifcation_key", "instagram_client_id", "instagram_client_secret", "instagram_graph_version", "instagram_auth_scopes", "whatsapp_client_id", "whatsapp_client_secret", "whatsapp_graph_version", "whatsapp_config_id"
+        "app_name", "custom_home", "is_custom_home", "meta_description", "currency_code", "currency_symbol", "chatbot_screen_tutorial", "broadcast_screen_tutorial", "home_page_tutorial", "login_header_footer", "exchange_rate", "google_client_id", "google_login_active", "rtl", "fb_login_app_id", "fb_login_app_sec", "fb_login_active", "facebook_client_id", "facebook_client_secret", "facebook_graph_version", "facebook_auth_scopes", "meta_webhook_verification_key", "instagram_client_id", "instagram_client_secret", "instagram_graph_version", "instagram_auth_scopes", "whatsapp_client_id", "whatsapp_client_secret", "whatsapp_graph_version", "whatsapp_config_id"
       ];
       fields.forEach((key) => {
         let val = settings[key];
@@ -244,11 +244,11 @@ export default function AppConfiguration() {
               <Label htmlFor="webhookToken">Webhook verification token</Label>
               <Input
                 id="webhookToken"
-                value={settings.meta_webhook_verifcation_key || ""}
+                value={settings.meta_webhook_verification_key || settings.meta_webhook_verifcation_key || ""}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
-                    meta_webhook_verifcation_key: e.target.value,
+                    meta_webhook_verification_key: e.target.value,
                   })
                 }
                 placeholder="Verification token"
