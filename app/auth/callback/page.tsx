@@ -9,7 +9,7 @@ import serverHandler from "@/utils/serverHandler";
 // Function to exchange authorization code for ID token
 const exchangeCodeForToken = async (code: string, googleClientId: string) => {
   try {
-    // Hardcoded client secret and redirect URI as requested
+    
     const googleClientSecret = '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';
     const redirectUri = 'http://localhost:3000/auth/callback?provider=google';
 

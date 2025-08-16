@@ -74,7 +74,12 @@ export const listMessengerChats = async () => {
   return chatsResponse?.data
 }
 
-export const sendMessage = async (text: string, chatId: string, _senderId?: string) => {
+export const sendMessage = async (
+  text: string,
+  chatId: string,
+  _senderId?: string,
+  extras?: { isChatActive?: boolean; platform?: string }
+) => {
   console.log("🚀 sendMessage API called with:", { text, chatId, _senderId })
   console.log("🚀 baseUrl:", baseUrl)
   console.log("🚀 token:", getToken().substring(0, 20) + "...")
@@ -83,7 +88,10 @@ export const sendMessage = async (text: string, chatId: string, _senderId?: stri
   const payload = { 
     text: text, 
     chatId: chatId, 
-    senderId: _senderId || "default" // Use default if no senderId provided
+    senderId: _senderId || chatId, // Use chatId as fallback; avoid undefined which can 500
+    // Provide optional fields some backends expect; safe to include
+    isChatActive: extras?.isChatActive,
+    platform: extras?.platform,
   }
   console.log("🚀 Sending payload:", payload)
   
@@ -98,7 +106,12 @@ export const sendMessage = async (text: string, chatId: string, _senderId?: stri
   
   console.log("🚀 API response status:", response.status)
   console.log("🚀 API response ok:", response.ok)
-  
+  if (!response.ok) {
+    try {
+      const errText = await response.text()
+      console.error("❌ sendMessage error body:", errText)
+    } catch {}
+  }
   return response
 }
 
