@@ -16,6 +16,7 @@ interface ComposerProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>
   imageInputRef: React.RefObject<HTMLInputElement | null>
   disabled?: boolean
+  disabledReason?: string
   onQuickReply?: () => void
   onTriggerChatbot?: () => void
   onRefresh?: () => void
@@ -31,6 +32,7 @@ export function Composer({
   fileInputRef,
   imageInputRef,
   disabled,
+  disabledReason,
   onQuickReply,
   onTriggerChatbot,
   onRefresh,
@@ -50,6 +52,16 @@ export function Composer({
       onPasteFiles(files)
     }
   }, [onPasteFiles])
+
+  if (disabled) {
+    return (
+      <div className="border-t p-4 bg-gray-50 rounded-t-lg">
+        <div className="w-full p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm">
+          {disabledReason || "Messaging window closed. Please send a template message."}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="border-t p-4 bg-gray-50 rounded-t-lg h-20 flex items-center">

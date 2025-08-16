@@ -54,13 +54,22 @@ export default function ChannelsSettings() {
       console.log('🔍 User ID:', user?.id);
       console.log('🔍 Is authenticated:', user ? 'Yes' : 'No');
 
-      if (!user?.id) {
-        console.log('❌ No user ID found:', user);
-        setLoading(false)
-        return
+      // Resolve userId from Redux or localStorage
+      let resolvedUserId: string | null = user?.id || null;
+      if (!resolvedUserId) {
+        try {
+          const userLS = localStorage.getItem('user');
+          const parsed = userLS ? JSON.parse(userLS) : null;
+          resolvedUserId = parsed?.id || parsed?.uid || null;
+          console.log('🧩 Resolved user ID from localStorage:', resolvedUserId);
+        } catch {}
       }
 
-      console.log('🔍 Fetching connected accounts for user:', user.id);
+      if (resolvedUserId) {
+        console.log('🔍 Fetching connected accounts for user:', resolvedUserId);
+      } else {
+        console.log('⚠️ No user ID available, will attempt direct backend fetch using token');
+      }
 
       try {
         setLoading(true)
@@ -85,78 +94,132 @@ export default function ChannelsSettings() {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`/api/user/get_connected_accounts?user_id=${user.id}`, {
-          method: 'GET',
-          headers,
-          credentials: 'include', // Include cookies
-        });
+        if (resolvedUserId) {
+          const response = await fetch(`/api/user/get_connected_accounts?user_id=${resolvedUserId}`, {
+            method: 'GET',
+            headers,
+            credentials: 'include',
+          });
 
-        const data = await response.json()
+          const data = await response.json()
 
-        console.log('📡 API Response:', data);
+          console.log('📡 API Response:', data);
 
-        if (data.success) {
-          console.log('✅ Connected accounts received:', data.data);
-          setConnectedAccounts(data.data || [])
-        } else {
-          console.error('❌ API Error:', data.message);
-          // If authentication failed, try calling backend directly
-          if (data.message === 'Authentication token required' || data.message.includes('uid')) {
-            console.log('🔄 Trying direct backend calls...');
-            try {
-              const [facebookData, instagramData, whatsappData] = await Promise.all([
-                fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/messanger/accounts`, {
-                  method: 'GET',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  }
-                }).then(res => res.json()),
-                fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/accounts`, {
-                  method: 'GET',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  }
-                }).then(res => res.json()),
-                fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/whatsapp/accounts`, {
-                  method: 'GET',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  }
-                }).then(res => res.json())
-              ]);
-              
-              console.log('📡 Direct backend responses:', { facebookData, instagramData, whatsappData });
-              
-              // Combine all profiles
-              const allProfiles = [
-                ...(facebookData.data?.profiles || []),
-                ...(instagramData.data?.profiles || []),
-                ...(whatsappData.data?.profiles || [])
-              ];
-              
-              const connectedAccounts = allProfiles.map((profile: any) => ({
-                id: profile.id,
-                platform: profile.platform,
-                account_name: profile.name,
-                account_id: profile.social_user_id,
-                username: profile.username,
-                avatar: profile.avatar,
-                social_account_id: profile.social_account_id,
-                connected_at: new Date().toISOString(),
-                status: 'active'
-              }));
-              
-              console.log('✅ Direct backend accounts:', connectedAccounts);
-              setConnectedAccounts(connectedAccounts);
-              return; // Exit early since we got data
-            } catch (directErr) {
-              console.error('❌ Direct backend error:', directErr);
+          if (data.success) {
+            console.log('✅ Connected accounts received:', data.data);
+            setConnectedAccounts(data.data || [])
+          } else {
+            console.error('❌ API Error:', data.message);
+            // If authentication failed, try calling backend directly
+            if (data.message === 'Authentication token required' || String(data.message || '').includes('uid')) {
+              console.log('🔄 Trying direct backend calls...');
+              try {
+                const [facebookData, instagramData, whatsappData] = await Promise.all([
+                  fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/messanger/accounts`, {
+                    method: 'GET',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json'
+                    }
+                  }).then(res => res.json()),
+                  fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/accounts`, {
+                    method: 'GET',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json'
+                    }
+                  }).then(res => res.json()),
+                  fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/whatsapp/accounts`, {
+                    method: 'GET',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json'
+                    }
+                  }).then(res => res.json())
+                ]);
+                
+                console.log('📡 Direct backend responses:', { facebookData, instagramData, whatsappData });
+                
+                // Combine all profiles
+                const allProfiles = [
+                  ...(facebookData?.data?.profiles || facebookData?.profiles || []),
+                  ...(instagramData?.data?.profiles || instagramData?.profiles || []),
+                  ...(whatsappData?.data?.profiles || whatsappData?.profiles || [])
+                ];
+                
+                const connectedAccounts = allProfiles.map((profile: any) => ({
+                  id: profile.id,
+                  platform: profile.platform,
+                  account_name: profile.name,
+                  account_id: profile.social_user_id,
+                  username: profile.username,
+                  avatar: profile.avatar,
+                  social_account_id: profile.social_account_id,
+                  connected_at: new Date().toISOString(),
+                  status: 'active'
+                }));
+                
+                console.log('✅ Direct backend accounts:', connectedAccounts);
+                setConnectedAccounts(connectedAccounts);
+                return; // Exit early since we got data
+              } catch (directErr) {
+                console.error('❌ Direct backend error:', directErr);
+              }
             }
+            setError(data.message || 'Failed to fetch connected accounts')
           }
-          setError(data.message || 'Failed to fetch connected accounts')
+        } else {
+          
+          try {
+            const [facebookData, instagramData, whatsappData] = await Promise.all([
+              fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/messanger/accounts`, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              }).then(res => res.json()),
+              fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/accounts`, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              }).then(res => res.json()),
+              fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/whatsapp/accounts`, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              }).then(res => res.json())
+            ]);
+
+            console.log('📡 Direct backend responses (no userId):', { facebookData, instagramData, whatsappData });
+
+            const allProfiles = [
+              ...(facebookData?.data?.profiles || facebookData?.profiles || []),
+              ...(instagramData?.data?.profiles || instagramData?.profiles || []),
+              ...(whatsappData?.data?.profiles || whatsappData?.profiles || [])
+            ];
+
+            const connectedAccounts = allProfiles.map((profile: any) => ({
+              id: profile.id,
+              platform: profile.platform,
+              account_name: profile.name,
+              account_id: profile.social_user_id,
+              username: profile.username,
+              avatar: profile.avatar,
+              social_account_id: profile.social_account_id,
+              connected_at: new Date().toISOString(),
+              status: 'active'
+            }));
+
+            setConnectedAccounts(connectedAccounts);
+          } catch (directErr) {
+            console.error('❌ Direct backend error:', directErr);
+            setError('Failed to fetch connected accounts');
+          }
         }
       } catch (err) {
         console.error('❌ Fetch error:', err);
@@ -174,7 +237,7 @@ export default function ChannelsSettings() {
     // Handle different platform name variations
     const platformVariations = {
       'instagram': ['instagram', 'instagram_business'],
-      'facebook': ['facebook', 'messenger', 'facebook_messenger', 'messanger'], // Handle backend typo
+      'facebook': ['facebook', 'messenger', 'messanger'], 
       'whatsapp': ['whatsapp', 'whatsapp_business']
     };
     

@@ -532,6 +532,11 @@ export default function InboxView() {
     console.log("🚀 selectedConversation:", selectedConversation)
     console.log("🚀 remainingSeconds:", remainingSeconds)
     if (!message.trim() || !selectedConversation) return
+    // Guard: check messaging window
+    if (remainingSeconds <= 0) {
+      toast({ title: "Messaging window closed", description: "Please send a template message.", variant: "destructive" })
+      return
+    }
     
     
     
@@ -559,7 +564,10 @@ export default function InboxView() {
       console.log("🚀 Calling sendMessage with:", { messageText, chatId })
       // Use sender_id if available (actual Facebook user ID), otherwise use chat_id
       const senderId = selectedConversation.sender_id || chatId
-      const response = await sendMessage(messageText, chatId, senderId)
+      const response = await sendMessage(messageText, chatId, senderId, {
+        isChatActive: remainingSeconds > 0,
+        platform: selectedConversation.platform,
+      })
       console.log("🚀 sendMessage response:", response)
       
       if (response.ok) {
@@ -732,6 +740,15 @@ export default function InboxView() {
                 fileInputRef={fileInputRef}
                 imageInputRef={imageInputRef}
                 disabled={selectedConversation?.isActive === false || remainingSeconds <= 0}
+                disabledReason={
+                  selectedConversation?.isActive === false
+                    ? "This chat is disabled."
+                    : remainingSeconds <= 0
+                    ? (/whatsapp/i.test(selectedConversation?.platform || "")
+                        ? "24-hour WhatsApp window closed. Send a template message."
+                        : "7-day messaging window closed. Send a template message.")
+                    : undefined
+                }
                 onQuickReply={() => toast({ title: "Quick reply picker opened" })}
                 onTriggerChatbot={() => toast({ title: "Chatbot triggered" })}
                 onRefresh={() => selectedConversation && fetchMessages(1, false)}
