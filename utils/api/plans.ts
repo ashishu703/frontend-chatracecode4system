@@ -72,7 +72,7 @@ export const userPlansAPI = {
 
   // Get plan details by ID
   getPlanDetails: async (planId: number) => {
-    const response = await serverHandler.post('/api/user/get_plan_details', { id: planId });
+    const response = await serverHandler.post('plan_details', { id: planId });
     return response.data;
   },
 
