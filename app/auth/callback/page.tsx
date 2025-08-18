@@ -160,7 +160,6 @@ function OAuthCallbackContent() {
                 business_id = business_id || resolved.business_id || business_id;
               }
             } catch (e) {
-              // continue; backend may infer, but we prefer providing waba_id
             }
           }
 
