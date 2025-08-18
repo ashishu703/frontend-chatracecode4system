@@ -91,6 +91,19 @@ export default function DashboardPage() {
         }
       } catch {}
     }
+    // If a token is present in URL (from OAuth), persist it and reload user
+    try {
+      const url = new URL(window.location.href);
+      const oauthToken = url.searchParams.get('token');
+      if (oauthToken) {
+        localStorage.setItem('serviceToken', oauthToken);
+        // optionally keep role as user
+        localStorage.setItem('role', 'user');
+        // Clean the URL param
+        url.searchParams.delete('token');
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch {}
   }, [dispatch, user]);
 
   const renderCurrentView = () => {

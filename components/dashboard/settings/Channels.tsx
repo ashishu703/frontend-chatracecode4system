@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import serverHandler from "@/utils/serverHandler"
+import InstagramProfileSigner from "@/components/integrations/instagram/InstagramProfileSigner"
 import { useSelector } from "react-redux"
 
 // SVG Icons (unchanged from your original code)
@@ -46,14 +48,24 @@ export default function ChannelsSettings() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const user = useSelector((state: any) => state.auth.user)
+  const [instagramConfig, setInstagramConfig] = useState<{ authURI?: string } | undefined>()
+
+  // Helper to deduplicate by platform + social/account id
+  const dedupeAccounts = (list: ConnectedAccount[]) => {
+    const seen = new Set<string>()
+    const result: ConnectedAccount[] = []
+    for (const item of list) {
+      const key = `${(item.platform || '').toLowerCase()}|${item.social_account_id || item.account_id || item.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push(item)
+    }
+    return result
+  }
 
   // Fetch connected accounts on component mount
   useEffect(() => {
     const fetchConnectedAccounts = async () => {
-      console.log('🔍 User state:', user);
-      console.log('🔍 User ID:', user?.id);
-      console.log('🔍 Is authenticated:', user ? 'Yes' : 'No');
-
       // Resolve userId from Redux or localStorage
       let resolvedUserId: string | null = user?.id || null;
       if (!resolvedUserId) {
@@ -61,30 +73,24 @@ export default function ChannelsSettings() {
           const userLS = localStorage.getItem('user');
           const parsed = userLS ? JSON.parse(userLS) : null;
           resolvedUserId = parsed?.id || parsed?.uid || null;
-          console.log('🧩 Resolved user ID from localStorage:', resolvedUserId);
         } catch {}
-      }
-
-      if (resolvedUserId) {
-        console.log('🔍 Fetching connected accounts for user:', resolvedUserId);
-      } else {
-        console.log('⚠️ No user ID available, will attempt direct backend fetch using token');
       }
 
       try {
         setLoading(true)
+        // Fetch auth params to mirror chatrace-front integration flow
+        try {
+          type AuthParams = { instagram?: { authURI?: string } }
+          const authParamsRes = await serverHandler.get<AuthParams>('/api/user/get_auth_params')
+          const instagram = (authParamsRes.data as any)?.instagram
+          if (instagram) setInstagramConfig(instagram)
+        } catch {}
         
         // Get auth token from localStorage
         const serviceToken = localStorage.getItem('serviceToken');
         const adminToken = localStorage.getItem('adminToken');
         const agentToken = localStorage.getItem('agentToken');
         const token = serviceToken || adminToken || agentToken;
-        
-        console.log('🔑 Frontend token found:', !!token);
-        console.log('🔍 Available localStorage keys:', Object.keys(localStorage));
-        console.log('🔍 serviceToken:', serviceToken ? 'exists' : 'not found');
-        console.log('🔍 adminToken:', adminToken ? 'exists' : 'not found');
-        console.log('🔍 agentToken:', agentToken ? 'exists' : 'not found');
 
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -103,16 +109,34 @@ export default function ChannelsSettings() {
 
           const data = await response.json()
 
-          console.log('📡 API Response:', data);
-
           if (data.success) {
-            console.log('✅ Connected accounts received:', data.data);
-            setConnectedAccounts(data.data || [])
+            setConnectedAccounts(dedupeAccounts((data.data || []) as ConnectedAccount[]))
+            try {
+              const current = (data.data || []) as ConnectedAccount[]
+              const hasFb = current.some(a => ['facebook','messenger','facebook_messenger','messanger'].includes((a.platform || '').toLowerCase()))
+              if (!hasFb) {
+                const fbRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/messanger/accounts`, {
+                  method: 'GET',
+                  headers,
+                }).then(res => res.json())
+                const fbProfiles = fbRes?.data?.profiles || fbRes?.profiles || []
+                const mapped = fbProfiles.map((profile: any) => ({
+                  id: profile.id,
+                  platform: profile.platform,
+                  account_name: profile.name,
+                  account_id: profile.social_user_id,
+                  username: profile.username,
+                  avatar: profile.avatar,
+                  social_account_id: profile.social_account_id,
+                  connected_at: new Date().toISOString(),
+                  status: 'active'
+                })) as ConnectedAccount[]
+                if (mapped.length) setConnectedAccounts(prev => dedupeAccounts([...(prev || []), ...mapped]))
+              }
+            } catch {}
           } else {
-            console.error('❌ API Error:', data.message);
             // If authentication failed, try calling backend directly
             if (data.message === 'Authentication token required' || String(data.message || '').includes('uid')) {
-              console.log('🔄 Trying direct backend calls...');
               try {
                 const [facebookData, instagramData, whatsappData] = await Promise.all([
                   fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/messanger/accounts`, {
@@ -138,8 +162,6 @@ export default function ChannelsSettings() {
                   }).then(res => res.json())
                 ]);
                 
-                console.log('📡 Direct backend responses:', { facebookData, instagramData, whatsappData });
-                
                 // Combine all profiles
                 const allProfiles = [
                   ...(facebookData?.data?.profiles || facebookData?.profiles || []),
@@ -159,11 +181,10 @@ export default function ChannelsSettings() {
                   status: 'active'
                 }));
                 
-                console.log('✅ Direct backend accounts:', connectedAccounts);
-                setConnectedAccounts(connectedAccounts);
+                setConnectedAccounts(dedupeAccounts(connectedAccounts));
                 return; // Exit early since we got data
               } catch (directErr) {
-                console.error('❌ Direct backend error:', directErr);
+                setError('Failed to fetch connected accounts');
               }
             }
             setError(data.message || 'Failed to fetch connected accounts')
@@ -195,8 +216,6 @@ export default function ChannelsSettings() {
               }).then(res => res.json())
             ]);
 
-            console.log('📡 Direct backend responses (no userId):', { facebookData, instagramData, whatsappData });
-
             const allProfiles = [
               ...(facebookData?.data?.profiles || facebookData?.profiles || []),
               ...(instagramData?.data?.profiles || instagramData?.profiles || []),
@@ -215,16 +234,13 @@ export default function ChannelsSettings() {
               status: 'active'
             }));
 
-            setConnectedAccounts(connectedAccounts);
+            setConnectedAccounts(dedupeAccounts(connectedAccounts));
           } catch (directErr) {
-            console.error('❌ Direct backend error:', directErr);
             setError('Failed to fetch connected accounts');
           }
         }
       } catch (err) {
-        console.error('❌ Fetch error:', err);
         setError('Failed to fetch connected accounts')
-        console.error('Error fetching connected accounts:', err)
       } finally {
         setLoading(false)
       }
@@ -249,7 +265,6 @@ export default function ChannelsSettings() {
       ) && 
       account.status === 'active'
     )
-    console.log(`🔍 Checking ${platform} connection:`, connected, 'Total accounts:', connectedAccounts.length, 'Variations checked:', variations);
     return connected
   }
 
@@ -269,7 +284,6 @@ export default function ChannelsSettings() {
       ) && 
       account.status === 'active'
     )
-    console.log(`🔍 Getting ${platform} account info:`, account);
     return account
   }
 
@@ -289,7 +303,6 @@ export default function ChannelsSettings() {
       ) && 
       account.status === 'active'
     )
-    console.log(`🔍 Getting ${platform} accounts:`, accounts);
     return accounts
   }
 
@@ -352,21 +365,6 @@ export default function ChannelsSettings() {
             </div>
           )}
           
-          {/* Debug Section - Remove this in production */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="font-medium text-blue-800 mb-2">Debug Info:</h4>
-              <div className="text-xs text-blue-700 space-y-1">
-                <p>User ID: {user?.id || 'Not found'}</p>
-                <p>Total accounts: {connectedAccounts.length}</p>
-                <p>Raw accounts: {JSON.stringify(connectedAccounts, null, 2)}</p>
-                <p>Instagram connected: {isConnected('instagram') ? 'Yes' : 'No'}</p>
-                <p>Facebook connected: {isConnected('facebook') ? 'Yes' : 'No'}</p>
-                <p>WhatsApp connected: {isConnected('whatsapp') ? 'Yes' : 'No'}</p>
-              </div>
-            </div>
-          )}
-          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Instagram */}
             <motion.div
@@ -374,18 +372,18 @@ export default function ChannelsSettings() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.1 }}
             >
-              <Card className="relative overflow-hidden border-2 hover:border-pink-300 transition-all duration-200">
+              <Card className="relative overflow-hidden border-2 hover:border-pink-300 transition-all duration-200 h-full">
                 <CardContent className="p-6 text-center space-y-4">
                   <div className="text-pink-500">
                     <InstagramIcon />
                   </div>
                   <div>
                     <h3 className="font-semibold">Instagram</h3>
-                    <p className="text-xs text-gray-500">Direct Messages</p>
-                    
+                    <p className="text-xs text-gray-500">Business</p>
+
                     {/* Show connected accounts */}
                     {getConnectedAccounts('instagram').map((account, index) => (
-                      <div key={account.id} className="mt-3 p-3 bg-pink-50 rounded-lg">
+                      <div key={`${account.platform}-${account.social_account_id || account.account_id || account.id}-${index}`} className="mt-3 p-3 bg-pink-50 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                           <Avatar className="h-6 w-6">
                             <AvatarImage src={account.avatar} />
@@ -414,10 +412,35 @@ export default function ChannelsSettings() {
                     )}
                   </div>
                   <Button
-                    onClick={() => isConnected('instagram') 
-                      ? handleChannelDisconnect('instagram') 
-                      : handleChannelConnect('instagram')
-                    }
+                    onClick={() => {
+                      if (isConnected('instagram')) {
+                        const first = getConnectedAccounts('instagram')[0];
+                        if (first?.social_account_id) {
+                          serverHandler
+                            .delete(`/api/instagram/accounts/${first.social_account_id}`)
+                            .then(() => {
+                              setConnectedAccounts(prev => prev.filter(a => a.social_account_id !== first.social_account_id));
+                            })
+                            .catch(() => setError('Failed to disconnect Instagram'))
+                        }
+                      } else {
+                        const authURI = instagramConfig?.authURI;
+                        if (authURI) {
+                          const token =
+                            (typeof window !== 'undefined' && window.localStorage.getItem('serviceToken')) ||
+                            (typeof window !== 'undefined' && window.localStorage.getItem('adminToken')) ||
+                            (typeof window !== 'undefined' && window.localStorage.getItem('agentToken')) ||
+                            null
+                          const url = new URL(authURI)
+                          const prevState = url.searchParams.get('state') || 'instagram'
+                          const dialogRedirect = url.searchParams.get('redirect_uri') || ''
+                          const encodedDialogRedirect = dialogRedirect ? encodeURIComponent(dialogRedirect) : ''
+                          const nextState = token ? `instagram|${token}|${Date.now()}|${encodedDialogRedirect}` : prevState
+                          url.searchParams.set('state', nextState)
+                          window.location.href = url.toString()
+                        }
+                      }
+                    }}
                     variant={isConnected('instagram') ? "outline" : "default"}
                     className={
                       isConnected('instagram')
@@ -438,7 +461,7 @@ export default function ChannelsSettings() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
             >
-              <Card className="relative overflow-hidden border-2 hover:border-blue-300 transition-all duration-200">
+              <Card className="relative overflow-hidden border-2 hover:border-blue-300 transition-all duration-200 h-full">
                 <CardContent className="p-6 text-center space-y-4">
                   <div className="text-blue-500">
                     <FacebookMessengerIcon />
@@ -449,7 +472,7 @@ export default function ChannelsSettings() {
                     
                     {/* Show connected accounts */}
                     {getConnectedAccounts('facebook').map((account, index) => (
-                      <div key={account.id} className="mt-3 p-3 bg-blue-50 rounded-lg">
+                      <div key={`${account.platform}-${account.social_account_id || account.account_id || account.id}-${index}`} className="mt-3 p-3 bg-blue-50 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                           <Avatar className="h-6 w-6">
                             <AvatarImage src={account.avatar} />
@@ -502,7 +525,7 @@ export default function ChannelsSettings() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3 }}
             >
-              <Card className="relative overflow-hidden border-2 hover:border-green-300 transition-all duration-200">
+              <Card className="relative overflow-hidden border-2 hover:border-green-300 transition-all duration-200 h-full">
                 <CardContent className="p-6 text-center space-y-4">
                   <div className="text-green-500">
                     <WhatsAppIcon />
@@ -513,7 +536,7 @@ export default function ChannelsSettings() {
                     
                     {/* Show connected accounts */}
                     {getConnectedAccounts('whatsapp').map((account, index) => (
-                      <div key={account.id} className="mt-3 p-3 bg-green-50 rounded-lg">
+                      <div key={`${account.platform}-${account.social_account_id || account.account_id || account.id}-${index}`} className="mt-3 p-3 bg-green-50 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                           <Avatar className="h-6 w-6">
                             <AvatarImage src={account.avatar} />

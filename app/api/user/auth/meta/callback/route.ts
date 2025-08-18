@@ -48,10 +48,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/onboarding?error=no_code', request.url));
     }
 
-    // Determine platform from state
-    const platform = state?.includes('instagram') ? 'instagram' : 
-                    state?.includes('messenger') ? 'messenger' : 
-                    state?.includes('whatsapp') ? 'whatsapp' : 'unknown';
+    // Determine platform from state and extract token if embedded: state format can be "platform|<jwt>|<ts>|<encodedRedirect>"
+    const rawState = state || '';
+    const [statePlatform, embeddedToken, _ts, encodedRedirect] = rawState.split('|');
+    const platform = statePlatform?.includes('instagram') ? 'instagram' : 
+                    statePlatform?.includes('messenger') ? 'messenger' : 
+                    statePlatform?.includes('whatsapp') ? 'whatsapp' : 'unknown';
     
     console.log('🔍 OAuth Callback - Platform:', platform, 'State:', state);
 
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    // For Instagram and Messenger, process the OAuth flow here
+    // For Messenger and other platforms, process the OAuth flow here
     console.log('📘 Processing Facebook/Instagram OAuth flow');
 
     // Get credentials from backend server using the correct endpoint
@@ -109,7 +111,18 @@ export async function GET(request: NextRequest) {
     const clientId = settings.facebook_client_id;
     const clientSecret = settings.facebook_client_secret;
     const graphVersion = settings.facebook_graph_version || "v18.0";
-    const redirectUri = process.env.NEXT_PUBLIC_META_REDIRECT_URI || `https://79a53a3720a9.ngrok-free.app/api/user/auth/meta/callback`;
+    // Compute redirect URI dynamically, but prefer one embedded in state (from the original dialog) or backend config
+    const currentUrl = new URL(request.url);
+    const defaultCallback = `${currentUrl.origin}/api/user/auth/meta/callback`;
+    const stateRedirect = encodedRedirect ? decodeURIComponent(encodedRedirect) : '';
+    const effectiveRedirectUri = stateRedirect || settings.instagram_redirect_url || defaultCallback;
+    // Prefer dialog origin (e.g., ngrok https) for final navigation
+    let finalOrigin: string;
+    try {
+      finalOrigin = new URL(effectiveRedirectUri).origin;
+    } catch {
+      finalOrigin = currentUrl.origin;
+    }
 
     if (!clientId || !clientSecret) {
       console.error('❌ Missing Facebook credentials:', {
@@ -125,6 +138,83 @@ export async function GET(request: NextRequest) {
       graphVersion
     });
 
+    // For Instagram, let the backend perform the token exchange to avoid double-use of the code
+    if (platform === 'instagram') {
+      // Retrieve JWT token from state, or cookies/headers as fallback
+      let jwtToken = embeddedToken || getJwtTokenFromRequest(request);
+      if (!jwtToken) {
+        console.error('JWT token not found for Instagram auth');
+        return NextResponse.redirect(new URL('/onboarding?error=auth_token_missing', request.url));
+      }
+      const backendResponse = await fetch(`${baseUrl}/api/instagram/auth-init`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwtToken}`
+        },
+        body: JSON.stringify({ code, redirect_uri: effectiveRedirectUri }),
+      });
+      if (!backendResponse.ok) {
+        const errorText = await backendResponse.text();
+        console.error('Backend Instagram auth-init failed', errorText);
+        return NextResponse.redirect(new URL('/onboarding?error=backend_login_failed', request.url));
+      }
+      const backendData = await backendResponse.json();
+      if (!backendData.success) {
+        console.error('Backend Instagram auth-init failed:', backendData.message);
+        return NextResponse.redirect(new URL('/onboarding?error=backend_login_failed', request.url));
+      }
+      const redirectUrl = new URL('/dashboard', finalOrigin);
+      redirectUrl.searchParams.set('instagram_connected', 'true');
+      if (embeddedToken) redirectUrl.searchParams.set('token', embeddedToken);
+      return NextResponse.redirect(redirectUrl, 302);
+    }
+
+    if (platform === 'messenger') {
+      // Retrieve JWT token from state or cookies
+      let jwtToken = embeddedToken || getJwtTokenFromRequest(request);
+      if (!jwtToken) {
+        return NextResponse.redirect(new URL('/onboarding?error=auth_token_missing', request.url));
+      }
+      // Exchange code on server side and init messenger
+      const tokenResponse = await fetch(`https://graph.facebook.com/${graphVersion}/oauth/access_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: effectiveRedirectUri,
+          code: code!,
+        }),
+      });
+      if (!tokenResponse.ok) {
+        const errorData = await tokenResponse.text();
+        console.error('❌ Messenger token exchange failed:', errorData);
+        return NextResponse.redirect(new URL('/onboarding?error=token_exchange_failed', request.url));
+      }
+      const tokenJson = await tokenResponse.json();
+      const accessToken = tokenJson.access_token;
+      const backendResponse = await fetch(`${baseUrl}/api/messanger/auth-init`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwtToken}`
+        },
+        body: JSON.stringify({ accessToken }),
+      });
+      if (!backendResponse.ok) {
+        return NextResponse.redirect(new URL('/onboarding?error=backend_login_failed', request.url));
+      }
+      const r = await backendResponse.json();
+      if (!r.success) {
+        return NextResponse.redirect(new URL('/onboarding?error=backend_login_failed', request.url));
+      }
+      const redirectUrl = new URL('/dashboard', finalOrigin);
+      redirectUrl.searchParams.set('messenger_connected', 'true');
+      if (embeddedToken) redirectUrl.searchParams.set('token', embeddedToken);
+      return NextResponse.redirect(redirectUrl, 302);
+    }
+
     console.log('🔄 Exchanging code for access token...');
     // Exchange code for access token
     const tokenResponse = await fetch(`https://graph.facebook.com/${graphVersion}/oauth/access_token`, {
@@ -135,7 +225,7 @@ export async function GET(request: NextRequest) {
       body: new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
-        redirect_uri: redirectUri,
+        redirect_uri: effectiveRedirectUri,
         code: code,
       }),
     });
@@ -148,7 +238,7 @@ export async function GET(request: NextRequest) {
         error: errorData,
         platform,
         clientId: clientId?.substring(0, 10) + '...',
-        redirectUri
+        redirectUri: effectiveRedirectUri
       });
       return NextResponse.redirect(new URL('/onboarding?error=token_exchange_failed', request.url));
     }
@@ -220,31 +310,7 @@ export async function GET(request: NextRequest) {
 
     let platformAccounts = [];
     
-    if (platform === 'instagram') {
-      // Find Instagram business accounts
-      for (const page of pages as any[]) {
-        const instagramResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${page.id}?fields=instagram_business_account&access_token=${longLivedToken}`);
-        if (instagramResponse.ok) {
-          const instagramData = await instagramResponse.json();
-          if (instagramData.instagram_business_account) {
-            const instagramAccountId = instagramData.instagram_business_account.id;
-            
-            // Get Instagram account details
-            const accountDetailsResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${instagramAccountId}?fields=id,username,name,profile_picture_url,biography,followers_count,media_count&access_token=${longLivedToken}`);
-            
-            if (accountDetailsResponse.ok) {
-              const accountDetails = await accountDetailsResponse.json();
-              platformAccounts.push({
-                ...accountDetails,
-                page_id: page.id,
-                page_name: page.name,
-                page_access_token: page.access_token
-              });
-            }
-          }
-        }
-      }
-    } else if (platform === 'messenger') {
+    if (platform === 'messenger') {
       // For Messenger, store Facebook pages
       platformAccounts = pages.map((page: any) => ({
         id: page.id,
@@ -255,7 +321,7 @@ export async function GET(request: NextRequest) {
       }));
     }
 
-    // Get user info from Facebook Graph API
+    // Get user info from Facebook Graph API (best-effort)
     const userInfoResponse = await fetch(`https://graph.facebook.com/${graphVersion}/me?fields=id,name,email&access_token=${longLivedToken}`);
     
     let userData = {
@@ -273,48 +339,6 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Handle Instagram authentication
-    if (platform === 'instagram') {
-      // Retrieve JWT token from cookies or headers
-      let jwtToken = request.headers.get('authorization');
-      if (jwtToken && jwtToken.startsWith('Bearer ')) {
-        jwtToken = jwtToken.replace('Bearer ', '');
-      }
-      // If not found in headers, try cookies
-      if (!jwtToken) {
-        const cookieHeader = request.headers.get('cookie');
-        if (cookieHeader) {
-          const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-            const [key, value] = cookie.trim().split('=');
-            acc[key] = value;
-            return acc;
-          }, {} as Record<string, string>);
-          jwtToken = cookies.serviceToken || cookies.adminToken;
-        }
-      }
-      if (!jwtToken) {
-        console.error('JWT token not found for Instagram auth');
-        return NextResponse.redirect(new URL('/onboarding?error=auth_token_missing', request.url));
-      }
-      const backendResponse = await fetch(`${baseUrl}/instagram/auth-init`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${jwtToken}`
-        },
-        body: JSON.stringify({ code }),
-      });
-      if (!backendResponse.ok) {
-        console.error('Backend Instagram auth-init failed');
-        return NextResponse.redirect(new URL('/onboarding?error=backend_login_failed', request.url));
-      }
-      const backendData = await backendResponse.json();
-      if (!backendData.success) {
-        console.error('Backend Instagram auth-init failed:', backendData.message);
-        return NextResponse.redirect(new URL('/onboarding?error=backend_login_failed', request.url));
-      }
-    }
-
     console.log('✅ OAuth successful!', {
       platform: platform,
       accountsCount: platformAccounts.length,
@@ -328,15 +352,16 @@ export async function GET(request: NextRequest) {
     });
 
     // Redirect to dashboard with success
-    const redirectUrl = new URL('/dashboard', request.url);
+    const redirectUrl = new URL('/dashboard', finalOrigin);
     redirectUrl.searchParams.set(`${platform}_connected`, 'true');
+    if (embeddedToken) redirectUrl.searchParams.set('token', embeddedToken);
     
     // Add account IDs to the redirect URL for reference
     if (platformAccounts.length > 0) {
       redirectUrl.searchParams.set('account_count', platformAccounts.length.toString());
     }
     
-    return NextResponse.redirect(redirectUrl);
+    return NextResponse.redirect(redirectUrl, 302);
 
   } catch (error: any) {
     console.error('❌ Meta callback error:', {

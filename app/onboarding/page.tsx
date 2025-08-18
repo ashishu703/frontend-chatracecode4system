@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation"
 import { useDispatch } from "react-redux"
 import { connectPlatform } from "@/store/slices/authSlice"
 import { Check, ArrowRight, AlertCircle, CheckCircle } from "lucide-react"
+import serverHandler from "@/utils/serverHandler"
+import { initFacebookLogin } from "@/lib/facebook"
 
 const platforms = [
   {
@@ -78,17 +80,29 @@ export default function OnboardingPage() {
 
     try {
       if (platformId === "instagram") {
-        // Get Instagram OAuth URL from backend
-        const response = await fetch('/api/auth/instagram');
-        const data = await response.json();
-        
-        if (data.success) {
-          // Redirect to Instagram OAuth
-          window.location.href = data.data.authUrl;
-          return;
-        } else {
-          console.error('Failed to get Instagram OAuth URL:', data.message);
-          // Fallback to simulated connect
+        // Mirror chatrace-front: get auth params, then redirect to instagram.authURI
+        try {
+          const resp: any = await serverHandler.get('/api/user/get_auth_params')
+          const data = resp?.data || {}
+          const instagram = (data as any)?.instagram
+          let authURI = instagram?.authURI as string | undefined
+          if (authURI) {
+            const token =
+              (typeof window !== 'undefined' && window.localStorage.getItem('serviceToken')) ||
+              (typeof window !== 'undefined' && window.localStorage.getItem('adminToken')) ||
+              (typeof window !== 'undefined' && window.localStorage.getItem('agentToken')) ||
+              null
+            const url = new URL(authURI)
+            const prevState = url.searchParams.get('state') || 'instagram'
+            const dialogRedirect = url.searchParams.get('redirect_uri') || ''
+            const encodedDialogRedirect = dialogRedirect ? encodeURIComponent(dialogRedirect) : ''
+            const nextState = token ? `instagram|${token}|${Date.now()}|${encodedDialogRedirect}` : prevState
+            url.searchParams.set('state', nextState)
+            window.location.href = url.toString()
+            return
+          }
+          throw new Error('Missing Instagram authURI')
+        } catch (e) {
           await new Promise((resolve) => setTimeout(resolve, 1500));
           dispatch(connectPlatform(platformId));
           setConnectedPlatforms((prev) => [...prev, platformId]);
@@ -100,7 +114,19 @@ export default function OnboardingPage() {
         const data = await response.json();
         
         if (data.success) {
-          window.location.href = data.data.authUrl;
+          // Inject JWT and dialog redirect into state like instagram flow
+          const token =
+            (typeof window !== 'undefined' && window.localStorage.getItem('serviceToken')) ||
+            (typeof window !== 'undefined' && window.localStorage.getItem('adminToken')) ||
+            (typeof window !== 'undefined' && window.localStorage.getItem('agentToken')) ||
+            null
+          const authUrl = new URL(data.data.authUrl as string)
+          const prevState = authUrl.searchParams.get('state') || 'messenger'
+          const dialogRedirect = authUrl.searchParams.get('redirect_uri') || ''
+          const encodedDialogRedirect = dialogRedirect ? encodeURIComponent(dialogRedirect) : ''
+          const nextState = token ? `messenger|${token}|${Date.now()}|${encodedDialogRedirect}` : prevState
+          authUrl.searchParams.set('state', nextState)
+          window.location.href = authUrl.toString();
           return;
         } else {
           // Fallback to simulated connect
@@ -110,20 +136,33 @@ export default function OnboardingPage() {
           setIsConnecting(null);
         }
       } else if (platformId === "whatsapp") {
-        // Get WhatsApp OAuth URL from backend
         const response = await fetch('/api/auth/whatsapp');
         const data = await response.json();
-        
-        if (data.success) {
-          window.location.href = data.data.authUrl;
-          return;
-        } else {
-          // Fallback to simulated connect
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          dispatch(connectPlatform(platformId));
-          setConnectedPlatforms((prev) => [...prev, platformId]);
-          setIsConnecting(null);
+        if (data?.success && data?.data?.facebookAppId) {
+          try {
+            const { facebookAppId, configId, scopes, redirectUri } = data.data;
+            const { code } = await initFacebookLogin(facebookAppId, {
+              configId,
+              scope: scopes,
+              responseType: 'code'
+            });
+            const result: any = await serverHandler.post('/api/whatsapp/auth_init', {
+              code,
+              redirect_uri: redirectUri
+            });
+            if (result?.data?.success) {
+              window.location.href = '/dashboard?whatsapp_connected=true';
+              return;
+            }
+          } catch (e) {
+            // fall through to simulated connect below
+          }
         }
+        // Fallback to simulated connect
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        dispatch(connectPlatform(platformId));
+        setConnectedPlatforms((prev) => [...prev, platformId]);
+        setIsConnecting(null);
       } else {
         // For Google or other platforms, fallback to simulated connect
         await new Promise((resolve) => setTimeout(resolve, 1500));

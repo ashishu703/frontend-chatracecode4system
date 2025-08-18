@@ -3,33 +3,40 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faFacebookMessenger, faWhatsapp, faInstagram, faTelegram } from "@fortawesome/free-brands-svg-icons"
 
 export const formatTime = (timestamp: string | Date | number) => {
-  if (!timestamp) return ""
+  if (timestamp === undefined || timestamp === null || timestamp === "") return ""
   try {
-    let date: Date
+    let ms: number | null = null
     if (typeof timestamp === "number") {
-      date = new Date(timestamp * 1000)
+      ms = timestamp > 1e12 ? timestamp : timestamp * 1000
     } else if (typeof timestamp === "string") {
-      const numTimestamp = parseInt(timestamp)
-      if (!isNaN(numTimestamp) && numTimestamp > 1000000000) {
-        date = new Date(numTimestamp * 1000)
+      if (/^\d+$/.test(timestamp)) {
+        const n = parseInt(timestamp, 10)
+        ms = n > 1e12 ? n : n * 1000
       } else {
-        date = new Date(timestamp)
+        const parsed = new Date(timestamp).getTime()
+        ms = Number.isNaN(parsed) ? null : parsed
       }
-    } else {
-      date = timestamp
+    } else if (timestamp instanceof Date) {
+      ms = timestamp.getTime()
     }
-    if (isNaN(date.getTime())) {
-      return ""
-    }
-    const now = new Date()
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })
-    } else if (diffInHours < 168) {
-      return date.toLocaleDateString("en-US", { weekday: "short" })
-    }
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  } catch (error) {
+    if (ms === null) return ""
+    const date = new Date(ms)
+
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(date)
+
+    const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value || ""
+    const label = `${get("day")} ${get("month")} ${get("year")}, ${get("hour")}:${get("minute")}:${get("second")} (IST)`
+    return label
+  } catch {
     return ""
   }
 }
