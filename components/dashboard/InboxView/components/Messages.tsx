@@ -25,11 +25,10 @@ export function Messages({
   onLoadOlderMessages,
   isActive = true
 }: MessagesProps) {
-  const isExpired = (remainingSeconds !== undefined && remainingSeconds <= 0) || !isActive
+  
+  const isExpired = (remainingSeconds !== undefined && remainingSeconds <= 0)
   return (
     <div className="flex-1 permanent-scrollbar p-4 space-y-3 bg-[#f0f2f5]">
-      {/* Removed Load older messages button as requested */}
-      
       {isLoadingMessages ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center text-muted-foreground">

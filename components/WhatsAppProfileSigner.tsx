@@ -25,8 +25,8 @@ export function WhatsAppProfileSigner({ isOpen, onClose, onSuccess }: WhatsAppPr
       setStep('connecting');
       setError(null);
 
-      // Get WhatsApp configuration
-      const configResponse = await fetch('/api/whatsapp/config');
+      // Get WhatsApp configuration (same contract as chatrace-front)
+      const configResponse = await fetch('/api/auth/whatsapp');
       const config = await configResponse.json();
       
       if (!config.success || !config.data?.facebookAppId) {
@@ -41,7 +41,7 @@ export function WhatsAppProfileSigner({ isOpen, onClose, onSuccess }: WhatsAppPr
       });
 
       // Exchange the code via backend (port 6400) using serverHandler and include redirect_uri
-      const redirect_uri = `${window.location.origin}/api/user/auth/whatsapp/callback`;
+      const redirect_uri = config.data.redirectUri || `${window.location.origin}/api/user/auth/whatsapp/callback`;
       const { data: result }: { data: { success?: boolean; message?: string } } = await serverHandler.post('/api/whatsapp/auth_init', {
         code,
         redirect_uri,

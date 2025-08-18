@@ -91,6 +91,7 @@ export default function InboxView() {
         sender_name: chat.sender_name,
         last_message_time: chat.lastMessage?.timestamp || chat.last_message_time,
         last_message_body: chat.lastMessage?.body?.text || chat.last_message_body,
+        last_message_timestamp: chat.last_message_timestamp || chat.lastMessage?.timestamp,
       }
       setConversations((prev) => {
         const exists = prev.find((c) => c.id === newConversation.id)
@@ -112,6 +113,7 @@ export default function InboxView() {
               last_message_time: message.timestamp || message.createdAt,
               time: formatTime(message.timestamp || message.createdAt),
               unread_count: (chat.unread_count || 0) + 1,
+              last_message_timestamp: message.timestamp || message.createdAt,
             }
           }
           return chat
@@ -143,7 +145,7 @@ export default function InboxView() {
         avatar: chat.avatar || chat.profile_pic || "/placeholder.svg",
         lastMessage: chat.lastMessage?.body?.text || chat.last_message_body || chat.lastMessage || "",
         platform: chat.platform || chat.channel || "messenger",
-        time: formatTime(chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
+        time: formatTime(chat.last_message_timestamp || chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
         page_name: chat.page?.name || chat.page_name,
         page_icon: chat.page?.icon || chat.page_icon,
         channel_icon: chat.channel_icon,
@@ -169,7 +171,7 @@ export default function InboxView() {
       // Reset timer based on first conversation's last message time
       if (firstConversation) {
         console.log("🕐 Initial timer reset for first conversation")
-        resetTimerFromTimestamp(firstConversation.platform || "", firstConversation.last_message_time)
+        resetTimerFromTimestamp(firstConversation.platform || "", firstConversation.last_message_timestamp)
       }
       
       // Reset pagination state
@@ -370,6 +372,27 @@ export default function InboxView() {
     await fetchMessages(1, false)
   }, [selectedConversation, fetchMessages])
 
+  // Preflight: refresh chat window info from server before sending
+  const refreshSelectedConversationFromServer = React.useCallback(async (): Promise<void> => {
+    try {
+      const chats = await fetchChats()
+      const match = chats.find((c: any) => (String(c.id) === String(selectedConversation?.id) || String(c.chat_id) === String(selectedConversation?.chat_id)))
+      if (match) {
+        setSelectedConversation((prev) => prev ? ({
+          ...prev,
+          platform: match.platform || prev.platform,
+          last_message_timestamp: match.last_message_timestamp || match.lastMessage?.timestamp || prev.last_message_timestamp,
+        } as any) : prev)
+        // Defer timer reset to next tick so hook dependencies are initialized
+        setTimeout(() => {
+          resetTimerFromTimestamp(match.platform || selectedConversation?.platform || "", match.last_message_timestamp || match.lastMessage?.timestamp)
+        }, 0)
+      }
+    } catch (e) {
+      console.warn("⚠️ Failed to refresh conversation preflight:", e)
+    }
+  }, [selectedConversation, /* intentionally not including resetTimerFromTimestamp to avoid order issue */])
+
   // Load older messages function
   const loadOlderMessages = React.useCallback(async () => {
     if (!selectedConversation || !hasMoreMessages || isLoadingOlderMessages) return
@@ -396,12 +419,12 @@ export default function InboxView() {
   }, [fetchMessages])
 
   const computeWindowSeconds = React.useCallback((platform: string) => {
-    if (/whatsapp/i.test(platform)) return 24 * 60 * 60
-    if (/instagram|messenger/i.test(platform)) return 7 * 24 * 60 * 60
+    const p = (platform || "").toLowerCase()
+    if (p.includes("whatsapp")) return 24 * 60 * 60
+    if (p.includes("instagram") || p.includes("messenger") || p === "facebook") return 7 * 24 * 60 * 60
     return 7 * 24 * 60 * 60
   }, [])
 
-  // Helper to normalize timestamps to milliseconds for consistent sorting
   const toMs = React.useCallback((raw: any): number => {
     if (!raw) return Date.now()
     if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000
@@ -415,17 +438,22 @@ export default function InboxView() {
 
   const resetTimerFromTimestamp = React.useCallback((platform: string, timestamp?: string | number) => {
     const windowSeconds = computeWindowSeconds(platform)
-    // Accept epoch seconds, epoch ms, or ISO
+    // Timestamp comes from API as unix seconds (e.g., 1755328703). Normalize strictly from that.
     let lastTsMs: number | null = null
-    if (!timestamp) {
+    if (timestamp === undefined || timestamp === null || timestamp === "") {
       lastTsMs = null
     } else if (typeof timestamp === 'number') {
+      // Treat numbers <= 1e12 as seconds
       lastTsMs = timestamp > 1e12 ? timestamp : timestamp * 1000
-    } else if (/^\d+$/.test(timestamp)) {
-      const asNum = parseInt(timestamp, 10)
-      lastTsMs = asNum > 1e12 ? asNum : asNum * 1000
-    } else {
-      lastTsMs = new Date(timestamp).getTime()
+    } else if (typeof timestamp === 'string') {
+      if (/^\d+$/.test(timestamp)) {
+        const asNum = parseInt(timestamp, 10)
+        lastTsMs = asNum > 1e12 ? asNum : asNum * 1000
+      } else {
+        // If ISO sneaks in, still handle it
+        const parsed = new Date(timestamp).getTime()
+        lastTsMs = Number.isNaN(parsed) ? null : parsed
+      }
     }
     if (lastTsMs && !Number.isNaN(lastTsMs)) {
       const elapsed = Math.max(0, Math.floor((Date.now() - lastTsMs) / 1000))
@@ -443,8 +471,8 @@ export default function InboxView() {
     console.log("🔍 useEffect: selectedConversation changed:", selectedConversation)
     if (selectedConversation) {
       console.log("🔍 useEffect: Calling fetchMessages for conversation:", selectedConversation.id)
-      // Reset timer based on platform and last message time
-      resetTimerFromTimestamp(selectedConversation.platform || "", selectedConversation.last_message_timestamp || selectedConversation.last_message_time)
+      // Reset timer based on platform and last_message_timestamp from API
+      resetTimerFromTimestamp(selectedConversation.platform || "", selectedConversation.last_message_timestamp)
       // Reset pagination and fetch first page
       setCurrentPage(1)
       setHasMoreMessages(true)
@@ -513,6 +541,8 @@ export default function InboxView() {
         // Reset timer on new incoming message
         console.log("🕐 New message received, resetting timer")
         resetTimerFromTimestamp(selectedConversation.platform || "", msg.timestamp)
+        // Also update selectedConversation's last_message_timestamp for consistency
+        setSelectedConversation((prev) => prev ? { ...prev, last_message_timestamp: msg.timestamp || msg.createdAt } as any : prev)
       }
     }
     const handleUpdateDelivery = (msg: any) => {
@@ -533,6 +563,12 @@ export default function InboxView() {
     console.log("🚀 remainingSeconds:", remainingSeconds)
     if (!message.trim() || !selectedConversation) return
     // Guard: check messaging window
+    if (remainingSeconds <= 0) {
+      toast({ title: "Messaging window closed", description: "Please send a template message.", variant: "destructive" })
+      return
+    }
+    // Preflight refresh from server to avoid mismatch with backend window
+    await refreshSelectedConversationFromServer()
     if (remainingSeconds <= 0) {
       toast({ title: "Messaging window closed", description: "Please send a template message.", variant: "destructive" })
       return
@@ -590,6 +626,15 @@ export default function InboxView() {
         
         console.log("✅ Message sent and persisted locally without refresh")
       } else {
+        // Try to parse backend error to detect expiration and sync UI
+        try {
+          const errText = await response.text()
+          if (errText && /expired/i.test(errText)) {
+            setRemainingSeconds(0)
+            toast({ title: "Session expired", description: "Please send a Meta-approved template to continue", variant: "destructive" })
+            return
+          }
+        } catch {}
         throw new Error("Failed to send message")
       }
     } catch (error: any) {
@@ -729,7 +774,7 @@ export default function InboxView() {
                 hasMoreMessages={hasMoreMessages}
                 isLoadingOlderMessages={isLoadingOlderMessages}
                 onLoadOlderMessages={loadOlderMessages}
-                isActive={selectedConversation?.isActive}
+                isActive={true}
               />
               <Composer
                 message={message}
@@ -739,16 +784,7 @@ export default function InboxView() {
                 onImagePick={handleImageUpload}
                 fileInputRef={fileInputRef}
                 imageInputRef={imageInputRef}
-                disabled={selectedConversation?.isActive === false || remainingSeconds <= 0}
-                disabledReason={
-                  selectedConversation?.isActive === false
-                    ? "This chat is disabled."
-                    : remainingSeconds <= 0
-                    ? (/whatsapp/i.test(selectedConversation?.platform || "")
-                        ? "24-hour WhatsApp window closed. Send a template message."
-                        : "7-day messaging window closed. Send a template message.")
-                    : undefined
-                }
+                disabled={!(remainingSeconds > 0)}
                 onQuickReply={() => toast({ title: "Quick reply picker opened" })}
                 onTriggerChatbot={() => toast({ title: "Chatbot triggered" })}
                 onRefresh={() => selectedConversation && fetchMessages(1, false)}

@@ -16,7 +16,6 @@ interface ComposerProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>
   imageInputRef: React.RefObject<HTMLInputElement | null>
   disabled?: boolean
-  disabledReason?: string
   onQuickReply?: () => void
   onTriggerChatbot?: () => void
   onRefresh?: () => void
@@ -32,7 +31,6 @@ export function Composer({
   fileInputRef,
   imageInputRef,
   disabled,
-  disabledReason,
   onQuickReply,
   onTriggerChatbot,
   onRefresh,
@@ -52,16 +50,6 @@ export function Composer({
       onPasteFiles(files)
     }
   }, [onPasteFiles])
-
-  if (disabled) {
-    return (
-      <div className="border-t p-4 bg-gray-50 rounded-t-lg">
-        <div className="w-full p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm">
-          {disabledReason || "Messaging window closed. Please send a template message."}
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="border-t p-4 bg-gray-50 rounded-t-lg h-20 flex items-center">
@@ -97,9 +85,10 @@ export function Composer({
           placeholder="Type message here..."
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          disabled={disabled}
           className="w-full pr-20 rounded-full border-green-300 focus:border-green-500 focus:ring-green-500 bg-gray-50 focus:bg-white h-12 text-sm"
           onKeyDown={(e) => {
-            if (e.key === "Enter") onSend()
+            if (!disabled && e.key === "Enter") onSend()
           }}
           onPaste={handlePaste}
         />
@@ -120,7 +109,7 @@ export function Composer({
             console.log("🚀 Send button clicked!")
             console.log("🚀 Current message:", message)
             console.log("🚀 onSend function:", onSend)
-            onSend()
+            if (!disabled) onSend()
           }} disabled={disabled || !message.trim()}>
             <Send className="h-4 w-4" />
           </Button>
