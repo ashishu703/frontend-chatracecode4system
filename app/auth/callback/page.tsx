@@ -133,38 +133,10 @@ function OAuthCallbackContent() {
             response = await serverHandler.post("/api/messanger/auth-init", { code });
           }
         } else if (provider === "whatsapp") {
-          // WhatsApp requires business_id, waba_id and the same redirect_uri used in the OAuth dialog
-          let business_id = searchParams.get("business_id") || undefined as string | undefined;
-          let waba_id = searchParams.get("waba_id") || undefined as string | undefined;
-
-          if (!business_id || !waba_id) {
-            try {
-              const configResponse: any = await serverHandler.get('/api/web/get_web_public');
-              const settings = configResponse?.data?.data || {};
-              business_id = business_id || settings.whatsapp_business_id || settings.business_id || settings.whatsapp_config_id;
-              waba_id = waba_id || settings.whatsapp_waba_id || settings.waba_id || settings.whatsapp_config_id;
-            } catch (e) {
-              // proceed; backend may still infer
-            }
-          }
-
-          const redirect_uri = `${window.location.origin}/api/user/auth/whatsapp/callback`;
-
-          // If waba_id missing, resolve it first via our API (uses FB Graph with code)
-          if (!waba_id) {
-            try {
-              const resolveResp: any = await serverHandler.post('/api/whatsapp/resolve_waba', { code, redirect_uri });
-              const resolved = resolveResp?.data || {};
-              if (resolved?.success) {
-                waba_id = resolved.waba_id || waba_id;
-                business_id = business_id || resolved.business_id || business_id;
-              }
-            } catch (e) {
-              // continue; backend may infer, but we prefer providing waba_id
-            }
-          }
-
-          response = await serverHandler.post("/api/whatsapp/auth_init", { code, business_id, waba_id, redirect_uri });
+          // New flow: this page should not finalize WhatsApp auth anymore.
+          // The embedded signup will send WA_EMBEDDED_SIGNUP postMessage that our component listens to.
+          router.replace("/onboarding");
+          return;
         } else {
           router.replace("/onboarding");
           return;

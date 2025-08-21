@@ -46,6 +46,8 @@ export default function OnboardingPage() {
   const [isConnecting, setIsConnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [waCode, setWaCode] = useState<string | null>(null)
+  const [waAccountInfo, setWaAccountInfo] = useState<any | null>(null)
 
   // Check for URL parameters on mount
   useEffect(() => {
@@ -74,6 +76,62 @@ export default function OnboardingPage() {
       setConnectedPlatforms(prev => [...prev, 'whatsapp']);
     }
   }, []);
+
+  // Listen for WhatsApp Embedded Signup FINISH message
+  useEffect(() => {
+    const handlePostMessage = (event: MessageEvent) => {
+      if (!['https://www.facebook.com', 'https://web.facebook.com'].includes(event.origin)) return;
+      try {
+        const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        console.log('[Onboarding][WA] postMessage received:', payload);
+        const { type, event: eventState, data } = payload || {};
+        if (type === 'WA_EMBEDDED_SIGNUP' && eventState === 'FINISH' && data) {
+          console.log('[Onboarding][WA] Embedded signup FINISH payload:', data);
+          setWaAccountInfo(data);
+        }
+      } catch (e) {
+        console.log('[Onboarding][WA] postMessage parse error', e);
+      }
+    };
+    window.addEventListener('message', handlePostMessage);
+    return () => window.removeEventListener('message', handlePostMessage);
+  }, []);
+
+  // Finalize auth when both code and account info exist
+  useEffect(() => {
+    const finalize = async () => {
+      if (!waCode || !waAccountInfo) return;
+      try {
+        console.log('[Onboarding][WA] Finalizing via /api/whatsapp/auth-init', {
+          hasCode: !!waCode,
+          business_id: waAccountInfo?.business_id,
+          waba_id: waAccountInfo?.waba_id,
+          phone_number_id: waAccountInfo?.phone_number_id
+        });
+        const resp: any = await serverHandler.post('/api/whatsapp/auth-init', {
+          code: waCode,
+          ...waAccountInfo
+        });
+        console.log('[Onboarding][WA] Backend result:', resp?.data);
+        if (resp?.data?.success || resp?.data?.msg === 'success') {
+          setSuccess('WhatsApp Business connected successfully!');
+          setConnectedPlatforms(prev => prev.includes('whatsapp') ? prev : [...prev, 'whatsapp']);
+          setIsConnecting(null);
+          // Redirect to dashboard after successful connection
+          setTimeout(() => {
+            window.location.href = '/dashboard?whatsapp_connected=true';
+          }, 800);
+        } else {
+          throw new Error(resp?.data?.message || 'Failed to connect WhatsApp');
+        }
+      } catch (e: any) {
+        console.error('[Onboarding][WA] finalize error', e?.message, e?.response?.data);
+        setError(e?.message || 'Failed to connect WhatsApp');
+        setIsConnecting(null);
+      }
+    };
+    finalize();
+  }, [waCode, waAccountInfo]);
 
   const handlePlatformConnect = async (platformId: string) => {
     setIsConnecting(platformId);
@@ -140,20 +198,17 @@ export default function OnboardingPage() {
         const data = await response.json();
         if (data?.success && data?.data?.facebookAppId) {
           try {
-            const { facebookAppId, configId, scopes, redirectUri } = data.data;
+            const { facebookAppId, configId, scopes } = data.data;
+            console.log('[Onboarding][WA] Launching FB embedded signup', { appId: facebookAppId, configId });
             const { code } = await initFacebookLogin(facebookAppId, {
               configId,
               scope: scopes,
               responseType: 'code'
             });
-            const result: any = await serverHandler.post('/api/whatsapp/auth_init', {
-              code,
-              redirect_uri: redirectUri
-            });
-            if (result?.data?.success) {
-              window.location.href = '/dashboard?whatsapp_connected=true';
-              return;
-            }
+            console.log('[Onboarding][WA] Authorization code captured:', code ? `${String(code).slice(0,6)}...` : null);
+            setWaCode(code);
+            // Wait for WA_EMBEDDED_SIGNUP FINISH message; finalize happens in effect
+            return;
           } catch (e) {
             // fall through to simulated connect below
           }
