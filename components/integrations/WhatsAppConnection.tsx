@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import serverHandler from '@/utils/serverHandler';
 import { WhatsAppProfileSigner } from '@/components/WhatsAppProfileSigner';
 
 interface WhatsAppConnectionProps {
@@ -25,13 +26,18 @@ export function WhatsAppConnection({ onConnect, onDisconnect }: WhatsAppConnecti
   const checkConnectionStatus = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/whatsapp/accounts');
-      const data = await response.json();
+      console.log('[WhatsAppConnection] Checking connection status via /api/whatsapp/accounts');
+      const resp = await serverHandler.get('/api/whatsapp/accounts');
+      console.log('[WhatsAppConnection] /api/whatsapp/accounts response:', resp?.data);
+      const data: any = resp?.data || {};
       
-      if (data.success) {
-        setIsConnected(data.connected);
+      if (data && (data.success !== undefined ? data.success : true)) {
+        // Mirror chatrace-front: backend returns { profiles }
+        const profiles = Array.isArray(data.profiles) ? data.profiles : (data.data && Array.isArray(data.data.profiles) ? data.data.profiles : []);
+        console.log('[WhatsAppConnection] Profiles length:', profiles?.length || 0);
+        setIsConnected((profiles?.length || 0) > 0);
       } else {
-        console.error('Failed to check connection status:', data.message);
+        console.error('Failed to check connection status:', (data && data.message) || 'unknown error');
         toast.error('Failed to check WhatsApp connection status');
       }
     } catch (error) {

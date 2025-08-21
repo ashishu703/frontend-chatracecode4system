@@ -18,6 +18,8 @@ export function WhatsAppProfileSigner({ isOpen, onClose, onSuccess }: WhatsAppPr
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState<'init' | 'connecting' | 'success' | 'error'>('init');
   const [error, setError] = useState<string | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [accountInfo, setAccountInfo] = useState<any | null>(null);
 
   const handleConnect = async () => {
     try {
@@ -26,41 +28,27 @@ export function WhatsAppProfileSigner({ isOpen, onClose, onSuccess }: WhatsAppPr
       setError(null);
 
       // Get WhatsApp configuration (same contract as chatrace-front)
+      console.log('[WhatsAppProfileSigner] Fetching /api/auth/whatsapp config...');
       const configResponse = await fetch('/api/auth/whatsapp');
       const config = await configResponse.json();
+      console.log('[WhatsAppProfileSigner] Config response:', config);
       
       if (!config.success || !config.data?.facebookAppId) {
         throw new Error('Failed to load WhatsApp configuration');
       }
 
       // Initialize Facebook login for WhatsApp Business
+      console.log('[WhatsAppProfileSigner] Initializing FB embedded signup...', {
+        appId: config.data.facebookAppId,
+        configId: config.data.configId
+      });
       const { code } = await initFacebookLogin(config.data.facebookAppId, {
         configId: config.data.configId,
         scope: config.data.scopes,
         responseType: 'code'
       });
-
-      // Exchange the code via backend (port 6400) using serverHandler and include redirect_uri
-      const redirect_uri = config.data.redirectUri || `${window.location.origin}/api/user/auth/whatsapp/callback`;
-      const { data: result }: { data: { success?: boolean; message?: string } } = await serverHandler.post('/api/whatsapp/auth_init', {
-        code,
-        redirect_uri,
-        accountInfo: {
-          platform: 'whatsapp_business',
-          connected_at: new Date().toISOString()
-        }
-      });
-      
-      if (result.success) {
-        setStep('success');
-        toast.success('Successfully connected to WhatsApp Business');
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 2000);
-      } else {
-        throw new Error(result.message || 'Failed to connect to WhatsApp Business');
-      }
+      setCode(code);
+      console.log('[WhatsAppProfileSigner] Authorization code captured:', code ? `${String(code).slice(0, 6)}...` : null);
     } catch (error: any) {
       console.error('Error during WhatsApp connection:', error);
       setError(
@@ -78,6 +66,63 @@ export function WhatsAppProfileSigner({ isOpen, onClose, onSuccess }: WhatsAppPr
       setIsLoading(false);
     }
   };
+
+  // Listen for embedded signup completion to capture business_id, waba_id, phone_number_id
+  useEffect(() => {
+    const handlePostMessage = (event: MessageEvent) => {
+      if (!['https://www.facebook.com', 'https://web.facebook.com'].includes(event.origin)) return;
+      try {
+        const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        console.log('[WhatsAppProfileSigner] postMessage received:', payload);
+        const { type, event: eventState, data } = payload || {};
+        if (type === 'WA_EMBEDDED_SIGNUP' && eventState === 'FINISH' && data) {
+          console.log('[WhatsAppProfileSigner] Embedded signup FINISH data:', data);
+          setAccountInfo(data);
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    window.addEventListener('message', handlePostMessage);
+    return () => window.removeEventListener('message', handlePostMessage);
+  }, []);
+
+  // When both code and accountInfo are available, finalize auth with backend
+  useEffect(() => {
+    const finalizeAuth = async () => {
+      if (!code || !accountInfo) return;
+      try {
+        console.log('[WhatsAppProfileSigner] Finalizing auth with backend...', {
+          hasCode: !!code,
+          business_id: accountInfo?.business_id,
+          waba_id: accountInfo?.waba_id,
+          phone_number_id: accountInfo?.phone_number_id
+        });
+        const { data: result }: { data: { success?: boolean; msg?: string; message?: string } } = await serverHandler.post('/api/whatsapp/auth-init', {
+          code,
+          ...accountInfo
+        });
+        console.log('[WhatsAppProfileSigner] Backend /api/whatsapp/auth-init result:', result);
+        if (result?.success || result?.msg === 'success') {
+          setStep('success');
+          toast.success('Successfully connected to WhatsApp Business');
+          setTimeout(() => {
+            onSuccess();
+            onClose();
+          }, 1200);
+        } else {
+          throw new Error(result?.message || 'Failed to connect to WhatsApp Business');
+        }
+      } catch (err: any) {
+        console.error('[WhatsAppProfileSigner] Finalize auth error:', err?.message, err?.response?.data);
+        setError(err?.message || 'Failed to connect to WhatsApp Business');
+        setStep('error');
+        toast.error(err?.message || 'Failed to connect to WhatsApp Business');
+      }
+    };
+    finalizeAuth();
+  }, [code, accountInfo, onClose, onSuccess]);
 
   const handleRetry = () => {
     setStep('init');
