@@ -27,6 +27,13 @@ export function Messages({
 }: MessagesProps) {
   
   const isExpired = (remainingSeconds !== undefined && remainingSeconds <= 0)
+  const isEmojiOnly = (text: string | undefined): boolean => {
+    if (!text) return false
+    const trimmed = text.trim()
+    if (!trimmed) return false
+    const stripped = trimmed.replace(/[\u{1F300}-\u{1FAFF}\u{1F1E6}-\u{1F1FF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}\u{FE0F}\u{200D}\u{2640}-\u{2642}]/gu, "")
+    return stripped === ""
+  }
   return (
     <div className="flex-1 permanent-scrollbar p-4 space-y-3 bg-[#f0f2f5]">
       {isLoadingMessages ? (
@@ -47,26 +54,28 @@ export function Messages({
       ) : (
         messages.map((msg) => (
           <div key={msg.id} className={cn("flex", msg.sender === "user" ? "justify-end" : "justify-start")}>
-            <div className={cn("relative max-w-[80%] xl:max-w-[70%] group", msg.sender === "user" ? "ml-12" : "mr-12")}>
+            <div className={cn("relative w-fit max-w-[75%] xl:max-w-[65%] group", msg.sender === "user" ? "ml-12" : "mr-12")}>
               {(() => {
-                const isMedia = msg.type === "image" || msg.type === "video" || msg.type === "gif"
+                const emojiOnly = msg.type === "text" && isEmojiOnly(typeof msg.message === 'string' ? msg.message : '')
+                const showBubble = msg.type === "text" && !emojiOnly
+                const isNonTextMessage = msg.type !== "text" || emojiOnly
                 return (
                   <div
                     className={cn(
-                      "rounded-2xl shadow-sm",
-                      isMedia
-                        ? "p-0 bg-transparent border-0"
-                        : "px-3 py-2",
-                      !isMedia && (msg.sender === "user"
+                      isNonTextMessage 
+                        ? "p-0 bg-transparent border-0 w-fit shadow-none rounded-none"
+                        : "rounded-2xl shadow-sm break-words overflow-hidden px-3 py-2 w-fit min-w-0",
+                      showBubble && (msg.sender === "user"
                         ? "bg-[#d9fdd3] text-gray-900 rounded-br-md"
                         : "bg-white text-gray-900 border border-gray-200 rounded-bl-md")
                     )}
+                    style={{ width: 'fit-content', maxWidth: '100%' }}
                   >
                 <MessageContent msg={msg} />
                 {msg.reactions && msg.reactions.length > 0 && (
                   <div className="flex gap-1 mt-2 -mb-1">
                     {msg.reactions.map((r: any, i: number) => (
-                      <span key={i} className="text-sm bg-white rounded-full px-1 shadow-sm">{r.emoji}</span>
+                      <span key={i} className="text-sm">{typeof r === 'string' ? r : r?.emoji || r?.reaction || '👍'}</span>
                     ))}
                   </div>
                 )}
@@ -75,7 +84,7 @@ export function Messages({
               })()}
               <div
                 className={cn(
-                  "flex items-center gap-1 mt-1 px-2 text-[10px] text-gray-500",
+                  "flex items-center gap-1 mt-1 text-[10px] text-gray-500",
                   msg.sender === "user" ? "justify-end" : "justify-start"
                 )}
               >

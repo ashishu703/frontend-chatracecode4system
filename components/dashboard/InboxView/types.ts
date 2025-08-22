@@ -37,7 +37,7 @@ export interface Conversation {
   page_icon?: string
   unread_count?: number
   sender_name?: string
-  sender_id?: string // Actual Facebook user ID
+  sender_id?: string
   last_message_time?: string
   last_message_body?: string
   channel_icon?: string

@@ -64,6 +64,14 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    // Restore last selected dashboard view from localStorage on mount
+    try {
+      const storedView = localStorage.getItem('dashboardCurrentView');
+      if (storedView) {
+        dispatch(setCurrentView(storedView));
+      }
+    } catch {}
+
     const fetchDashboard = async () => {
       setLoading(true);
       setError(undefined);
@@ -163,11 +171,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen bg-gray-50 flex overflow-hidden">
       <Sidebar />
 
-      <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? "ml-64" : "ml-16"}`}>
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+      <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? "ml-64" : "ml-16"} flex flex-col min-w-0`}> 
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 sticky top-0 z-40">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
@@ -251,7 +259,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <main className="p-6">{renderCurrentView()}</main>
+        <main className="p-6 overflow-y-auto no-scrollbar flex-1 min-w-0">{renderCurrentView()}</main>
       </div>
     </div>
   )

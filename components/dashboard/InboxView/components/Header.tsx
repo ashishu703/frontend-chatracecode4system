@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Menu, Star, MoreVertical, ShieldOff, ShieldBan, ChevronDown, Clock } from "lucide-react";
 import { Conversation } from "../types";
-import { getChannelIcon } from "../utils";
+import { getChannelIcon, getDefaultUserIcon, generateInitials, isValidAvatar } from "../utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,10 +82,25 @@ export function Header({
 
         <div className="relative">
           <Avatar className="h-10 w-10">
-            <AvatarImage src={selectedConversation.avatar || "/placeholder.svg"} />
-            <AvatarFallback>{selectedConversation.name?.charAt(0)?.toUpperCase() || "?"}</AvatarFallback>
+            {isValidAvatar(selectedConversation.avatar) ? (
+              <AvatarImage 
+                src={selectedConversation.avatar} 
+                alt={selectedConversation.name}
+                onError={(e) => {
+                  // Hide the image element to show fallback
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            ) : null}
+            <AvatarFallback className="bg-blue-100 text-blue-600 text-sm font-bold">
+              {generateInitials(selectedConversation.name)}
+            </AvatarFallback>
           </Avatar>
-          <div className="absolute -bottom-1 -right-1">{getChannelIcon(selectedConversation.platform)}</div>
+          {selectedConversation.platform && (
+            <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-0.5 shadow-sm scale-75">
+              {getChannelIcon(selectedConversation.platform)}
+            </div>
+          )}
         </div>
         
         <div className="flex flex-col gap-y-0">

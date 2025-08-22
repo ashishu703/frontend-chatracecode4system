@@ -9,9 +9,10 @@ import { Composer } from "./components/Composer"
 import { Conversation, Message, ContactDetails } from "./types"
 import { fetchChats, fetchMessagesForChat, listMessengerChats, sendMessage, sendFile, uploadMedia, sendMedia } from "./api"
 import { formatTime } from "./utils"
-import { getChannelIcon } from "./utils"
+import { getChannelIcon, getDefaultUserIcon, generateInitials, isValidAvatar } from "./utils"
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/ui/use-toast"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export default function InboxView() {
   const [message, setMessage] = React.useState("")
@@ -31,13 +32,14 @@ export default function InboxView() {
   const autoScrollNextRef = React.useRef<boolean>(true)
   const [isLoading, setIsLoading] = React.useState(true)
   const [isLoadingMessages, setIsLoadingMessages] = React.useState(false)
-  const { socket, isConnected } = useSocket()
+  const { socket, isConnected, socketEvents } = useSocket()
   const [assignedTo, setAssignedTo] = React.useState<string | undefined>(undefined)
   const [favorite, setFavorite] = React.useState<Record<string, boolean>>({})
   const [isDisabledMap, setIsDisabledMap] = React.useState<Record<string, boolean>>({})
   const [isBlockedMap, setIsBlockedMap] = React.useState<Record<string, boolean>>({})
   const [statusMap, setStatusMap] = React.useState<Record<string, Conversation["status"]>>({})
   const [remainingSeconds, setRemainingSeconds] = React.useState<number>(15 * 60)
+  const [unreadMap, setUnreadMap] = React.useState<Record<string, number>>({})
   const users = React.useMemo(() => [{ id: "me", name: "Me", online: true }, { id: "agent-1", name: "Agent 1", online: false }], [])
   
   // Pagination state for messages
@@ -46,18 +48,85 @@ export default function InboxView() {
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = React.useState(false)
   const PAGE_SIZE = 10 
 
-  // Debug: Monitor message changes
-  React.useEffect(() => {
-    console.log("🔍 Messages state changed. Count:", messages.length)
-    if (messages.length > 0) {
-      console.log("🔍 Current message IDs:", messages.map(m => ({ 
-        id: m.id, 
-        message: m.message.substring(0, 30), 
-        sender: m.sender,
-        status: m.status 
-      })))
+  const parseJsonIfNeeded = React.useCallback((value: any) => {
+    if (typeof value === "string" && value.trim().startsWith("{")) {
+      try { return JSON.parse(value) } catch { return value }
     }
-  }, [messages])
+    return value
+  }, [])
+
+  const deriveContent = React.useCallback((raw: any) => {
+    const body: any = parseJsonIfNeeded(raw?.body ?? raw)
+    const base = { text: "", type: (raw?.type || "text") as Message["type"], body: undefined as any }
+    if (typeof raw?.message === "string") base.text = raw.message
+    if (typeof body === "string") base.text = body
+    if (typeof body === "object" && body) {
+      const text = body.text || body.caption || ""
+      const url = body.attachment_url || body.attchment_url || body.video_url || body.audio_url || body.document_url || body.file_url || body.url || body.image_url || ""
+      const ext = (u: string) => {
+        if (!u || typeof u !== 'string') return ""
+        const clean = u.split('?')[0].split('#')[0]
+        const idx = clean.lastIndexOf('.')
+        return idx >= 0 ? clean.substring(idx + 1).toLowerCase() : ""
+      }
+      // Images
+      const extension = ext(url)
+      const isImageExt = ["jpg","jpeg","png","webp","bmp","tiff"].includes(extension)
+      const isGifExt = extension === "gif"
+      const isVideoExt = ["mp4","webm","m4v","mov","3gp","mkv"].includes(extension)
+      const isAudioExt = ["mp3","wav","ogg","m4a","aac"].includes(extension)
+      const isDocExt = ["pdf","doc","docx","ppt","pptx","xls","xlsx","csv","txt"].includes(extension)
+      if (url && (isImageExt || (!extension && (body.image_url || body.type === 'image')))) {
+        return { text, type: "image" as const, body: { url, caption: text } }
+      }
+      // Video
+      if ((url && isVideoExt) || body.video_url || (body.url && body.type === "video")) {
+        return { text, type: "video" as const, body: { url: url || body.video_url || body.url, caption: text } }
+      }
+      // Audio
+      if ((url && isAudioExt) || body.audio_url || (body.url && body.type === "audio")) {
+        return { text, type: "audio" as const, body: { url: url || body.audio_url || body.url, caption: text } }
+      }
+      // Document/File
+      if ((url && isDocExt) || body.document_url || body.file_url || (body.url && body.type === "document")) {
+        return { text: text || body.filename || "Document", type: "file" as const, body: { url: url || body.document_url || body.file_url || body.url, caption: text, filename: body.filename || "Document", filesize: body.filesize || "" } }
+      }
+      // Carousel
+      if (Array.isArray(body.elements)) {
+        return { text, type: "carousel" as const, body: { elements: body.elements, text } }
+      }
+      // GIF
+      if (isGifExt || body.gif_url || (body.url && body.type === "gif")) {
+        return { text, type: "gif" as const, body: { url: url || body.gif_url || body.url, caption: text } }
+      }
+      return { text: text || "", type: (raw?.type || "text") as Message["type"], body }
+    }
+    // URL-only string (e.g., emoji image link)
+    if (typeof base.text === "string") {
+      const m = base.text.match(/(https?:\/\/[^\s"']+\.(jpg|jpeg|png|gif|webp))/i)
+      if (m) return { text: base.text.replace(m[0], "").trim(), type: "image" as const, body: { url: m[1], caption: base.text.replace(m[0], "").trim() } }
+    }
+    return base
+  }, [parseJsonIfNeeded])
+
+  const previewText = React.useCallback((raw: any): string => {
+    const c = deriveContent(raw)
+    if (c.text) return c.text
+    if (c.type === "image") return "Image"
+    if (c.type === "video") return "Video"
+    if (c.type === "audio") return "Audio"
+    if (c.type === "file") return typeof c.body?.filename === "string" ? c.body.filename : "Document"
+    if (c.type === "gif") return "GIF"
+    if (c.type === "carousel") return "Carousel"
+    return ""
+  }, [deriveContent])
+
+  // Monitor message changes
+  React.useEffect(() => {
+    if (messages.length > 100) {
+      console.log("High message count:", messages.length)
+    }
+  }, [messages.length])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -69,20 +138,19 @@ export default function InboxView() {
   }, [messages])
 
   React.useEffect(() => {
-    const t = setInterval(() => setRemainingSeconds((s) => (s > 0 ? s - 1 : 0)), 1000)
-    return () => clearInterval(t)
+    setRemainingSeconds((s) => s)
   }, [])
 
   React.useEffect(() => {
-    if (!socket) return
+    if (!socketEvents) return
     const handleNewChat = (chat: any) => {
       const newConversation: Conversation = {
         id: chat.id || chat.chat_id,
         chat_id: chat.chat_id || chat.id,
         name: chat.sender_name || chat.name || "Unknown",
         avatar: chat.avatar || chat.profile_pic || "/placeholder.svg",
-        lastMessage: chat.lastMessage?.body?.text || chat.last_message_body || chat.lastMessage || "",
-        platform: chat.platform || chat.channel || "messenger",
+        lastMessage: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
+        platform: chat.account?.platform || chat.platform || chat.channel || "messenger",
         time: formatTime(chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
         page_name: chat.page?.name || chat.page_name,
         page_icon: chat.page?.icon || chat.page_icon,
@@ -90,7 +158,7 @@ export default function InboxView() {
         unread_count: chat.unread_count || 0,
         sender_name: chat.sender_name,
         last_message_time: chat.lastMessage?.timestamp || chat.last_message_time,
-        last_message_body: chat.lastMessage?.body?.text || chat.last_message_body,
+        last_message_body: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
         last_message_timestamp: chat.last_message_timestamp || chat.lastMessage?.timestamp,
       }
       setConversations((prev) => {
@@ -103,16 +171,28 @@ export default function InboxView() {
       setConversations((prev) => prev.map((chat) => (chat.id === updatedChat.id ? { ...chat, ...updatedChat } : chat)))
     }
     const handleNewMessage = (message: any) => {
+      const msgChatId = String(message.chat_id)
+      const route = (message.route || '').toString().toUpperCase()
+      const isSelectedForMsg = !!selectedConversation && (
+        String(selectedConversation.id) === msgChatId ||
+        String(selectedConversation.chat_id) === msgChatId
+      )
+      if (route === 'INCOMING' && !isSelectedForMsg) {
+        setUnreadMap((prev) => ({ ...prev, [msgChatId]: (prev[msgChatId] || 0) + 1 }))
+      }
       setConversations((prev) =>
         prev.map((chat) => {
-          if (chat.chat_id === message.chat_id || chat.id === message.chat_id) {
+          const convIds = [String(chat.chat_id), String(chat.id)]
+          if (convIds.includes(msgChatId)) {
+            const pv = previewText(message)
             return {
               ...chat,
-              lastMessage: message.body?.text || message.body?.caption || message.message || "",
-              last_message_body: message.body?.text || message.body?.caption || message.message || "",
+              lastMessage: pv,
+              last_message_body: pv,
               last_message_time: message.timestamp || message.createdAt,
               time: formatTime(message.timestamp || message.createdAt),
-              unread_count: (chat.unread_count || 0) + 1,
+              // reflect unread immediately in UI
+              unread_count: route === 'INCOMING' && !isSelectedForMsg ? (chat.unread_count || 0) + 1 : chat.unread_count,
               last_message_timestamp: message.timestamp || message.createdAt,
             }
           }
@@ -120,40 +200,91 @@ export default function InboxView() {
         })
       )
     }
-    socket.on("new_chat", handleNewChat)
-    socket.on("chat_updated", handleChatUpdate)
-    socket.on("new_message", handleNewMessage)
-    return () => {
-      socket.off("new_chat", handleNewChat)
-      socket.off("chat_updated", handleChatUpdate)
-      socket.off("new_message", handleNewMessage)
+    const handleConversationsUpdated = (chats: any[]) => {
+      if (!Array.isArray(chats)) return
+      setConversations((prev) => {
+        const mapped = chats.map((chat: any) => {
+          const id = String(chat.id || chat.chat_id)
+          const existing = prev.find((c) => String(c.id) === id || String(c.chat_id) === id)
+          const isSelected = !!selectedConversation && (String(selectedConversation.id) === id || String(selectedConversation.chat_id) === id)
+          // Hard rule: never take unread from server here; prefer local unreadMap unless selected
+          const mergedUnread = isSelected ? 0 : (unreadMap[id] ?? existing?.unread_count ?? 0)
+          return {
+            id: chat.id || chat.chat_id,
+            chat_id: chat.chat_id || chat.id,
+            name: chat.sender_name || chat.page?.name || chat.name || "Unknown",
+            avatar: chat.avatar || chat.profile_pic || "/placeholder.svg",
+            lastMessage: previewText(chat.lastMessage || { body: { text: chat.last_message_body || chat.lastMessage } }),
+            platform: chat.account?.platform || chat.platform || chat.channel || "messenger",
+            time: formatTime(chat.last_message_timestamp || chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
+            page_name: chat.page?.name || chat.page_name,
+            page_icon: chat.page?.icon || chat.page_icon,
+            channel_icon: chat.channel_icon,
+            unread_count: mergedUnread,
+            sender_name: chat.sender_name,
+            sender_id: chat.sender_id || chat.chat_id,
+            last_message_time: chat.lastMessage?.timestamp || chat.last_message_time,
+            last_message_body: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
+            status: statusMap[chat.id || chat.chat_id] || existing?.status || "open",
+            favorite: !!favorite[chat.id || chat.chat_id],
+            isDisabled: !!isDisabledMap[chat.id || chat.chat_id],
+            isBlocked: !!isBlockedMap[chat.id || chat.chat_id],
+            isActive: typeof chat.isActive === 'boolean' ? chat.isActive : (existing?.isActive ?? true),
+            last_message_timestamp: chat.last_message_timestamp || chat.lastMessage?.timestamp,
+          } as Conversation
+        })
+        setFilteredConversations(mapped)
+        return mapped
+      })
     }
-  }, [socket])
+    const handleChatsUpdated = (chats: any[]) => {
+      if (!Array.isArray(chats)) return
+      setConversations((prev) => prev.map((chat) => {
+        const updated = chats.find((c: any) => String(c.id || c.chat_id) === String(chat.id || chat.chat_id))
+        if (!updated) return chat
+        const id = String(updated.id || updated.chat_id)
+        const isSelected = !!selectedConversation && (String(selectedConversation.id) === id || String(selectedConversation.chat_id) === id)
+        return {
+          ...chat,
+          ...updated,
+          // Keep local unread; prefer unreadMap; only clear when selected
+          unread_count: isSelected ? 0 : (unreadMap[id] ?? chat.unread_count ?? 0),
+        }
+      }))
+    }
+    // Subscribe to centralized socket event bus
+    socketEvents.on('conversationsUpdated', handleConversationsUpdated)
+    socketEvents.on('chatsUpdated', handleChatsUpdated)
+    socketEvents.on('newMessage', handleNewMessage)
+    return () => {
+      socketEvents.off('conversationsUpdated', handleConversationsUpdated)
+      socketEvents.off('chatsUpdated', handleChatsUpdated)
+      socketEvents.off('newMessage', handleNewMessage)
+    }
+  }, [socketEvents, unreadMap, selectedConversation])
 
   React.useEffect(() => {
     let isMounted = true
     const loadChats = async () => {
       setIsLoading(true)
-      console.log("🔍 loadChats: Starting to fetch chats...")
       const chats = await fetchChats()
-      console.log("🔍 loadChats: Received chats:", chats)
       if (!isMounted) return
       const conversationsData = chats.map((chat: any) => ({
         id: chat.id || chat.chat_id,
         chat_id: chat.chat_id || chat.id,
         name: chat.sender_name || chat.page?.name || chat.name || "Unknown",
         avatar: chat.avatar || chat.profile_pic || "/placeholder.svg",
-        lastMessage: chat.lastMessage?.body?.text || chat.last_message_body || chat.lastMessage || "",
-        platform: chat.platform || chat.channel || "messenger",
+        lastMessage: previewText(chat.lastMessage || { body: { text: chat.last_message_body || chat.lastMessage } }),
+        platform: chat.account?.platform || chat.platform || chat.channel || "messenger",
         time: formatTime(chat.last_message_timestamp || chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
         page_name: chat.page?.name || chat.page_name,
         page_icon: chat.page?.icon || chat.page_icon,
         channel_icon: chat.channel_icon,
         unread_count: chat.unread_count || 0,
         sender_name: chat.sender_name,
-        sender_id: chat.sender_id || chat.chat_id, // Use sender_id if available, fallback to chat_id
+        sender_id: chat.sender_id || chat.chat_id, 
         last_message_time: chat.lastMessage?.timestamp || chat.last_message_time,
-        last_message_body: chat.lastMessage?.body?.text || chat.last_message_body,
+        last_message_body: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
         status: statusMap[chat.id || chat.chat_id] || "open",
         favorite: !!favorite[chat.id || chat.chat_id],
         isDisabled: !!isDisabledMap[chat.id || chat.chat_id],
@@ -161,18 +292,18 @@ export default function InboxView() {
         isActive: typeof chat.isActive === 'boolean' ? chat.isActive : true,
         last_message_timestamp: chat.last_message_timestamp || chat.lastMessage?.timestamp,
       })) as Conversation[]
-      console.log("🔍 loadChats: Processed conversations:", conversationsData)
       setConversations(conversationsData)
       setFilteredConversations(conversationsData)
-      const firstConversation = conversationsData.length > 0 ? conversationsData[0] : null
-      console.log("🔍 loadChats: Setting first conversation as selected:", firstConversation)
-      setSelectedConversation(firstConversation)
-      
-      // Reset timer based on first conversation's last message time
-      if (firstConversation) {
-        console.log("🕐 Initial timer reset for first conversation")
-        resetTimerFromTimestamp(firstConversation.platform || "", firstConversation.last_message_timestamp)
-      }
+      // seed unreadMap from initial payload once
+      setUnreadMap((prev) => {
+        const next = { ...prev }
+        conversationsData.forEach((c) => {
+          const id = String(c.id || c.chat_id)
+          if (next[id] === undefined) next[id] = c.unread_count || 0
+        })
+        return next
+      })
+      // Do not auto-select a conversation; user must open manually to mark as read
       
       // Reset pagination state
       setCurrentPage(1)
@@ -203,7 +334,6 @@ export default function InboxView() {
   const fetchMessages = React.useCallback(async (page: number = 1, append: boolean = false) => {
     if (!selectedConversation) return
     setIsLoadingMessages(true)
-    console.log("🔍 fetchMessages: Fetching messages for conversation (by both ids):", { id: selectedConversation.id, chat_id: selectedConversation.chat_id }, "Page:", page, "Append:", append)
     
     try {
       const [msgsByConvId, msgsByChatId] = await Promise.all([
@@ -211,13 +341,9 @@ export default function InboxView() {
         fetchMessagesForChat(String(selectedConversation.chat_id), page, PAGE_SIZE),
       ])
       const msgs = [...(Array.isArray(msgsByConvId) ? msgsByConvId : []), ...(Array.isArray(msgsByChatId) ? msgsByChatId : [])]
-      console.log("🔍 fetchMessages: Received messages (merged):", { byConvId: msgsByConvId?.length || 0, byChatId: msgsByChatId?.length || 0, merged: msgs.length })
       
       if (!Array.isArray(msgs) || msgs.length === 0) {
-        if (page === 1) {
-          console.log("🔍 fetchMessages: No messages found, clearing messages array")
-          setMessages([])
-        }
+        if (page === 1) setMessages([])
         setHasMoreMessages(false)
         setContactDetails({ ...(selectedConversation as any) })
         setIsLoadingMessages(false)
@@ -225,60 +351,10 @@ export default function InboxView() {
       }
       
       const messagesData = msgs.map((msg: any) => {
-        let messageText = ""
-        let messageType = msg.type || "text"
-        let messageBody = msg.body
-        
-        // Handle different message body formats
-        if (typeof msg.body === "string") {
-          messageText = msg.body
-        } else if (msg.body && typeof msg.body === "object") {
-          if (msg.body.attachment_url || msg.body.attchment_url || msg.body.url || msg.body.image_url) {
-            messageType = "image"
-            messageText = msg.body.text || msg.body.caption || ""
-            messageBody = { url: msg.body.attachment_url || msg.body.attchment_url || msg.body.url || msg.body.image_url, caption: msg.body.text || msg.body.caption || "" }
-          } else if (msg.body.video_url || (msg.body.url && msg.body.type === "video")) {
-            messageType = "video"
-            messageText = msg.body.text || msg.body.caption || ""
-            messageBody = { url: msg.body.video_url || msg.body.url, caption: msg.body.text || msg.body.caption || "" }
-          } else if (msg.body.audio_url || (msg.body.url && msg.body.type === "audio")) {
-            messageType = "audio"
-            messageText = msg.body.text || msg.body.caption || ""
-            messageBody = { url: msg.body.audio_url || msg.body.url, caption: msg.body.text || msg.body.caption || "" }
-          } else if (msg.body.document_url || msg.body.file_url || (msg.body.url && msg.body.type === "document")) {
-            messageType = "file"
-            messageText = msg.body.text || msg.body.caption || msg.body.filename || "Document"
-            messageBody = { url: msg.body.document_url || msg.body.file_url || msg.body.url, caption: msg.body.text || msg.body.caption || "", filename: msg.body.filename || "Document", filesize: msg.body.filesize || "" }
-          } else if (msg.body.elements && Array.isArray(msg.body.elements)) {
-            messageType = "carousel"
-            messageText = msg.body.text || msg.body.caption || ""
-            messageBody = { elements: msg.body.elements, text: msg.body.text || msg.body.caption || "" }
-          } else if (msg.body.gif_url || (msg.body.url && msg.body.type === "gif")) {
-            messageType = "gif"
-            messageText = msg.body.text || msg.body.caption || ""
-            messageBody = { url: msg.body.gif_url || msg.body.url, caption: msg.body.text || msg.body.caption || "" }
-          } else {
-            messageText = (msg.body as any).text || (msg.body as any).caption || JSON.stringify(msg.body)
-          }
-        } else if (msg.message && typeof msg.message === "string") {
-          messageText = msg.message
-        } else if (msg.message && typeof msg.message === "object") {
-          messageText = JSON.stringify(msg.message)
-        }
-        
-        // Handle JSON string bodies
-        if (typeof msg.body === "string" && msg.body.startsWith("{")) {
-          try {
-            const parsedBody = JSON.parse(msg.body)
-            if (parsedBody.attchment_url || parsedBody.attachment_url || parsedBody.url) {
-              messageType = "image"
-              messageText = parsedBody.text || parsedBody.caption || ""
-              messageBody = { url: parsedBody.attchment_url || parsedBody.attachment_url || parsedBody.url, caption: parsedBody.text || parsedBody.caption || "" }
-            }
-          } catch (e) {}
-        }
-        
-        // Handle interactive messages
+        const content = deriveContent(msg)
+        let messageText = content.text
+        let messageType = content.type
+        let messageBody = content.body
         let buttons: any[] = []
         if (msg.type === "interactive" && msg.body && (msg.body as any).interactive) {
           const interactive = (msg.body as any).interactive
@@ -289,28 +365,10 @@ export default function InboxView() {
           }
         }
         
-        // Handle URL patterns in message text
-        if (
-          messageText &&
-          typeof messageText === "string" &&
-          (messageText.includes("attchment_url") || messageText.includes("attachment_url") || messageText.includes(".jpg") || messageText.includes(".png") || messageText.includes(".jpeg"))
-        ) {
-          try {
-            const urlMatch = messageText.match(/(https?:\/\/[^\s"']+\.(jpg|jpeg|png|gif|webp))/i)
-            if (urlMatch) {
-              messageType = "image"
-              messageBody = { url: urlMatch[1], caption: messageText.replace(urlMatch[0], "").trim() || "" }
-              messageText = (messageBody as any).caption
-            }
-          } catch (e) {}
-        }
-        
-        // Normalize timestamp for consistent sorting (store ms in rawTimestamp)
         const rawTimestamp = msg.timestamp || msg.createdAt || msg.created_at
         const rawTsMs = toMs(rawTimestamp)
         const formattedTimestamp = formatTime(rawTimestamp)
-        
-        // IMPORTANT: Properly handle route field to determine sender
+      
         const sender = msg.route === "OUTGOING" || msg.route === "outgoing" ? "user" : "other"
         
         const processedMessage: Message = {
@@ -328,11 +386,9 @@ export default function InboxView() {
         return processedMessage
       }) as Message[]
       
-      // De-duplicate by id/message_id + timestamp
-      const deduped = messagesData.filter((m, idx, arr) => idx === arr.findIndex(x => (x.id && m.id ? x.id === m.id : (x.message === m.message && x.rawTimestamp === m.rawTimestamp && x.sender === m.sender))))
+      // De-duplicate by id
+      const deduped = messagesData.filter((m, idx, arr) => idx === arr.findIndex(x => x.id === m.id))
       const sortedMessages = deduped.sort((a: any, b: any) => new Date(a.rawTimestamp || 0).getTime() - new Date(b.rawTimestamp || 0).getTime())
-      console.log("🔍 fetchMessages: Setting", sortedMessages.length, "messages")
-      console.log("🔍 fetchMessages: Message IDs:", sortedMessages.map(m => ({ id: m.id, message: (m.message||'').substring(0, 20), sender: m.sender })))
       
       if (append) {
        
@@ -354,19 +410,15 @@ export default function InboxView() {
       setContactDetails({ ...(selectedConversation as any) })
       
     } catch (error) {
-      console.error("🔍 fetchMessages: Error fetching messages:", error)
       toast({ title: "Failed to load messages", description: "Please try again", variant: "destructive" })
     } finally {
       setIsLoadingMessages(false)
-      // Re-enable auto-scroll for future updates unless we specifically set it off again
       if (!append) autoScrollNextRef.current = true
     }
   }, [selectedConversation, PAGE_SIZE])
 
-  // Manual refresh function - use this instead of automatic refresh
   const manualRefreshMessages = React.useCallback(async () => {
     if (!selectedConversation) return
-    console.log("🔄 Manual refresh requested by user")
     setCurrentPage(1)
     setHasMoreMessages(true)
     await fetchMessages(1, false)
@@ -389,21 +441,19 @@ export default function InboxView() {
         }, 0)
       }
     } catch (e) {
-      console.warn("⚠️ Failed to refresh conversation preflight:", e)
+      // Ignore preflight errors
     }
   }, [selectedConversation, /* intentionally not including resetTimerFromTimestamp to avoid order issue */])
 
   // Load older messages function
   const loadOlderMessages = React.useCallback(async () => {
     if (!selectedConversation || !hasMoreMessages || isLoadingOlderMessages) return
-    console.log("🔄 Loading older messages, page:", currentPage + 1)
     setIsLoadingOlderMessages(true)
     try {
       autoScrollNextRef.current = false
       await fetchMessages(currentPage + 1, true)
     } finally {
       setIsLoadingOlderMessages(false)
-      // keep autoScrollNextRef false only for this update; next updates can scroll
       setTimeout(() => { autoScrollNextRef.current = true }, 0)
     }
   }, [selectedConversation, hasMoreMessages, isLoadingOlderMessages, currentPage, fetchMessages])
@@ -485,76 +535,65 @@ export default function InboxView() {
   }, [selectedConversation, fetchMessages, resetTimerFromTimestamp])
 
   React.useEffect(() => {
-    if (!socket || !selectedConversation) return
+    if (!socketEvents || !selectedConversation) return
     const handleNewMessage = (msg: any) => {
-      if (msg.chat_id === selectedConversation.id || msg.chat_id === selectedConversation.chat_id) {
+      const msgIds = [msg?.chat_id, (msg as any)?.chatId, (msg as any)?.chat?.id]
+        .filter((v) => v !== undefined && v !== null)
+        .map((v) => String(v))
+      const selIds = [selectedConversation.id, selectedConversation.chat_id, (selectedConversation as any).sender_id]
+        .filter((v) => v !== undefined && v !== null)
+        .map((v) => String(v))
+      const matches = msgIds.some((id) => selIds.includes(id))
+      if (matches) {
         const route = (msg.route || '').toString().toUpperCase()
-        const rawTsMs = toMs(msg.timestamp || new Date().toISOString())
+        const rawTsMs = toMs(msg.timestamp || (msg as any).createdAt || new Date().toISOString())
+        const normalized = deriveContent(msg)
+        const text = normalized.text
+        const body = normalized.body
         const newMessage: Message = {
           id: msg.id || `socket-${Date.now()}-${Math.random()}`, // Ensure unique ID
           sender: route === "OUTGOING" ? "user" : "other",
-          message: msg.body?.text || msg.body?.caption || msg.body || msg.message || "",
-          type: (msg.type || "text") as any,
+          message: text,
+          type: (normalized.type || "text") as any,
           timestamp: formatTime(msg.timestamp || new Date().toISOString()),
           rawTimestamp: rawTsMs,
           status: (msg.status || "") as any,
-          body: msg.body,
+          body: body,
           reactions: msg.reactions || [],
           buttons: msg.buttons || [],
         }
         
         setMessages((prev) => {
-          // Check if this message already exists (by content and timestamp to avoid duplicates)
-          const exists = prev.some((m) => {
-            // More sophisticated duplicate detection
-            const contentMatch = m.message === newMessage.message
-            const timeMatch = Math.abs(new Date(m.rawTimestamp || 0).getTime() - new Date(newMessage.rawTimestamp || 0).getTime()) < 10000 // Within 10 seconds
-            const senderMatch = m.sender === newMessage.sender
-            
-            return contentMatch && timeMatch && senderMatch
-          })
+          // Simple duplicate check by ID
+          if (prev.some((m) => m.id === newMessage.id)) return prev
           
-          if (exists) {
-            console.log("🔄 Message already exists, skipping duplicate:", newMessage.message)
-            return prev
-          }
-          
-          // Check if this is a duplicate of a message we just sent
-          const isDuplicateOfSent = prev.some((m) => 
-            m.status === "delivered" && 
-            m.message === newMessage.message && 
-            m.sender === "user" &&
-            Math.abs(new Date(m.rawTimestamp || 0).getTime() - new Date(newMessage.rawTimestamp || 0).getTime()) < 5000
-          )
-          
-          if (isDuplicateOfSent) {
-            console.log("🔄 This appears to be a duplicate of a message we just sent, skipping")
-            return prev
-          }
-          
-          console.log("🆕 Adding new message from socket:", newMessage)
+          // Add and sort
           const updated = [...prev, newMessage]
-          const sorted = updated.sort((a, b) => new Date(a.rawTimestamp || 0).getTime() - new Date(b.rawTimestamp || 0).getTime())
-          return sorted
+          return updated.sort((a, b) => new Date(a.rawTimestamp || 0).getTime() - new Date(b.rawTimestamp || 0).getTime())
         })
         
         // Reset timer on new incoming message
-        console.log("🕐 New message received, resetting timer")
         resetTimerFromTimestamp(selectedConversation.platform || "", msg.timestamp)
-        // Also update selectedConversation's last_message_timestamp for consistency
-        setSelectedConversation((prev) => prev ? { ...prev, last_message_timestamp: msg.timestamp || msg.createdAt } as any : prev)
       }
     }
     const handleUpdateDelivery = (msg: any) => {
       setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, status: msg.status } : m)))
     }
-    socket.on("new_message", handleNewMessage)
-    socket.on("update_delivery", handleUpdateDelivery)
-    return () => {
-      socket.off("new_message", handleNewMessage)
-      socket.off("update_delivery", handleUpdateDelivery)
+    const handleNewReaction = (payload: any) => {
+      // payload may contain message_id and reaction
+      const { message_id, reaction } = payload || {}
+      if (!message_id || !reaction) return
+      setMessages((prev) => prev.map((m) => (m.id === message_id ? { ...m, reactions: [...(m.reactions || []), reaction] } : m)))
     }
-  }, [socket, selectedConversation, resetTimerFromTimestamp])
+    socketEvents.on('newMessage', handleNewMessage)
+    socketEvents.on('deliveryStatusUpdated', handleUpdateDelivery)
+    socketEvents.on('newReaction', handleNewReaction)
+    return () => {
+      socketEvents.off('newMessage', handleNewMessage)
+      socketEvents.off('deliveryStatusUpdated', handleUpdateDelivery)
+      socketEvents.off('newReaction', handleNewReaction)
+    }
+  }, [socketEvents, selectedConversation, resetTimerFromTimestamp])
 
   const handleSendMessage = async () => {
     console.log("🚀 handleSendMessage called!")
@@ -725,7 +764,20 @@ export default function InboxView() {
           filteredConversations={filteredConversations}
           isLoading={isLoading}
           selectedConversation={selectedConversation}
-          setSelectedConversation={(c) => setSelectedConversation(c)}
+          setSelectedConversation={(c) => {
+            // Reset unread count for this conversation when opened
+            setConversations((prev) => prev.map((chat) => {
+              const match = (String(chat.id) === String(c.id)) || (String(chat.chat_id) === String(c.chat_id))
+              return match ? { ...chat, unread_count: 0 } : chat
+            }))
+            setUnreadMap((prev) => {
+              const id = String(c.id || c.chat_id)
+              const next = { ...prev }
+              next[id] = 0
+              return next
+            })
+            setSelectedConversation(c)
+          }}
           leftSidebarOpen={leftSidebarOpen}
           setLeftSidebarOpen={setLeftSidebarOpen}
           searchQuery={searchQuery}
@@ -795,23 +847,25 @@ export default function InboxView() {
                  {/* User Icon with Platform Overlay */}
                  <div className="flex flex-col items-center gap-3">
                    <div className="relative">
-                     {selectedConversation.avatar ? (
-                       <img 
-                         src={selectedConversation.avatar} 
-                         alt={selectedConversation.name}
-                         className="h-20 w-20 rounded-full object-cover"
-                       />
-                     ) : (
-                       <div className="h-20 w-20 rounded-full bg-gray-200 flex items-center justify-center">
-                         <div className="h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center">
-                           <svg className="h-8 w-8 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                           </svg>
-                         </div>
-                       </div>
-                     )}
+                     <Avatar className="h-20 w-20">
+                       {isValidAvatar(selectedConversation.avatar) ? (
+                         <AvatarImage 
+                           src={selectedConversation.avatar} 
+                           alt={selectedConversation.name}
+                           onError={(e) => {
+                             // Hide the image element to show fallback
+                             e.currentTarget.style.display = 'none'
+                           }}
+                         />
+                       ) : null}
+                       <AvatarFallback className="bg-blue-100 text-blue-600 text-3xl font-bold">
+                         {generateInitials(selectedConversation.name)}
+                       </AvatarFallback>
+                     </Avatar>
                      {selectedConversation.platform && (
-                       <div className="absolute -bottom-1 -right-1 text-[20px]">{getChannelIcon(selectedConversation.platform)}</div>
+                       <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm">
+                         {getChannelIcon(selectedConversation.platform)}
+                       </div>
                      )}
                    </div>
                    
