@@ -91,7 +91,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       console.log('Admin socket connection allowed for testing');
     }
 
-    let wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:6400"
+    let wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4600"
     // Convert WebSocket URL to HTTP URL for Socket.IO
     if (wsUrl.startsWith("ws://")) wsUrl = wsUrl.replace("ws://", "http://")
     if (wsUrl.startsWith("wss://")) wsUrl = wsUrl.replace("wss://", "https://")
@@ -131,7 +131,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     })
 
     // Handle incoming messages
-    newSocket.on('new_message', (msg: Message) => {
+    newSocket.on('push_new_msg', (msg: Message) => {
       console.log('New message received in socket context:', msg)
       console.log('Current messages count:', messages.length)
       setMessages(prev => {

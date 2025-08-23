@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react"
 import { useSelector } from "react-redux"
 import type { RootState } from "@/store/store"
-import HomePage from "./HomePage"
 import PrebuiltTemplatesPage from "./PrebuiltTemplatesPage"
 import { BroadcastTemplateBuilder } from "./CreateTemplatePage"
 import SavedTemplatesPage from "./SavedTemplatesPage"
@@ -121,8 +120,6 @@ export default function WhatsAppTemplateManager() {
    }
 
    switch (currentPage) {
-     case "home":
-       return <HomePage setCurrentPage={setCurrentPage} />
     case "prebuilt-templates":
       return (
         <PrebuiltTemplatesPage
@@ -142,11 +139,11 @@ export default function WhatsAppTemplateManager() {
          />
        )
      case "broadcast":
-       return <BroadcastPage setCurrentPage={setCurrentPage} />
+       return <BroadcastPage />
      case "broadcast-analytics":
        return <BroadcastAnalyticsPage />
      default:
-       return <HomePage setCurrentPage={setCurrentPage} />
+       return <BroadcastAnalyticsPage />
    }
  }
 

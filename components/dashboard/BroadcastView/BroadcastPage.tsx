@@ -7,7 +7,7 @@ export default function ScheduledBroadcast() {
   const [rowsPerPage, setRowsPerPage] = useState(5)
   
   // Empty data array - add your data here when available
-  const broadcasts = []
+  const broadcasts: Array<{ id: string; name: string; scheduled: string }> = []
   
   const filteredBroadcasts = broadcasts.filter(broadcast =>
     broadcast?.name?.toLowerCase().includes(searchTerm.toLowerCase())

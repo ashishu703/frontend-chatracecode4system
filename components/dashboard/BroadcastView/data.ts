@@ -34,6 +34,7 @@
          { id: "1", type: "URL", text: "Shop Now", url: "https://shop.example.com" },
          { id: "2", type: "PHONE_NUMBER", text: "Call Us", phoneNumber: "+1234567890" }
        ],
+       lastUpdated:"",
        variables: ["1", "2"],
        catalogEnabled: true,
        catalogId: "catalog_123"
@@ -44,6 +45,7 @@
        category: "MARKETING",
        language: "en",
        status: "APPROVED",
+       lastUpdated:"",
        body: "⚡ FLASH SALE ALERT! {{1}} is now {{2}}% OFF! Hurry, only {{3}} hours left!",
        buttons: [
          { id: "1", type: "URL", text: "Buy Now", url: "https://sale.example.com" }
@@ -65,6 +67,7 @@
          { id: "1", type: "QUICK_REPLY", text: "Confirm" },
          { id: "2", type: "QUICK_REPLY", text: "Reschedule" }
        ],
+       lastUpdated:"",
        variables: ["1", "2", "3"],
        catalogEnabled: false
      }
@@ -80,6 +83,7 @@
        buttons: [
          { id: "1", type: "URL", text: "Get Started", url: "https://app.example.com" }
        ],
+       lastUpdated:"",
        variables: ["1"],
        catalogEnabled: false
      }
@@ -95,6 +99,7 @@
        footer: "Security is our priority",
        buttons: [],
        variables: ["1", "2", "3"],
+       lastUpdated:"",
        catalogEnabled: false
      }
    ]
