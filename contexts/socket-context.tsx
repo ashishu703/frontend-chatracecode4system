@@ -4,6 +4,34 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import serverHandler from '@/utils/serverHandler'
 
+// Lightweight event emitter to broadcast socket events across the app
+class SimpleEventEmitter {
+  private listeners: Record<string, Array<(...args: any[]) => void>> = {}
+
+  on(event: string, listener: (...args: any[]) => void) {
+    if (!this.listeners[event]) this.listeners[event] = []
+    this.listeners[event].push(listener)
+  }
+
+  off(event: string, listener?: (...args: any[]) => void) {
+    if (!this.listeners[event]) return
+    if (!listener) {
+      delete this.listeners[event]
+      return
+    }
+    this.listeners[event] = this.listeners[event].filter(l => l !== listener)
+    if (this.listeners[event].length === 0) delete this.listeners[event]
+  }
+
+  emit(event: string, ...args: any[]) {
+    const ls = this.listeners[event]
+    if (!ls || ls.length === 0) return
+    ;[...ls].forEach(l => {
+      try { l(...args) } catch (e) { console.error(`Error in listener for ${event}:`, e) }
+    })
+  }
+}
+
 interface Message {
   id: string
   chat_id: string
@@ -48,6 +76,7 @@ interface SocketContextType {
   isLoading: boolean
   sendMessage: (chatId: string, message: any) => Promise<void>
   checkAndTriggerFlow: (message: Message) => Promise<void>
+  socketEvents: SimpleEventEmitter
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined)
@@ -59,6 +88,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [eventBus] = useState(() => new SimpleEventEmitter())
+  const [lastEmittedUid, setLastEmittedUid] = useState<string | null>(null)
 
   // Debug environment variable
   useEffect(() => {
@@ -86,7 +117,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Temporarily allow admin socket connection for testing
     if (role === 'admin') {
       console.log('Admin socket connection allowed for testing');
     }
@@ -100,11 +130,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     const newSocket = io(wsUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'], // Allow fallback to polling
+      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
+      // Remove attempts cap to keep reconnecting until user disconnects
       reconnectionDelay: 1000,
-      timeout: 20000, // Increase timeout
+      timeout: 20000,
     })
 
     setSocket(newSocket)
@@ -113,16 +143,43 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     newSocket.on('connect', () => {
       console.log('Socket connected successfully')
       setIsConnected(true)
+      try { eventBus.emit('socketConnected') } catch {}
+      try {
+        const raw = localStorage.getItem('user')
+        const user = raw ? JSON.parse(raw) : null
+        const uid = user?.uid || user?.id
+        if (uid) {
+          newSocket.emit('user_connected', { userId: uid })
+          setLastEmittedUid(String(uid))
+        } else {
+          const token = localStorage.getItem('serviceToken') || localStorage.getItem('adminToken')
+          if (token) {
+            serverHandler.get('/api/user/get_me', { headers: { Authorization: `Bearer ${token}` }})
+              .then((resp: any) => {
+                const fetchedUser = resp?.data?.data
+                const fetchedUid = fetchedUser?.uid || fetchedUser?.id
+                if (fetchedUid) {
+                  localStorage.setItem('user', JSON.stringify(fetchedUser))
+                  newSocket.emit('user_connected', { userId: fetchedUid })
+                  setLastEmittedUid(String(fetchedUid))
+                }
+              })
+              .catch(() => {})
+          }
+        }
+      } catch {}
     })
 
     newSocket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason)
       setIsConnected(false)
+      try { eventBus.emit('socketDisconnected', { reason }) } catch {}
     })
 
     newSocket.on('connect_error', (error) => {
       console.error('Socket connection error:', error)
       setIsConnected(false)
+      try { eventBus.emit('socketError', error) } catch {}
     })
 
     newSocket.on('connect_timeout', () => {
@@ -130,7 +187,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setIsConnected(false)
     })
 
-    // Handle incoming messages
     newSocket.on('push_new_msg', (msg: Message) => {
       console.log('New message received in socket context:', msg)
       console.log('Current messages count:', messages.length)
@@ -144,10 +200,34 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         console.log('Processing incoming message for flow matching...')
         checkAndTriggerFlow(msg)
       }
+      try { eventBus.emit('newMessage', msg) } catch {}
+    })
+
+    // Mirror backend conversation updates to event bus
+    newSocket.on('update_conversations', (chats: any[]) => {
+      try { eventBus.emit('conversationsUpdated', chats) } catch {}
+    })
+    newSocket.on('update_chats', (chats: any[]) => {
+      try { eventBus.emit('chatsUpdated', chats) } catch {}
+    })
+    newSocket.on('update_delivery_status', (payload: any) => {
+      try { eventBus.emit('deliveryStatusUpdated', payload) } catch {}
+    })
+    newSocket.on('push_new_reaction', (payload: any) => {
+      try { eventBus.emit('newReaction', payload) } catch {}
     })
 
     return () => {
       newSocket.disconnect()
+      newSocket.off('push_new_msg')
+      newSocket.off('update_conversations')
+      newSocket.off('update_chats')
+      newSocket.off('update_delivery_status')
+      newSocket.off('push_new_reaction')
+      newSocket.off('connect')
+      newSocket.off('disconnect')
+      newSocket.off('connect_error')
+      newSocket.off('connect_timeout')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeof window !== 'undefined' ? localStorage.getItem("serviceToken") : null, typeof window !== 'undefined' ? localStorage.getItem("role") : null])
@@ -380,7 +460,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     flows,
     isLoading,
     sendMessage,
-    checkAndTriggerFlow
+    checkAndTriggerFlow,
+    socketEvents: eventBus
   }
 
   return (

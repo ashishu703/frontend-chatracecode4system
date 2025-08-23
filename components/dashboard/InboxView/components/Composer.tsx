@@ -106,9 +106,6 @@ export function Composer({
             </PopoverContent>
           </Popover>
           <Button size="icon" className="h-10 w-10 bg-green-500 hover:bg-green-600 text-white rounded-full" onClick={() => {
-            console.log("🚀 Send button clicked!")
-            console.log("🚀 Current message:", message)
-            console.log("🚀 onSend function:", onSend)
             if (!disabled) onSend()
           }} disabled={disabled || !message.trim()}>
             <Send className="h-4 w-4" />

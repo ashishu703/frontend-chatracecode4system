@@ -58,7 +58,6 @@
   }
 }
 
-/* Permanent, always-visible, grey scrollbars for chat sidebar and chat area */
 .permanent-scrollbar {
   overflow-y: scroll !important;
   scrollbar-width: thin;
@@ -74,4 +73,12 @@
 }
 .permanent-scrollbar::-webkit-scrollbar-track {
   background: #f1f5f9;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; 
 }

@@ -36,7 +36,7 @@ export default function RootLayout({
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="alternate icon" href="/favicon.ico" />
       </head>
-      <body className={inter.className} suppressHydrationWarning={true}>
+      <body className={`${inter.className} overflow-x-hidden`} suppressHydrationWarning={true}>
         <Providers>
           <AppProvider>
             {children}

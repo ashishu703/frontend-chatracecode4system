@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { X, Filter, Search, MessageCircle, ChevronDown, Phone, Globe, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Conversation } from "../types"
-import { getChannelIcon } from "../utils"
+import { getChannelIcon, getDefaultUserIcon, generateInitials, isValidAvatar } from "../utils"
 
 interface SidebarProps {
   conversations: Conversation[]
@@ -54,14 +54,14 @@ export function Sidebar({
     <>
       <div
         className={cn(
-          "w-[320px] bg-background border-r flex flex-col transition-all duration-300 ease-in-out min-h-full",
+          "w-[320px] bg-background flex flex-col transition-all duration-300 ease-in-out min-h-full",
           "lg:relative lg:translate-x-0",
           leftSidebarOpen ? "fixed inset-y-0 left-0 z-50 translate-x-0" : "fixed inset-y-0 left-0 z-50 -translate-x-full lg:translate-x-0"
         )}
       >
         {/* Header with Search and Dropdown */}
-        <div className="border-b px-4 py-3">
-          <div className="flex items-center justify-end mb-3">
+        <div className="border-b px-4 py-2">
+          <div className="flex items-center justify-end mb-2">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setLeftSidebarOpen(false)}>
               <X className="h-4 w-4" />
             </Button>
@@ -143,13 +143,13 @@ export function Sidebar({
            </div>
 
            {/* Chat Count below Active Chats */}
-           <div className="mb-2">
-             <span className="text-xs text-gray-500">{filteredConversations.length} Chats • 0 Unread</span>
+           <div className="mb-1">
+             <span className="text-xs text-gray-500">{filteredConversations.length} Chats • {filteredConversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)} Unread</span>
            </div>
 
           {/* Filter Options */}
           {filterPopoverOpen && (
-            <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+            <div className="mb-2 p-2 bg-gray-50 rounded-lg">
               <div className="grid grid-cols-2 gap-2">
                 {["all", "open", "pending", "solved"].map((f) => (
                   <Button
@@ -192,37 +192,64 @@ export function Sidebar({
               </div>
             </div>
           ) : (
-                         filteredConversations.map((conversation) => (
-               <div
-                 key={conversation.id}
-                 className={cn(
-                   "px-4 py-3 hover:bg-green-50 cursor-pointer border-l-4 transition-all duration-200",
-                   selectedConversation?.id === conversation.id 
-                     ? "border-l-green-500 bg-green-50" 
-                     : "border-l-transparent hover:border-l-green-300"
-                 )}
-                 onClick={() => setSelectedConversation(conversation)}
-               >
-                 <div className="flex items-center gap-3">
-                   <div className="flex-1 min-w-0">
-                                           <div className="flex items-center justify-between mb-1">
-                        <p className="text-sm font-semibold truncate text-gray-700">{conversation.name}</p>
-                        <span className="text-xs text-gray-500">{conversation.time}</span>
+            filteredConversations.map((conversation) => (
+              <div
+                key={conversation.id}
+                className={cn(
+                  "px-4 py-2 hover:bg-green-50 cursor-pointer border-l-4 transition-all duration-200",
+                  selectedConversation?.id === conversation.id 
+                    ? "border-l-green-500 bg-green-50" 
+                    : "border-l-transparent hover:border-l-green-300"
+                )}
+                onClick={() => setSelectedConversation(conversation)}
+              >
+                <div className="flex items-center gap-3">
+                  {/* Profile Picture with Platform Icon Overlay */}
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="h-12 w-12">
+                      {isValidAvatar(conversation.avatar) ? (
+                        <AvatarImage 
+                          src={conversation.avatar} 
+                          alt={conversation.name}
+                          onError={(e) => {
+                            // Hide the image element to show fallback
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-blue-100 text-blue-600 text-base font-bold">
+                        {generateInitials(conversation.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    {/* Platform Icon Overlay */}
+                    {conversation.platform && (
+                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm">
+                        {getChannelIcon(conversation.platform)}
                       </div>
-                      <p className="text-xs text-gray-600 truncate">
-                        {typeof conversation.lastMessage === "string"
-                          ? conversation.lastMessage
-                          : conversation.lastMessage && typeof conversation.lastMessage === "object"
-                          ? ((conversation.lastMessage as any).body &&
-                            typeof (conversation.lastMessage as any).body === "object" &&
-                            (((conversation.lastMessage as any).body as any).text || ((conversation.lastMessage as any).body as any).caption)) ||
-                            JSON.stringify((conversation.lastMessage as any).body || conversation.lastMessage)
-                          : ""}
-                      </p>
+                    )}
+                  </div>
+                  
+                                     <div className="flex-1 min-w-0">
+                     <div className="flex items-center justify-between mb-1">
+                       <p className="text-sm font-bold truncate text-gray-900">{conversation.name}</p>
+                       {conversation.unread_count ? (
+                         <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-green-500 text-white text-[10px] font-semibold">{conversation.unread_count > 99 ? '99+' : conversation.unread_count}</span>
+                       ) : null}
+                     </div>
+                     <p className="text-xs text-gray-600 truncate">
+                       {typeof conversation.lastMessage === "string"
+                         ? conversation.lastMessage
+                         : conversation.lastMessage && typeof conversation.lastMessage === "object"
+                         ? ((conversation.lastMessage as any).body &&
+                           typeof (conversation.lastMessage as any).body === "object" &&
+                           (((conversation.lastMessage as any).body as any).text || ((conversation.lastMessage as any).body as any).caption)) ||
+                           JSON.stringify((conversation.lastMessage as any).body || conversation.lastMessage)
+                         : ""}
+                     </p>
                    </div>
-                 </div>
-               </div>
-             ))
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>

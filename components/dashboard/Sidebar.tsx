@@ -47,6 +47,9 @@ export default function Sidebar() {
       setOpenDropdown(openDropdown === itemId ? null : itemId)
     } else {
       dispatch(setCurrentView(itemId))
+      try {
+        localStorage.setItem('dashboardCurrentView', itemId)
+      } catch {}
     }
   }
 
@@ -55,6 +58,11 @@ export default function Sidebar() {
       className={`fixed left-0 top-0 h-full bg-white shadow-lg border-r border-gray-200 transition-all duration-300 z-50 ${
         sidebarOpen ? "w-64" : "w-16"
       }`}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        overflowX: "hidden",
+      }}
     >
       {/* Logo */}
       <div className="p-4 border-b border-gray-200">
@@ -71,7 +79,7 @@ export default function Sidebar() {
       </div>
 
       {/* Menu Items */}
-      <nav className="mt-4">
+      <nav className="mt-4 overflow-y-auto no-scrollbar" style={{ flex: 1 }}>
         {menuItems.map((item) => (
           <div key={item.id}>
             {/* Parent Item */}
@@ -109,7 +117,7 @@ export default function Sidebar() {
                 {item.children.map((child) => (
                   <button
                     key={child.id}
-                    onClick={() => dispatch(setCurrentView(child.id))}
+                    onClick={() => { dispatch(setCurrentView(child.id)); try { localStorage.setItem('dashboardCurrentView', child.id) } catch {} }}
                     className={`w-full flex items-center px-4 py-2 text-left hover:bg-blue-50 text-gray-600 ${
                       currentView === child.id ? "bg-blue-100 text-blue-600 font-semibold" : ""
                     }`}
@@ -126,7 +134,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       {sidebarOpen && (
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
+        <div className="p-4 border-t border-gray-200 bg-white">
           <p className="text-xs text-gray-500 text-center">
             <b>© MBG 2025</b>
             <br />

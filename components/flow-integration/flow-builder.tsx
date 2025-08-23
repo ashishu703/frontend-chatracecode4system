@@ -19,7 +19,7 @@ import "@xyflow/react/dist/style.css"
 
 // import { NodeSidebar } from "./node-sidebar"
 import { NodeConfigPanel } from "./node-config-panel"
-import { FlowHeader } from "./flow-header"
+// FlowHeader is not used here
 import { NodeContextProvider } from "./node-context"
 import { nodeTypes } from "./nodes"
 import { validateConnection } from "@/lib/flow-integration/flow-validation"
@@ -137,41 +137,70 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const reactFlowInstance = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
-  // Add state for flow title and flowId
   const [flowTitle, setFlowTitle] = useState("");
   const [flowId, setFlowId] = useState("");
   
   const { toast } = useToast();
   
-  // Auto-generate flow ID when component mounts
+  // Auto-generate flow ID when creating a new flow only
   useEffect(() => {
-    if (!flowId) {
+    if (!flowId && !(initialFlowData && (initialFlowData.flowId || initialFlowData.flow_id))) {
       const generatedId = `flow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       setFlowId(generatedId);
     }
-  }, [flowId]);
+  }, [flowId, initialFlowData]);
 
   // Load initial flow data if provided (for editing mode)
   useEffect(() => {
     if (initialFlowData) {
-      // Ensure nodes have unique IDs to prevent conflicts
-      const nodesWithUniqueIds = Array.isArray(initialFlowData.nodes) 
-        ? initialFlowData.nodes.map((node: any) => ({
-            ...node,
-            id: node.id.includes('-') ? node.id : `${node.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
-          }))
-        : [];
-      
-      // Ensure edges have unique IDs to prevent conflicts
-      const edgesWithUniqueIds = Array.isArray(initialFlowData.edges)
-        ? initialFlowData.edges.map((edge: any) => ({
-            ...edge,
-            id: edge.id.includes('-') ? edge.id : `${edge.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
-          }))
-        : [];
-      
-      setNodes(nodesWithUniqueIds);
-      setEdges(edgesWithUniqueIds);
+      const mapBusinessToUiType = (businessType: string) => {
+        switch (businessType) {
+          case 'simpleMessage': return 'simpleMessageNode';
+          case 'imageMessage': return 'imageMessageNode';
+          case 'audioMessage': return 'audioMessageNode';
+          case 'videoMessage': return 'videoMessageNode';
+          case 'documentMessage': return 'documentMessageNode';
+          case 'buttonMessage': return 'buttonMessageNode';
+          case 'listMessage': return 'listMessageNode';
+          case 'assignAgent': return 'assignAgentNode';
+          case 'disableChatTill': return 'disableChatTillNode';
+          case 'requestAPI': return 'requestAPINode';
+          case 'mailMessage': return 'sendEmailNode';
+          case 'condition': return 'conditionNode';
+          case 'start': return 'startNode';
+          default: return 'genericNode';
+        }
+      };
+
+      const transformNodes = (nodesToTransform: any[]) => {
+        return Array.isArray(nodesToTransform)
+          ? nodesToTransform.map((node: any) => {
+              const businessType = node.nodeType || node.type || node?.data?.type;
+              const uiType = mapBusinessToUiType(businessType);
+              return {
+                ...node,
+                
+                id: node.id,
+                type: uiType,
+                data: {
+                  // Ensure business type is present inside data for editors
+                  type: businessType,
+                  ...(node.data || {}),
+                },
+              } as any;
+            })
+          : [];
+      };
+
+      const transformedNodes = transformNodes(initialFlowData.nodes);
+      const transformedEdges = Array.isArray(initialFlowData.edges) ? initialFlowData.edges : [];
+
+      setNodes(transformedNodes);
+      setEdges(transformedEdges);
+      // After nodes/edges mount, adjust viewport so connections render without refresh
+      requestAnimationFrame(() => {
+        try { reactFlowInstance.fitView(); } catch {}
+      });
       setFlowTitle(initialFlowData.title || '');
       // Handle both flowId and flow_id from API response
       setFlowId(initialFlowData.flowId || initialFlowData.flow_id || flowId);
@@ -636,81 +665,21 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
       return;
     }
     
-    // Create edges from node options if no manual edges exist
-    let cleanedEdges = [];
+    // Edges: persist exactly what the user created
+    let cleanedEdges: Edge[] = [] as any;
     
     if (edges.length === 0) {
-             // Auto-create edges from node options
-       nodes.forEach((node, nodeIndex) => {
-         const nodeOptions = node.data?.options || [];
-         if (Array.isArray(nodeOptions) && nodeOptions.length > 0) {
-           nodeOptions.forEach((option, optionIndex) => {
-             if (option.value && option.value.trim()) {
-               // Find the next node to connect to (or create a fallback)
-               const targetNode = nodes[nodeIndex + 1] || node; // Connect to next node or self
-               
-               cleanedEdges.push({
-                 id: `auto-edge-${node.id}-${option.id}-${Date.now()}`,
-                 source: node.id,
-                 target: targetNode.id,
-                 sourceHandle: option.value.trim(),
-               });
-             }
-           });
-         }
-       });
-       
-       // Add fallback edge for unmatched messages
-       if (nodes.length > 0) {
-         const firstNode = nodes[0];
-         cleanedEdges.push({
-           id: `fallback-edge-${firstNode.id}-${Date.now()}`,
-           source: firstNode.id,
-           target: firstNode.id, // Loop back to same node
-           sourceHandle: "{{OTHER_MSG}}",
-         });
-       }
-          } else {
-        // Process manual edges
-        cleanedEdges = edges.map((edge) => {
-          // Find the source node to get the option text
-          const sourceNode = nodes.find(node => node.id === edge.source);
-          let sourceHandle = "{{OTHER_MSG}}"; // Default fallback
-          
-          if (sourceNode && edge.sourceHandle) {
-            // Extract option text from the node's options
-            const nodeOptions = sourceNode.data?.options || [];
-            if (Array.isArray(nodeOptions)) {
-              // Find the option that matches the sourceHandle ID
-              for (const option of nodeOptions) {
-                if (typeof option === 'object' && option.id === edge.sourceHandle && option.value) {
-                  sourceHandle = option.value;
-                  break;
-                }
-              }
-            }
-          }
-          
-          return {
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            sourceHandle: sourceHandle,
-          };
-        });
-        
-        // Add fallback edge for unmatched messages if not already present
-        const hasFallbackEdge = cleanedEdges.some(edge => edge.sourceHandle === "{{OTHER_MSG}}");
-        if (!hasFallbackEdge && nodes.length > 0) {
-          const firstNode = nodes[0];
-          cleanedEdges.push({
-            id: `fallback-edge-${firstNode.id}-${Date.now()}`,
-            source: firstNode.id,
-            target: firstNode.id, // Loop back to same node
-            sourceHandle: "{{OTHER_MSG}}",
-          });
-        }
-      }
+      // do nothing
+    } else {
+        // Process manual edges; keep the handle IDs and include type
+        cleanedEdges = edges.map((edge) => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle,
+          type: edge.type || 'smoothstep',
+        }));
+    }
 
     const payload = {
       title: (flowTitle || '').trim(),
@@ -764,15 +733,54 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   const loadFlow = async (id: string) => {
     try {
       const res = await serverHandler.post('/api/chat_flow/get_by_flow_id', { flowId: id });
-      if ((res.data as any).success && (res.data as any).data) {
-        const flowData = (res.data as any).data;
-        setNodes(Array.isArray(flowData.nodes) ? flowData.nodes : []);
-        setEdges(Array.isArray(flowData.edges) ? flowData.edges : []);
+      const api = res.data as any;
+      if (api && api.success) {
+        // Backend returns flattened shape: { success: true, nodes, edges, ... }
+        const flowData = api.data ?? api;
+
+        const mapBusinessToUiType = (businessType: string) => {
+          switch (businessType) {
+            case 'simpleMessage': return 'simpleMessageNode';
+            case 'imageMessage': return 'imageMessageNode';
+            case 'audioMessage': return 'audioMessageNode';
+            case 'videoMessage': return 'videoMessageNode';
+            case 'documentMessage': return 'documentMessageNode';
+            case 'buttonMessage': return 'buttonMessageNode';
+            case 'listMessage': return 'listMessageNode';
+            case 'assignAgent': return 'assignAgentNode';
+            case 'disableChatTill': return 'disableChatTillNode';
+            case 'requestAPI': return 'requestAPINode';
+            case 'mailMessage': return 'sendEmailNode';
+            case 'condition': return 'conditionNode';
+            case 'start': return 'startNode';
+            default: return 'genericNode';
+          }
+        };
+
+        const transformedNodes = Array.isArray(flowData.nodes)
+          ? flowData.nodes.map((node: any) => {
+              const businessType = node.nodeType || node.type || node?.data?.type;
+              return {
+                ...node,
+                id: node.id,
+                type: mapBusinessToUiType(businessType),
+                data: { type: businessType, ...(node.data || {}) },
+              };
+            })
+          : [];
+
+        const incomingEdges = Array.isArray(flowData.edges) ? flowData.edges : [];
+
+        // Do not inject placeholder handles; render exactly what backend sent
+ 
+        setNodes(transformedNodes);
+        setEdges(incomingEdges);
+        try { requestAnimationFrame(() => reactFlowInstance.fitView()); } catch {}
         setFlowTitle(flowData.title || '');
-        setFlowId(flowData.flowId || id);
+        setFlowId(flowData.flowId || flowData.flow_id || id);
         toast({ title: 'Success', description: 'Flow loaded', variant: 'default' });
       } else {
-        toast({ title: 'Error', description: (res.data as any).msg || 'Failed to load flow', variant: 'destructive' });
+        toast({ title: 'Error', description: (api as any)?.msg || 'Failed to load flow', variant: 'destructive' });
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to load flow', variant: 'destructive' });
@@ -872,7 +880,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
                 onPaneClick={onPaneClick}
                 onDrop={onDrop}
                 onDragOver={onDragOver}
-                nodeTypes={nodeTypes}
+                nodeTypes={nodeTypes as any}
                 fitView
                 className={isPreviewMode ? "pointer-events-none" : ""}
               >

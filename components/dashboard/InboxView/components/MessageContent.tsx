@@ -15,43 +15,47 @@ function linkify(text: string) {
         </a>
       )
     }
-    return <React.Fragment key={i}>{part}</React.Fragment>
+    return <span key={i} className="break-all">{part}</span>
   })
 }
 
-function renderStructuredText(text: string) {
-  if (!text) return null
-  const lines = text.split(/\r?\n/)
-  const listLines: string[] = []
-  const paragraphs: string[] = []
-  lines.forEach((l) => {
-    const trimmed = l.trim()
-    if (/^(\d+\.|[-•])\s+/.test(trimmed)) {
-      listLines.push(trimmed.replace(/^[-•]\s+/, '').replace(/^(\d+)\.\s+/, ''))
-    } else if (trimmed === "") {
-      // paragraph break
-      paragraphs.push("\n")
-    } else {
-      paragraphs.push(trimmed)
-    }
-  })
+function renderStructuredText(text: string | any) {
+  if (typeof text !== 'string') return text
+  
+  // Split by newlines to handle line breaks
+  const lines = text.split('\n')
+  
   return (
-    <div className="space-y-2">
-      {paragraphs
-        .join("\n")
-        .split(/\n{2,}/)
-        .map((p, idx) => (
-          <p key={idx} className="text-sm leading-relaxed">
-            {linkify(p)}
-          </p>
-        ))}
-      {listLines.length > 0 && (
-        <ul className="list-disc pl-5 space-y-1 text-sm">
-          {listLines.map((item, i) => (
-            <li key={i}>{linkify(item)}</li>
-          ))}
-        </ul>
-      )}
+    <div className="w-fit">
+      {lines.map((line, i) => {
+        // Check if line starts with list markers
+        if (line.trim().match(/^[-*•]\s/)) {
+          return (
+            <div key={i} className="flex items-start gap-2 mb-1">
+              <span className="text-gray-500 mt-1">•</span>
+              <span className="break-words">{line.trim().replace(/^[-*•]\s/, '')}</span>
+            </div>
+          )
+        }
+        
+        // Check if line starts with numbered list
+        if (line.trim().match(/^\d+\.\s/)) {
+          const number = line.trim().match(/^(\d+)\.\s/)?.[1] || '1'
+          return (
+            <div key={i} className="flex items-start gap-2 mb-1">
+              <span className="text-gray-500 mt-1 text-xs">{number}.</span>
+              <span className="break-words">{line.trim().replace(/^\d+\.\s/, '')}</span>
+            </div>
+          )
+        }
+        
+        // Regular text line
+        return (
+          <div key={i} className="break-words mb-1 last:mb-0">
+            {line}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -61,34 +65,32 @@ export function MessageContent({ msg }: { msg: Message }) {
     const body: any = msg.body
     return (
       <div className="max-w-[600px]">
-        <div className="relative rounded-lg overflow-hidden bg-black/5">
-          <img
-            src={body.url || "/placeholder.svg"}
-            alt="Image"
-            className="block w-full max-w-[600px] max-h-[250px] object-contain cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
-            onClick={() => window.open(body.url, "_blank")}
-            onError={(e) => {
-              ;(e.currentTarget as HTMLImageElement).src = "/placeholder.svg"
-            }}
-          />
-        </div>
-        {body.caption && <p className="mt-2 text-sm">{body.caption}</p>}
+        <img
+          src={body.url || "/placeholder.svg"}
+          alt="Image"
+          className="block w-full max-w-[600px] max-h-[250px] object-contain cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
+          onClick={() => window.open(body.url, "_blank")}
+          onError={(e) => {
+            ;(e.currentTarget as HTMLImageElement).src = "/placeholder.svg"
+          }}
+        />
+        {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
       </div>
     )
   } else if (msg.type === "video" && msg.body && typeof msg.body === "object" && (msg.body as any).url) {
     const body: any = msg.body
     return (
       <div className="max-w-[380px]">
-        <video src={body.url} controls className="w-full max-w-[380px] max-h-[400px] rounded-lg object-contain bg-black" />
-        {body.caption && <p className="mt-2 text-sm">{body.caption}</p>}
+        <video src={body.url} controls className="w-full max-w-[380px] max-h-[400px] rounded-lg object-contain" />
+        {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
       </div>
     )
   } else if (msg.type === "audio" && msg.body && typeof msg.body === "object" && (msg.body as any).url) {
     const body: any = msg.body
     return (
-      <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-lg w-[380px] max-w-[380px]">
-        <Mic className="h-4 w-4" />
-        <audio src={body.url} controls className="flex-1" />
+      <div className="flex items-center gap-2 p-2 rounded-lg w-fit">
+        <Mic className="h-4 w-4 flex-shrink-0" />
+        <audio src={body.url} controls className="w-auto min-w-[200px]" />
       </div>
     )
   } else if (msg.type === "file" && msg.body && typeof msg.body === "object" && (msg.body as any).url) {
@@ -97,7 +99,7 @@ export function MessageContent({ msg }: { msg: Message }) {
     const fileSize = body.filesize || ""
     return (
       <div
-        className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer w-[380px] max-w-[380px]"
+        className="flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer w-fit"
         onClick={() => window.open(body.url, "_blank")}
       >
         <div className="flex-shrink-0">
@@ -123,7 +125,7 @@ export function MessageContent({ msg }: { msg: Message }) {
     return (
       <div className="space-y-2">
         {body.elements.map((element: any, index: number) => (
-          <div key={index} className="border border-gray-200 rounded-lg p-3 bg-white">
+          <div key={index} className="rounded-lg p-3">
             {element.image_url && (
               <img src={element.image_url} alt={element.title || "Carousel item"} className="w-full h-32 object-cover rounded mb-2" />
             )}
@@ -178,13 +180,25 @@ export function MessageContent({ msg }: { msg: Message }) {
     return (
       <div className="max-w-[380px]">
         <img src={body.url} alt="GIF" className="w-full max-w-[380px] max-h-[400px] object-contain rounded-lg" />
-        {body.caption && <p className="mt-2 text-sm">{body.caption}</p>}
+        {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
       </div>
     )
   }
   return (
-    <div className="text-sm leading-relaxed">
-      {renderStructuredText(msg.message || "")}
+    <div className="text-sm leading-relaxed break-words whitespace-pre-wrap w-fit">
+      {(() => {
+        const text = String(msg.message || "")
+        const emojiOnly = (() => {
+          const trimmed = text.trim()
+          if (!trimmed) return false
+          const stripped = trimmed.replace(/[\u{1F300}-\u{1FAFF}\u{1F1E6}-\u{1F1FF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}\u{FE0F}\u{200D}\u{2640}-\u{2642}]/gu, "")
+          return stripped === ""
+        })()
+        if (emojiOnly) {
+          return <span className="text-3xl leading-none select-none">{text}</span>
+        }
+        return renderStructuredText(text)
+      })()}
     </div>
   )
 }
