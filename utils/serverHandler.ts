@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const serverHandler = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_BASE_URL,
+  baseURL: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:4500',
   headers: {
     'Content-Type': 'application/json',
   },
