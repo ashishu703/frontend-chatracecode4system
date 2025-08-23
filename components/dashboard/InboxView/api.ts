@@ -22,10 +22,6 @@ export const fetchChats = async (page = 1, limit = 20) => {
 
 export const fetchMessagesForChat = async (chatId: string, page: number = 1, limit: number = 20) => {
   try {
-    console.log("🔍 fetchMessagesForChat called with chatId:", chatId, "page:", page, "limit:", limit)
-    console.log("🔍 Using baseUrl:", baseUrl)
-    console.log("🔍 Using token:", getToken().substring(0, 20) + "...")
-
     const response = await fetch(`${baseUrl}/api/inbox/get_convo`, {
       method: "POST",
       headers: {
@@ -39,27 +35,17 @@ export const fetchMessagesForChat = async (chatId: string, page: number = 1, lim
       }),
     })
 
-    console.log("🔍 Response status:", response.status)
-    console.log("🔍 Response headers:", Object.fromEntries(response.headers.entries()))
-
     if (!response.ok) {
-      console.error("❌ HTTP error! status:", response.status)
-      const errorText = await response.text()
-      console.error("❌ Error response:", errorText)
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
     const data = await response.json()
-    console.log("🔍 Response data:", data)
 
     if (data.success && data.data) {
-      console.log("✅ Success! Returning", data.data.length, "messages")
       return data.data
     }
-    console.log("⚠️ No success or no data in response")
     return []
   } catch (error) {
-    console.error("❌ fetchMessagesForChat error:", error)
     return []
   }
 }
@@ -80,20 +66,13 @@ export const sendMessage = async (
   _senderId?: string,
   extras?: { isChatActive?: boolean; platform?: string }
 ) => {
-  console.log("🚀 sendMessage API called with:", { text, chatId, _senderId })
-  console.log("🚀 baseUrl:", baseUrl)
-  console.log("🚀 token:", getToken().substring(0, 20) + "...")
-  
-  // Backend expects: text, chatId, senderId
   const payload = { 
     text: text, 
     chatId: chatId, 
-    senderId: _senderId || chatId, // Use chatId as fallback; avoid undefined which can 500
-    // Provide optional fields some backends expect; safe to include
+    senderId: _senderId || chatId, 
     isChatActive: extras?.isChatActive,
     platform: extras?.platform,
   }
-  console.log("🚀 Sending payload:", payload)
   
   const response = await fetch(`${baseUrl}/api/messanger/send`, {
     method: "POST",
@@ -104,14 +83,6 @@ export const sendMessage = async (
     body: JSON.stringify(payload),
   })
   
-  console.log("🚀 API response status:", response.status)
-  console.log("🚀 API response ok:", response.ok)
-  if (!response.ok) {
-    try {
-      const errText = await response.text()
-      console.error("❌ sendMessage error body:", errText)
-    } catch {}
-  }
   return response
 }
 
@@ -142,7 +113,6 @@ export const sendFile = async (file: File, chatId: string, senderId: string) => 
 
 export const tokenUtils = { getToken }
 
-// Upload a media file and return a public URL
 export const uploadMedia = async (file: File): Promise<string | false> => {
   try {
     const formData = new FormData()
@@ -163,25 +133,87 @@ export const uploadMedia = async (file: File): Promise<string | false> => {
   }
 }
 
-// Send media message (image | video | audio | file) via backend messenger send API
 export const sendMedia = async (
-  params: { type: "image" | "video" | "audio" | "file"; url: string; caption?: string; chatId: string; senderId: string }
+  params: { type: "image" | "video" | "audio" | "file"; url: string; caption?: string; chatId: string; senderId: string; platform?: string }
 ): Promise<boolean> => {
   try {
-    const response = await fetch(`${baseUrl}/api/messanger/send`, {
+    const { type, url, caption, chatId, senderId, platform = "messenger" } = params
+    
+    let endpoint = ""
+    let payload: any = {}
+    
+    if (platform === "whatsapp") {
+      switch (type) {
+        case "image":
+          endpoint = "/api/whatsapp/send_image"
+          payload = { url, senderId, chatId, caption }
+          break
+        case "video":
+          endpoint = "/api/whatsapp/send_video"
+          payload = { url, senderId, chatId, caption }
+          break
+        case "audio":
+          endpoint = "/api/whatsapp/send_audio"
+          payload = { url, senderId, chatId }
+          break
+        case "file":
+          endpoint = "/api/whatsapp/send_document"
+          payload = { url, senderId, chatId, caption }
+          break
+      }
+    } else if (platform === "instagram") {
+      switch (type) {
+        case "image":
+          endpoint = "/api/instagram/send_image"
+          payload = { url, senderId, chatId, caption }
+          break
+        case "video":
+          endpoint = "/api/instagram/send_video"
+          payload = { url, senderId, chatId, caption }
+          break
+        case "audio":
+          endpoint = "/api/instagram/send_audio"
+          payload = { url, senderId, chatId }
+          break
+        case "file":
+          endpoint = "/api/instagram/send_document"
+          payload = { url, senderId, chatId, caption }
+          break
+      }
+    } else {
+      switch (type) {
+        case "image":
+          endpoint = "/api/messanger/send-image"
+          payload = { url, senderId, chatId }
+          break
+        case "video":
+          endpoint = "/api/messanger/send-video"
+          payload = { url, senderId, chatId }
+          break
+        case "audio":
+          endpoint = "/api/messanger/send-audio"
+          payload = { url, senderId, chatId }
+          break
+        case "file":
+          endpoint = "/api/messanger/send-doc"
+          payload = { url, senderId, chatId }
+          break
+      }
+    }
+    
+    if (!endpoint) {
+      return false
+    }
+    
+    const response = await fetch(`${baseUrl}${endpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${getToken()}`,
       },
-      body: JSON.stringify({
-        text: params.caption || params.url, // Use caption or URL as text
-        chatId: params.chatId,
-        senderId: params.senderId,
-        type: params.type,
-        url: params.url,
-      }),
+      body: JSON.stringify(payload),
     })
+    
     if (!response.ok) return false
     const result = await response.json()
     return !!result?.success

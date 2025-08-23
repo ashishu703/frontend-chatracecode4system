@@ -38,15 +38,56 @@ export default function InboxView() {
   const [isDisabledMap, setIsDisabledMap] = React.useState<Record<string, boolean>>({})
   const [isBlockedMap, setIsBlockedMap] = React.useState<Record<string, boolean>>({})
   const [statusMap, setStatusMap] = React.useState<Record<string, Conversation["status"]>>({})
-  const [remainingSeconds, setRemainingSeconds] = React.useState<number>(15 * 60)
+  const [isChatSessionActive, setIsChatSessionActive] = React.useState(true)
   const [unreadMap, setUnreadMap] = React.useState<Record<string, number>>({})
   const users = React.useMemo(() => [{ id: "me", name: "Me", online: true }, { id: "agent-1", name: "Agent 1", online: false }], [])
+
+  // CRITICAL FIX: Load unread counts only once at startup
+  const [unreadMapLoaded, setUnreadMapLoaded] = React.useState(false)
+  
+  React.useEffect(() => {
+    if (!unreadMapLoaded) {
+      try {
+        const raw = sessionStorage.getItem("inbox:unreadMap")
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (parsed && typeof parsed === 'object') {
+            setUnreadMap(parsed)
+          }
+        }
+      } catch {}
+      setUnreadMapLoaded(true)
+    }
+  }, [unreadMapLoaded])
+
+  // CRITICAL FIX: Save unread counts to storage only when unread map changes
+  React.useEffect(() => {
+    if (unreadMapLoaded) {
+      try { 
+        sessionStorage.setItem("inbox:unreadMap", JSON.stringify(unreadMap))
+      } catch {}
+    }
+  }, [unreadMap, unreadMapLoaded])
   
   // Pagination state for messages
   const [currentPage, setCurrentPage] = React.useState(1)
   const [hasMoreMessages, setHasMoreMessages] = React.useState(true)
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = React.useState(false)
   const PAGE_SIZE = 10 
+
+  // CRITICAL FIX: Memoize helper functions to prevent re-renders
+  const sortConversations = React.useCallback((conversations: Conversation[]) => {
+    return [...conversations].sort((a: any, b: any) => {
+      const aUnread = (a.unread_count || 0) > 0
+      const bUnread = (b.unread_count || 0) > 0
+      if (aUnread && !bUnread) return -1
+      if (!aUnread && bUnread) return 1
+      
+      const aTime = new Date(a.last_message_timestamp || 0).getTime()
+      const bTime = new Date(b.last_message_timestamp || 0).getTime()
+      return bTime - aTime
+    })
+  }, [])
 
   const parseJsonIfNeeded = React.useCallback((value: any) => {
     if (typeof value === "string" && value.trim().startsWith("{")) {
@@ -69,39 +110,34 @@ export default function InboxView() {
         const idx = clean.lastIndexOf('.')
         return idx >= 0 ? clean.substring(idx + 1).toLowerCase() : ""
       }
-      // Images
       const extension = ext(url)
       const isImageExt = ["jpg","jpeg","png","webp","bmp","tiff"].includes(extension)
       const isGifExt = extension === "gif"
       const isVideoExt = ["mp4","webm","m4v","mov","3gp","mkv"].includes(extension)
       const isAudioExt = ["mp3","wav","ogg","m4a","aac"].includes(extension)
       const isDocExt = ["pdf","doc","docx","ppt","pptx","xls","xlsx","csv","txt"].includes(extension)
+      
       if (url && (isImageExt || (!extension && (body.image_url || body.type === 'image')))) {
         return { text, type: "image" as const, body: { url, caption: text } }
       }
-      // Video
       if ((url && isVideoExt) || body.video_url || (body.url && body.type === "video")) {
         return { text, type: "video" as const, body: { url: url || body.video_url || body.url, caption: text } }
       }
-      // Audio
       if ((url && isAudioExt) || body.audio_url || (body.url && body.type === "audio")) {
         return { text, type: "audio" as const, body: { url: url || body.audio_url || body.url, caption: text } }
       }
-      // Document/File
       if ((url && isDocExt) || body.document_url || body.file_url || (body.url && body.type === "document")) {
         return { text: text || body.filename || "Document", type: "file" as const, body: { url: url || body.document_url || body.file_url || body.url, caption: text, filename: body.filename || "Document", filesize: body.filesize || "" } }
       }
-      // Carousel
       if (Array.isArray(body.elements)) {
         return { text, type: "carousel" as const, body: { elements: body.elements, text } }
       }
-      // GIF
       if (isGifExt || body.gif_url || (body.url && body.type === "gif")) {
         return { text, type: "gif" as const, body: { url: url || body.gif_url || body.url, caption: text } }
       }
       return { text: text || "", type: (raw?.type || "text") as Message["type"], body }
     }
-    // URL-only string (e.g., emoji image link)
+    
     if (typeof base.text === "string") {
       const m = base.text.match(/(https?:\/\/[^\s"']+\.(jpg|jpeg|png|gif|webp))/i)
       if (m) return { text: base.text.replace(m[0], "").trim(), type: "image" as const, body: { url: m[1], caption: base.text.replace(m[0], "").trim() } }
@@ -121,94 +157,195 @@ export default function InboxView() {
     return ""
   }, [deriveContent])
 
-  // Monitor message changes
-  React.useEffect(() => {
-    if (messages.length > 100) {
-      console.log("High message count:", messages.length)
+  const toMs = React.useCallback((raw: any): number => {
+    if (!raw) return Date.now()
+    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000
+    if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+      const n = parseInt(raw, 10)
+      return n > 1e12 ? n : n * 1000
     }
-  }, [messages.length])
+    const parsed = new Date(raw).getTime()
+    return Number.isNaN(parsed) ? Date.now() : parsed
+  }, [])
 
-  const scrollToBottom = () => {
+  const scrollToBottom = React.useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+  }, [])
+
   React.useEffect(() => {
     if (autoScrollNextRef.current) {
       scrollToBottom()
     }
-  }, [messages])
+  }, [messages, scrollToBottom])
 
-  React.useEffect(() => {
-    setRemainingSeconds((s) => s)
-  }, [])
+  // CRITICAL FIX: Optimize socket event handlers with stable references
+  const handleNewMessage = React.useCallback((message: any) => {
+    const msgChatId = String(message.chat_id)
+    const route = (message.route || '').toString().toUpperCase()
+    const isSelectedForMsg = selectedConversation && (
+      String(selectedConversation.id) === msgChatId ||
+      String(selectedConversation.chat_id) === msgChatId
+    )
+    
+    // Only increment unread for incoming messages on non-selected chats
+    if (route === 'INCOMING' && !isSelectedForMsg) {
+      setUnreadMap((prev) => ({
+        ...prev,
+        [msgChatId]: (prev[msgChatId] || 0) + 1
+      }))
+    }
+    
+    // Update conversations list
+    setConversations((prev) => {
+      const next = prev.map((chat) => {
+        const convIds = [String(chat.chat_id), String(chat.id)]
+        if (convIds.includes(msgChatId)) {
+          const pv = previewText(message)
+          return {
+            ...chat,
+            lastMessage: pv,
+            last_message_body: pv,
+            last_message_time: message.timestamp || message.createdAt,
+            time: formatTime(message.timestamp || message.createdAt),
+            unread_count: route === 'INCOMING' && !isSelectedForMsg 
+              ? (chat.unread_count || 0) + 1 
+              : (chat.unread_count || 0),
+            last_message_timestamp: message.timestamp || message.createdAt,
+          }
+        }
+        return chat
+      })
+      return sortConversations(next)
+    })
+    
+    // CRITICAL FIX: Only update messages if this message belongs to the selected conversation
+    if (isSelectedForMsg) {
+      const rawTsMs = toMs(message.timestamp || message.createdAt || new Date().toISOString())
+      const normalized = deriveContent(message)
+      
+      const newMessage: Message = {
+        id: message.id || `socket-${Date.now()}-${Math.random()}`,
+        sender: route === "OUTGOING" ? "user" : "other",
+        message: normalized.text,
+        type: (normalized.type || "text") as any,
+        timestamp: formatTime(message.timestamp || new Date().toISOString()),
+        rawTimestamp: rawTsMs,
+        status: (message.status || "") as any,
+        body: normalized.body,
+        reactions: message.reactions || [],
+        buttons: message.buttons || [],
+      }
+      
+      setMessages((prev) => {
+        // Check for duplicates
+        if (prev.some((m) => m.id === newMessage.id)) return prev
+        
+        // Add and sort
+        const updated = [...prev, newMessage]
+        return updated.sort((a, b) => 
+          new Date(a.rawTimestamp || 0).getTime() - new Date(b.rawTimestamp || 0).getTime()
+        )
+      })
+      
+      // Update the selected conversation's last message timestamp for the timer
+      if (selectedConversation) {
+        setSelectedConversation(prev => prev ? {
+          ...prev,
+          last_message_timestamp: message.timestamp || message.createdAt || new Date().toISOString()
+        } : prev)
+      }
+    }
+  }, [selectedConversation, previewText, formatTime, sortConversations, toMs, deriveContent])
 
+  const handleChatUpdate = React.useCallback((updatedChat: any) => {
+    setConversations((prev) => {
+      const next = prev.map((chat) => 
+        chat.id === updatedChat.id ? { ...chat, ...updatedChat } : chat
+      )
+      return sortConversations(next)
+    })
+  }, [sortConversations])
+
+  const handleConversationsUpdated = React.useCallback((chats: any[]) => {
+    if (!Array.isArray(chats)) return
+    
+    setConversations((prev) => {
+      const mapped = chats.map((chat: any) => {
+        const id = String(chat.id || chat.chat_id)
+        const existing = prev.find((c) => String(c.id) === id || String(c.chat_id) === id)
+        const isSelected = selectedConversation && (
+          String(selectedConversation.id) === id || 
+          String(selectedConversation.chat_id) === id
+        )
+        
+        const serverUnread = chat.unread_count || 0
+        const currentUnread = unreadMap[id] ?? existing?.unread_count ?? 0
+        const mergedUnread = isSelected ? 0 : Math.max(serverUnread, currentUnread)
+        
+        return {
+          id: chat.id || chat.chat_id,
+          chat_id: chat.chat_id || chat.id,
+          name: chat.sender_name || chat.page?.name || chat.name || "Unknown",
+          avatar: chat.avatar || chat.profile_pic || "/placeholder.svg",
+          lastMessage: previewText(chat.lastMessage || { body: { text: chat.last_message_body || chat.lastMessage } }),
+          platform: chat.account?.platform || chat.platform || chat.channel || "messenger",
+          time: formatTime(chat.last_message_timestamp || chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
+          page_name: chat.page?.name || chat.page_name,
+          page_icon: chat.page?.icon || chat.page_icon,
+          channel_icon: chat.channel_icon,
+          unread_count: mergedUnread,
+          sender_name: chat.sender_name,
+          sender_id: chat.sender_id || chat.chat_id,
+          last_message_time: chat.lastMessage?.timestamp || chat.last_message_time,
+          last_message_body: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
+          status: statusMap[chat.id || chat.chat_id] || existing?.status || "open",
+          favorite: !!favorite[chat.id || chat.chat_id],
+          isDisabled: !!isDisabledMap[chat.id || chat.chat_id],
+          isBlocked: !!isBlockedMap[chat.id || chat.chat_id],
+          isActive: typeof chat.isActive === 'boolean' ? chat.isActive : (existing?.isActive ?? true),
+          last_message_timestamp: chat.last_message_timestamp || chat.lastMessage?.timestamp,
+        } as Conversation
+      })
+      
+      const sorted = sortConversations(mapped)
+      setFilteredConversations(sorted)
+      return sorted
+    })
+  }, [selectedConversation, unreadMap, previewText, formatTime, statusMap, favorite, isDisabledMap, isBlockedMap, sortConversations])
+
+  // CRITICAL FIX: Stable socket event subscriptions
   React.useEffect(() => {
     if (!socketEvents) return
-    const handleNewChat = (chat: any) => {
-      const newConversation: Conversation = {
-        id: chat.id || chat.chat_id,
-        chat_id: chat.chat_id || chat.id,
-        name: chat.sender_name || chat.name || "Unknown",
-        avatar: chat.avatar || chat.profile_pic || "/placeholder.svg",
-        lastMessage: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
-        platform: chat.account?.platform || chat.platform || chat.channel || "messenger",
-        time: formatTime(chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
-        page_name: chat.page?.name || chat.page_name,
-        page_icon: chat.page?.icon || chat.page_icon,
-        channel_icon: chat.channel_icon,
-        unread_count: chat.unread_count || 0,
-        sender_name: chat.sender_name,
-        last_message_time: chat.lastMessage?.timestamp || chat.last_message_time,
-        last_message_body: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
-        last_message_timestamp: chat.last_message_timestamp || chat.lastMessage?.timestamp,
-      }
-      setConversations((prev) => {
-        const exists = prev.find((c) => c.id === newConversation.id)
-        if (exists) return prev.map((c) => (c.id === newConversation.id ? newConversation : c))
-        return [newConversation, ...prev]
-      })
+    
+    socketEvents.on('newMessage', handleNewMessage)
+    socketEvents.on('chatUpdate', handleChatUpdate)
+    socketEvents.on('conversationsUpdated', handleConversationsUpdated)
+    
+    return () => {
+      socketEvents.off('newMessage', handleNewMessage)
+      socketEvents.off('chatUpdate', handleChatUpdate)
+      socketEvents.off('conversationsUpdated', handleConversationsUpdated)
     }
-    const handleChatUpdate = (updatedChat: any) => {
-      setConversations((prev) => prev.map((chat) => (chat.id === updatedChat.id ? { ...chat, ...updatedChat } : chat)))
-    }
-    const handleNewMessage = (message: any) => {
-      const msgChatId = String(message.chat_id)
-      const route = (message.route || '').toString().toUpperCase()
-      const isSelectedForMsg = !!selectedConversation && (
-        String(selectedConversation.id) === msgChatId ||
-        String(selectedConversation.chat_id) === msgChatId
-      )
-      if (route === 'INCOMING' && !isSelectedForMsg) {
-        setUnreadMap((prev) => ({ ...prev, [msgChatId]: (prev[msgChatId] || 0) + 1 }))
-      }
-      setConversations((prev) =>
-        prev.map((chat) => {
-          const convIds = [String(chat.chat_id), String(chat.id)]
-          if (convIds.includes(msgChatId)) {
-            const pv = previewText(message)
-            return {
-              ...chat,
-              lastMessage: pv,
-              last_message_body: pv,
-              last_message_time: message.timestamp || message.createdAt,
-              time: formatTime(message.timestamp || message.createdAt),
-              // reflect unread immediately in UI
-              unread_count: route === 'INCOMING' && !isSelectedForMsg ? (chat.unread_count || 0) + 1 : chat.unread_count,
-              last_message_timestamp: message.timestamp || message.createdAt,
-            }
-          }
-          return chat
-        })
-      )
-    }
-    const handleConversationsUpdated = (chats: any[]) => {
-      if (!Array.isArray(chats)) return
-      setConversations((prev) => {
-        const mapped = chats.map((chat: any) => {
-          const id = String(chat.id || chat.chat_id)
-          const existing = prev.find((c) => String(c.id) === id || String(c.chat_id) === id)
-          const isSelected = !!selectedConversation && (String(selectedConversation.id) === id || String(selectedConversation.chat_id) === id)
-          // Hard rule: never take unread from server here; prefer local unreadMap unless selected
-          const mergedUnread = isSelected ? 0 : (unreadMap[id] ?? existing?.unread_count ?? 0)
+  }, [socketEvents, handleNewMessage, handleChatUpdate, handleConversationsUpdated])
+
+  // Load chats effect - only runs once when component mounts
+  React.useEffect(() => {
+    if (!unreadMapLoaded) return
+    
+    let isMounted = true
+    const loadChats = async () => {
+      setIsLoading(true)
+      
+      try {
+        const chats = await fetchChats()
+        if (!isMounted) return
+        
+        const conversationsData = chats.map((chat: any) => {
+          const lastMessageTime = chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt || chat.updatedAt
+          const lastMessageTimestamp = chat.last_message_timestamp || lastMessageTime
+          const chatId = String(chat.id || chat.chat_id)
+          const preservedUnreadCount = unreadMap[chatId] ?? chat.unread_count ?? 0
+          
           return {
             id: chat.id || chat.chat_id,
             chat_id: chat.chat_id || chat.id,
@@ -216,110 +353,47 @@ export default function InboxView() {
             avatar: chat.avatar || chat.profile_pic || "/placeholder.svg",
             lastMessage: previewText(chat.lastMessage || { body: { text: chat.last_message_body || chat.lastMessage } }),
             platform: chat.account?.platform || chat.platform || chat.channel || "messenger",
-            time: formatTime(chat.last_message_timestamp || chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
+            time: formatTime(lastMessageTimestamp),
             page_name: chat.page?.name || chat.page_name,
             page_icon: chat.page?.icon || chat.page_icon,
             channel_icon: chat.channel_icon,
-            unread_count: mergedUnread,
+            unread_count: preservedUnreadCount,
             sender_name: chat.sender_name,
-            sender_id: chat.sender_id || chat.chat_id,
-            last_message_time: chat.lastMessage?.timestamp || chat.last_message_time,
+            sender_id: chat.sender_id || chat.chat_id, 
+            last_message_time: lastMessageTime,
             last_message_body: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
-            status: statusMap[chat.id || chat.chat_id] || existing?.status || "open",
+            status: statusMap[chat.id || chat.chat_id] || "open",
             favorite: !!favorite[chat.id || chat.chat_id],
             isDisabled: !!isDisabledMap[chat.id || chat.chat_id],
             isBlocked: !!isBlockedMap[chat.id || chat.chat_id],
-            isActive: typeof chat.isActive === 'boolean' ? chat.isActive : (existing?.isActive ?? true),
-            last_message_timestamp: chat.last_message_timestamp || chat.lastMessage?.timestamp,
-          } as Conversation
-        })
-        setFilteredConversations(mapped)
-        return mapped
-      })
+            isActive: typeof chat.isActive === 'boolean' ? chat.isActive : true,
+            last_message_timestamp: lastMessageTimestamp,
+          }
+        }) as Conversation[]
+        
+        const sortedConversations = sortConversations(conversationsData)
+        setConversations(sortedConversations)
+        setFilteredConversations(sortedConversations)
+        setCurrentPage(1)
+        setHasMoreMessages(true)
+        
+      } catch (error) {
+        setConversations([])
+      } finally {
+        setIsLoading(false)
+      }
     }
-    const handleChatsUpdated = (chats: any[]) => {
-      if (!Array.isArray(chats)) return
-      setConversations((prev) => prev.map((chat) => {
-        const updated = chats.find((c: any) => String(c.id || c.chat_id) === String(chat.id || chat.chat_id))
-        if (!updated) return chat
-        const id = String(updated.id || updated.chat_id)
-        const isSelected = !!selectedConversation && (String(selectedConversation.id) === id || String(selectedConversation.chat_id) === id)
-        return {
-          ...chat,
-          ...updated,
-          // Keep local unread; prefer unreadMap; only clear when selected
-          unread_count: isSelected ? 0 : (unreadMap[id] ?? chat.unread_count ?? 0),
-        }
-      }))
-    }
-    // Subscribe to centralized socket event bus
-    socketEvents.on('conversationsUpdated', handleConversationsUpdated)
-    socketEvents.on('chatsUpdated', handleChatsUpdated)
-    socketEvents.on('newMessage', handleNewMessage)
-    return () => {
-      socketEvents.off('conversationsUpdated', handleConversationsUpdated)
-      socketEvents.off('chatsUpdated', handleChatsUpdated)
-      socketEvents.off('newMessage', handleNewMessage)
-    }
-  }, [socketEvents, unreadMap, selectedConversation])
-
-  React.useEffect(() => {
-    let isMounted = true
-    const loadChats = async () => {
-      setIsLoading(true)
-      const chats = await fetchChats()
-      if (!isMounted) return
-      const conversationsData = chats.map((chat: any) => ({
-        id: chat.id || chat.chat_id,
-        chat_id: chat.chat_id || chat.id,
-        name: chat.sender_name || chat.page?.name || chat.name || "Unknown",
-        avatar: chat.avatar || chat.profile_pic || "/placeholder.svg",
-        lastMessage: previewText(chat.lastMessage || { body: { text: chat.last_message_body || chat.lastMessage } }),
-        platform: chat.account?.platform || chat.platform || chat.channel || "messenger",
-        time: formatTime(chat.last_message_timestamp || chat.lastMessage?.timestamp || chat.last_message_time || chat.time || chat.createdAt),
-        page_name: chat.page?.name || chat.page_name,
-        page_icon: chat.page?.icon || chat.page_icon,
-        channel_icon: chat.channel_icon,
-        unread_count: chat.unread_count || 0,
-        sender_name: chat.sender_name,
-        sender_id: chat.sender_id || chat.chat_id, 
-        last_message_time: chat.lastMessage?.timestamp || chat.last_message_time,
-        last_message_body: previewText(chat.lastMessage || { body: { text: chat.last_message_body } }),
-        status: statusMap[chat.id || chat.chat_id] || "open",
-        favorite: !!favorite[chat.id || chat.chat_id],
-        isDisabled: !!isDisabledMap[chat.id || chat.chat_id],
-        isBlocked: !!isBlockedMap[chat.id || chat.chat_id],
-        isActive: typeof chat.isActive === 'boolean' ? chat.isActive : true,
-        last_message_timestamp: chat.last_message_timestamp || chat.lastMessage?.timestamp,
-      })) as Conversation[]
-      setConversations(conversationsData)
-      setFilteredConversations(conversationsData)
-      // seed unreadMap from initial payload once
-      setUnreadMap((prev) => {
-        const next = { ...prev }
-        conversationsData.forEach((c) => {
-          const id = String(c.id || c.chat_id)
-          if (next[id] === undefined) next[id] = c.unread_count || 0
-        })
-        return next
-      })
-      // Do not auto-select a conversation; user must open manually to mark as read
-      
-      // Reset pagination state
-      setCurrentPage(1)
-      setHasMoreMessages(true)
-      
-      setIsLoading(false)
-    }
+    
     loadChats()
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [unreadMapLoaded]) // CRITICAL: Removed dependencies that were causing reloads
 
+  // Search effect
   React.useEffect(() => {
     if (searchQuery.trim() === "") {
-      setFilteredConversations(conversations)
+      setFilteredConversations(sortConversations(conversations))
     } else {
       const filtered = conversations.filter(
         (conv) =>
@@ -327,10 +401,11 @@ export default function InboxView() {
           (typeof conv.lastMessage === "string" ? conv.lastMessage : "").toLowerCase().includes(searchQuery.toLowerCase()) ||
           conv.platform.toLowerCase().includes(searchQuery.toLowerCase())
       )
-      setFilteredConversations(filtered)
+      setFilteredConversations(sortConversations(filtered))
     }
-  }, [searchQuery, conversations])
+  }, [searchQuery, conversations, sortConversations])
 
+  // CRITICAL FIX: Memoize fetchMessages to prevent unnecessary calls
   const fetchMessages = React.useCallback(async (page: number = 1, append: boolean = false) => {
     if (!selectedConversation) return
     setIsLoadingMessages(true)
@@ -356,6 +431,7 @@ export default function InboxView() {
         let messageType = content.type
         let messageBody = content.body
         let buttons: any[] = []
+        
         if (msg.type === "interactive" && msg.body && (msg.body as any).interactive) {
           const interactive = (msg.body as any).interactive
           if (interactive.type === "button_reply" && interactive.button_reply) {
@@ -368,10 +444,9 @@ export default function InboxView() {
         const rawTimestamp = msg.timestamp || msg.createdAt || msg.created_at
         const rawTsMs = toMs(rawTimestamp)
         const formattedTimestamp = formatTime(rawTimestamp)
-      
         const sender = msg.route === "OUTGOING" || msg.route === "outgoing" ? "user" : "other"
         
-        const processedMessage: Message = {
+        return {
           id: msg.id || msg.message_id || `fetched-${Date.now()}-${Math.random()}`,
           sender: sender,
           message: messageText,
@@ -382,16 +457,13 @@ export default function InboxView() {
           body: messageBody,
           reactions: msg.reactions || [],
           buttons: buttons,
-        }
-        return processedMessage
-      }) as Message[]
+        } as Message
+      })
       
-      // De-duplicate by id
       const deduped = messagesData.filter((m, idx, arr) => idx === arr.findIndex(x => x.id === m.id))
       const sortedMessages = deduped.sort((a: any, b: any) => new Date(a.rawTimestamp || 0).getTime() - new Date(b.rawTimestamp || 0).getTime())
       
       if (append) {
-       
         autoScrollNextRef.current = false
         setMessages((prev) => {
           const combined = [...sortedMessages, ...prev]
@@ -399,12 +471,10 @@ export default function InboxView() {
           return unique.sort((a, b) => new Date(a.rawTimestamp || 0).getTime() - new Date(b.rawTimestamp || 0).getTime())
         })
       } else {
-        // Replace all messages (first page)
         autoScrollNextRef.current = true
         setMessages(sortedMessages)
       }
       
-      // Update pagination state
       setHasMoreMessages((msgsByConvId?.length === PAGE_SIZE) || (msgsByChatId?.length === PAGE_SIZE))
       setCurrentPage(page)
       setContactDetails({ ...(selectedConversation as any) })
@@ -415,16 +485,25 @@ export default function InboxView() {
       setIsLoadingMessages(false)
       if (!append) autoScrollNextRef.current = true
     }
-  }, [selectedConversation, PAGE_SIZE])
+  }, [selectedConversation, PAGE_SIZE, deriveContent, formatTime, toMs])
 
-  const manualRefreshMessages = React.useCallback(async () => {
-    if (!selectedConversation) return
-    setCurrentPage(1)
-    setHasMoreMessages(true)
-    await fetchMessages(1, false)
-  }, [selectedConversation, fetchMessages])
+  // CRITICAL FIX: Only fetch messages when selectedConversation actually changes
+  const selectedConversationId = selectedConversation?.id
+  React.useEffect(() => {
+    if (selectedConversationId) {
+      if (selectedConversation) {
+        // The new ChatTimer component will manage its own state
+        setCurrentPage(1)
+        setHasMoreMessages(true)
+        autoScrollNextRef.current = true
+        fetchMessages(1, false)
+      }
+    } else {
+      setMessages([])
+    }
+  }, [selectedConversationId]) // CRITICAL: Only depend on the ID, not the full object
 
-  // Preflight: refresh chat window info from server before sending
+  // Rest of the component methods remain the same...
   const refreshSelectedConversationFromServer = React.useCallback(async (): Promise<void> => {
     try {
       const chats = await fetchChats()
@@ -435,188 +514,30 @@ export default function InboxView() {
           platform: match.platform || prev.platform,
           last_message_timestamp: match.last_message_timestamp || match.lastMessage?.timestamp || prev.last_message_timestamp,
         } as any) : prev)
-        // Defer timer reset to next tick so hook dependencies are initialized
-        setTimeout(() => {
-          resetTimerFromTimestamp(match.platform || selectedConversation?.platform || "", match.last_message_timestamp || match.lastMessage?.timestamp)
-        }, 0)
+        // The new ChatTimer component will manage its own state
       }
     } catch (e) {
       // Ignore preflight errors
     }
-  }, [selectedConversation, /* intentionally not including resetTimerFromTimestamp to avoid order issue */])
-
-  // Load older messages function
-  const loadOlderMessages = React.useCallback(async () => {
-    if (!selectedConversation || !hasMoreMessages || isLoadingOlderMessages) return
-    setIsLoadingOlderMessages(true)
-    try {
-      autoScrollNextRef.current = false
-      await fetchMessages(currentPage + 1, true)
-    } finally {
-      setIsLoadingOlderMessages(false)
-      setTimeout(() => { autoScrollNextRef.current = true }, 0)
-    }
-  }, [selectedConversation, hasMoreMessages, isLoadingOlderMessages, currentPage, fetchMessages])
-
-  // Listen for "Load older messages" action from Messages component button
-  React.useEffect(() => {
-    const onLoadOlder = () => {
-      // In current implementation we fetch full history; replace with paginated API if available
-      fetchMessages()
-    }
-    window.addEventListener('chat:load-older', onLoadOlder)
-    return () => window.removeEventListener('chat:load-older', onLoadOlder)
-  }, [fetchMessages])
-
-  const computeWindowSeconds = React.useCallback((platform: string) => {
-    const p = (platform || "").toLowerCase()
-    if (p.includes("whatsapp")) return 24 * 60 * 60
-    if (p.includes("instagram") || p.includes("messenger") || p === "facebook") return 7 * 24 * 60 * 60
-    return 7 * 24 * 60 * 60
-  }, [])
-
-  const toMs = React.useCallback((raw: any): number => {
-    if (!raw) return Date.now()
-    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000
-    if (typeof raw === 'string' && /^\d+$/.test(raw)) {
-      const n = parseInt(raw, 10)
-      return n > 1e12 ? n : n * 1000
-    }
-    const parsed = new Date(raw).getTime()
-    return Number.isNaN(parsed) ? Date.now() : parsed
-  }, [])
-
-  const resetTimerFromTimestamp = React.useCallback((platform: string, timestamp?: string | number) => {
-    const windowSeconds = computeWindowSeconds(platform)
-    // Timestamp comes from API as unix seconds (e.g., 1755328703). Normalize strictly from that.
-    let lastTsMs: number | null = null
-    if (timestamp === undefined || timestamp === null || timestamp === "") {
-      lastTsMs = null
-    } else if (typeof timestamp === 'number') {
-      // Treat numbers <= 1e12 as seconds
-      lastTsMs = timestamp > 1e12 ? timestamp : timestamp * 1000
-    } else if (typeof timestamp === 'string') {
-      if (/^\d+$/.test(timestamp)) {
-        const asNum = parseInt(timestamp, 10)
-        lastTsMs = asNum > 1e12 ? asNum : asNum * 1000
-      } else {
-        // If ISO sneaks in, still handle it
-        const parsed = new Date(timestamp).getTime()
-        lastTsMs = Number.isNaN(parsed) ? null : parsed
-      }
-    }
-    if (lastTsMs && !Number.isNaN(lastTsMs)) {
-      const elapsed = Math.max(0, Math.floor((Date.now() - lastTsMs) / 1000))
-      const remaining = Math.max(0, windowSeconds - elapsed)
-      console.log("🕐 Timer reset - Platform:", platform, "Last TS:", timestamp, "Elapsed:", elapsed, "Remaining:", remaining)
-      setRemainingSeconds(remaining)
-    } else {
-      console.log("🕐 Timer reset - No/invalid timestamp, giving full window:", windowSeconds)
-      setRemainingSeconds(windowSeconds)
-    }
-  }, [computeWindowSeconds])
-
-  // Reset timer when conversation changes
-  React.useEffect(() => {
-    console.log("🔍 useEffect: selectedConversation changed:", selectedConversation)
-    if (selectedConversation) {
-      console.log("🔍 useEffect: Calling fetchMessages for conversation:", selectedConversation.id)
-      // Reset timer based on platform and last_message_timestamp from API
-      resetTimerFromTimestamp(selectedConversation.platform || "", selectedConversation.last_message_timestamp)
-      // Reset pagination and fetch first page
-      setCurrentPage(1)
-      setHasMoreMessages(true)
-      autoScrollNextRef.current = true
-      fetchMessages(1, false)
-    } else {
-      console.log("🔍 useEffect: No conversation selected, clearing messages")
-      setMessages([])
-    }
-  }, [selectedConversation, fetchMessages, resetTimerFromTimestamp])
-
-  React.useEffect(() => {
-    if (!socketEvents || !selectedConversation) return
-    const handleNewMessage = (msg: any) => {
-      const msgIds = [msg?.chat_id, (msg as any)?.chatId, (msg as any)?.chat?.id]
-        .filter((v) => v !== undefined && v !== null)
-        .map((v) => String(v))
-      const selIds = [selectedConversation.id, selectedConversation.chat_id, (selectedConversation as any).sender_id]
-        .filter((v) => v !== undefined && v !== null)
-        .map((v) => String(v))
-      const matches = msgIds.some((id) => selIds.includes(id))
-      if (matches) {
-        const route = (msg.route || '').toString().toUpperCase()
-        const rawTsMs = toMs(msg.timestamp || (msg as any).createdAt || new Date().toISOString())
-        const normalized = deriveContent(msg)
-        const text = normalized.text
-        const body = normalized.body
-        const newMessage: Message = {
-          id: msg.id || `socket-${Date.now()}-${Math.random()}`, // Ensure unique ID
-          sender: route === "OUTGOING" ? "user" : "other",
-          message: text,
-          type: (normalized.type || "text") as any,
-          timestamp: formatTime(msg.timestamp || new Date().toISOString()),
-          rawTimestamp: rawTsMs,
-          status: (msg.status || "") as any,
-          body: body,
-          reactions: msg.reactions || [],
-          buttons: msg.buttons || [],
-        }
-        
-        setMessages((prev) => {
-          // Simple duplicate check by ID
-          if (prev.some((m) => m.id === newMessage.id)) return prev
-          
-          // Add and sort
-          const updated = [...prev, newMessage]
-          return updated.sort((a, b) => new Date(a.rawTimestamp || 0).getTime() - new Date(b.rawTimestamp || 0).getTime())
-        })
-        
-        // Reset timer on new incoming message
-        resetTimerFromTimestamp(selectedConversation.platform || "", msg.timestamp)
-      }
-    }
-    const handleUpdateDelivery = (msg: any) => {
-      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, status: msg.status } : m)))
-    }
-    const handleNewReaction = (payload: any) => {
-      // payload may contain message_id and reaction
-      const { message_id, reaction } = payload || {}
-      if (!message_id || !reaction) return
-      setMessages((prev) => prev.map((m) => (m.id === message_id ? { ...m, reactions: [...(m.reactions || []), reaction] } : m)))
-    }
-    socketEvents.on('newMessage', handleNewMessage)
-    socketEvents.on('deliveryStatusUpdated', handleUpdateDelivery)
-    socketEvents.on('newReaction', handleNewReaction)
-    return () => {
-      socketEvents.off('newMessage', handleNewMessage)
-      socketEvents.off('deliveryStatusUpdated', handleUpdateDelivery)
-      socketEvents.off('newReaction', handleNewReaction)
-    }
-  }, [socketEvents, selectedConversation, resetTimerFromTimestamp])
+  }, [selectedConversation])
 
   const handleSendMessage = async () => {
-    console.log("🚀 handleSendMessage called!")
-    console.log("🚀 message:", message)
-    console.log("🚀 selectedConversation:", selectedConversation)
-    console.log("🚀 remainingSeconds:", remainingSeconds)
     if (!message.trim() || !selectedConversation) return
-    // Guard: check messaging window
-    if (remainingSeconds <= 0) {
+    
+    // The new ChatTimer component will manage its own state
+    if (!isChatSessionActive) {
       toast({ title: "Messaging window closed", description: "Please send a template message.", variant: "destructive" })
       return
     }
-    // Preflight refresh from server to avoid mismatch with backend window
+    
     await refreshSelectedConversationFromServer()
-    if (remainingSeconds <= 0) {
+    // The new ChatTimer component will manage its own state
+    if (!isChatSessionActive) {
       toast({ title: "Messaging window closed", description: "Please send a template message.", variant: "destructive" })
       return
     }
-    
-    
     
     const messageText = message.trim()
-    console.log("🚀 messageText:", messageText)
     const tempMessageId = `temp-${Date.now()}`
     const optimisticMessage: Message = {
       id: tempMessageId,
@@ -628,25 +549,19 @@ export default function InboxView() {
       status: "sent",
     }
     
-    // Add optimistic message
     setMessages((prev) => [...prev, optimisticMessage])
     setMessage("")
     
     try {
       toast({ title: "Sending...", variant: "default" })
       const chatId = selectedConversation.chat_id || selectedConversation.id
-      console.log("🚀 chatId:", chatId)
-      console.log("🚀 Calling sendMessage with:", { messageText, chatId })
-      // Use sender_id if available (actual Facebook user ID), otherwise use chat_id
       const senderId = selectedConversation.sender_id || chatId
       const response = await sendMessage(messageText, chatId, senderId, {
-        isChatActive: remainingSeconds > 0,
+        isChatActive: isChatSessionActive,
         platform: selectedConversation.platform,
       })
-      console.log("🚀 sendMessage response:", response)
       
       if (response.ok) {
-        // Update the optimistic message to delivered status with a permanent ID
         const permanentId = `sent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         setMessages((prev) => prev.map((msg) => 
           msg.id === tempMessageId 
@@ -655,21 +570,17 @@ export default function InboxView() {
         ))
         toast({ title: "Message sent!", variant: "default" })
         
-        // DON'T refresh messages automatically - this was causing the disappearance!
-        // Instead, just update the conversation's last message
+        // Update conversation's last message without triggering reload
         setConversations((prev) => prev.map((conv) => 
           conv.id === selectedConversation.id 
             ? { ...conv, lastMessage: messageText, last_message_body: messageText, last_message_time: new Date().toISOString() }
             : conv
         ))
-        
-        console.log("✅ Message sent and persisted locally without refresh")
       } else {
-        // Try to parse backend error to detect expiration and sync UI
         try {
           const errText = await response.text()
           if (errText && /expired/i.test(errText)) {
-            setRemainingSeconds(0)
+            setIsChatSessionActive(false)
             toast({ title: "Session expired", description: "Please send a Meta-approved template to continue", variant: "destructive" })
             return
           }
@@ -677,9 +588,7 @@ export default function InboxView() {
         throw new Error("Failed to send message")
       }
     } catch (error: any) {
-      console.error("🚀 Error in handleSendMessage:", error)
       toast({ title: "Failed to send message", description: error.message || "Network error", variant: "destructive" })
-      // Remove the failed optimistic message
       setMessages((prev) => prev.filter((msg) => msg.id !== tempMessageId))
       setMessage(messageText)
     }
@@ -691,11 +600,15 @@ export default function InboxView() {
     try {
       const chatId = selectedConversation.chat_id || String(selectedConversation.id)
       const senderId = selectedConversation.sender_id || chatId
+      
+      // Upload file first to get URL
       const url = await uploadMedia(file)
       if (!url) {
         toast({ title: "Failed to upload file", variant: "destructive" })
         return false
       }
+      
+      // Determine file type
       const fileType = file.type.startsWith("image/")
         ? "image"
         : file.type.startsWith("video/")
@@ -703,13 +616,27 @@ export default function InboxView() {
         : file.type.startsWith("audio/")
         ? "audio"
         : "file"
-      let success = await sendMedia({ type: fileType as any, url, caption: file.name, chatId, senderId })
+      
+      // Detect platform from conversation
+      const platform = selectedConversation.platform || "messenger"
+      
+      // Send media using platform-specific API
+      let success = await sendMedia({ 
+        type: fileType as any, 
+        url, 
+        caption: file.name, 
+        chatId, 
+        senderId, 
+        platform 
+      })
+      
+      // Fallback to text message if media send fails
       if (!success) {
-        const resp = await sendMessage(url, chatId, senderId)
+        const resp = await sendMessage(url, chatId, senderId, { platform })
         success = resp.ok
       }
+      
       if (success) {
-        // Optimistically add to local state so it appears instantly
         const newMsg: Message = {
           id: `${fileType}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           sender: "user",
@@ -724,13 +651,14 @@ export default function InboxView() {
         toast({ title: `${fileType[0].toUpperCase() + fileType.slice(1)} sent successfully!`, variant: "default" })
         return true
       }
+      
       toast({ title: "Failed to send file", variant: "destructive" })
       return false
     } catch (e: any) {
       toast({ title: "Failed to send file", description: e?.message || "Upload error", variant: "destructive" })
       return false
     }
-  }, [selectedConversation])
+  }, [selectedConversation, formatTime])
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -748,13 +676,39 @@ export default function InboxView() {
     if (event.target) event.target.value = ""
   }
 
-  // Handle paste of images/videos from clipboard
   const handlePasteFiles = React.useCallback(async (files: FileList | File[]) => {
     const arr = Array.from(files)
     for (const f of arr) {
       await sendAnyFile(f)
     }
   }, [sendAnyFile])
+
+  const loadOlderMessages = React.useCallback(async () => {
+    if (!selectedConversation || !hasMoreMessages || isLoadingOlderMessages) return
+    setIsLoadingOlderMessages(true)
+    try {
+      autoScrollNextRef.current = false
+      await fetchMessages(currentPage + 1, true)
+    } finally {
+      setIsLoadingOlderMessages(false)
+      setTimeout(() => { autoScrollNextRef.current = true }, 0)
+    }
+  }, [selectedConversation, hasMoreMessages, isLoadingOlderMessages, currentPage, fetchMessages])
+
+  const manualRefreshMessages = React.useCallback(async () => {
+    if (!selectedConversation) return
+    setCurrentPage(1)
+    setHasMoreMessages(true)
+    await fetchMessages(1, false)
+  }, [selectedConversation, fetchMessages])
+
+  React.useEffect(() => {
+    const onLoadOlder = () => {
+      fetchMessages()
+    }
+    window.addEventListener('chat:load-older', onLoadOlder)
+    return () => window.removeEventListener('chat:load-older', onLoadOlder)
+  }, [fetchMessages])
 
   return (
     <TooltipProvider>
@@ -765,17 +719,19 @@ export default function InboxView() {
           isLoading={isLoading}
           selectedConversation={selectedConversation}
           setSelectedConversation={(c) => {
-            // Reset unread count for this conversation when opened
+            const conversationId = String(c.id || c.chat_id)
+            
             setConversations((prev) => prev.map((chat) => {
               const match = (String(chat.id) === String(c.id)) || (String(chat.chat_id) === String(c.chat_id))
               return match ? { ...chat, unread_count: 0 } : chat
             }))
+            
             setUnreadMap((prev) => {
-              const id = String(c.id || c.chat_id)
               const next = { ...prev }
-              next[id] = 0
+              next[conversationId] = 0
               return next
             })
+            
             setSelectedConversation(c)
           }}
           leftSidebarOpen={leftSidebarOpen}
@@ -789,7 +745,7 @@ export default function InboxView() {
           filterPopoverOpen={filterPopoverOpen}
           setFilterPopoverOpen={setFilterPopoverOpen}
         />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 bg-white">
           {selectedConversation ? (
             <div className="flex h-full w-full">
               <div className="flex-1 flex flex-col min-w-0">
@@ -813,7 +769,8 @@ export default function InboxView() {
                   setStatusMap((m) => ({ ...m, [selectedConversation.id]: st }))
                   setSelectedConversation({ ...selectedConversation, status: st })
                 }}
-                remainingSeconds={remainingSeconds}
+                onSessionExpired={() => setIsChatSessionActive(false)}
+                onSessionActive={() => setIsChatSessionActive(true)}
                 onAssign={(uid) => setAssignedTo(uid)}
                 assignedTo={assignedTo}
                 users={users}
@@ -822,11 +779,10 @@ export default function InboxView() {
                 messages={messages} 
                 isLoadingMessages={isLoadingMessages} 
                 messagesEndRef={messagesEndRef} 
-                remainingSeconds={remainingSeconds}
                 hasMoreMessages={hasMoreMessages}
                 isLoadingOlderMessages={isLoadingOlderMessages}
                 onLoadOlderMessages={loadOlderMessages}
-                isActive={true}
+                isActive={isChatSessionActive}
               />
               <Composer
                 message={message}
@@ -836,91 +792,87 @@ export default function InboxView() {
                 onImagePick={handleImageUpload}
                 fileInputRef={fileInputRef}
                 imageInputRef={imageInputRef}
-                disabled={!(remainingSeconds > 0)}
+                disabled={!isChatSessionActive}
                 onQuickReply={() => toast({ title: "Quick reply picker opened" })}
                 onTriggerChatbot={() => toast({ title: "Chatbot triggered" })}
                 onRefresh={() => selectedConversation && fetchMessages(1, false)}
                 onPasteFiles={handlePasteFiles}
               />
               </div>
-                             <div className="hidden lg:flex shrink-0 w-[320px] border-l bg-white p-5 flex-col gap-5 h-full overflow-y-auto">
-                 {/* User Icon with Platform Overlay */}
-                 <div className="flex flex-col items-center gap-3">
-                   <div className="relative">
-                     <Avatar className="h-20 w-20">
-                       {isValidAvatar(selectedConversation.avatar) ? (
-                         <AvatarImage 
-                           src={selectedConversation.avatar} 
-                           alt={selectedConversation.name}
-                           onError={(e) => {
-                             // Hide the image element to show fallback
-                             e.currentTarget.style.display = 'none'
-                           }}
-                         />
-                       ) : null}
-                       <AvatarFallback className="bg-blue-100 text-blue-600 text-3xl font-bold">
-                         {generateInitials(selectedConversation.name)}
-                       </AvatarFallback>
-                     </Avatar>
-                     {selectedConversation.platform && (
-                       <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm">
-                         {getChannelIcon(selectedConversation.platform)}
-                       </div>
-                     )}
-                   </div>
-                   
-                   {/* Username in Bold Gray */}
-                   <div className="text-center">
-                     <div className="font-bold text-lg text-gray-700 underline">{selectedConversation.name}</div>
-                   </div>
-                   
-                   {/* Page Name in Light Gray */}
-                   <div className="text-center">
-                     <div className="text-sm text-gray-500">{selectedConversation.page_name || selectedConversation.platform}</div>
-                   </div>
-                 </div>
-                                 <div className="space-y-3 text-sm">
-                   <div className="flex items-center justify-between">
-                     <span className="text-muted-foreground">Status</span>
-                     <span className={cn("flex items-center gap-1", isConnected ? "text-green-600" : "text-red-500")}>{isConnected ? "Online" : "Offline"}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-muted-foreground">Platform</span>
-                     <span className="capitalize">{selectedConversation.platform || "-"}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-muted-foreground">Last seen</span>
-                     <span>{selectedConversation.time || "-"}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-muted-foreground">Email</span>
-                     <span className="truncate max-w-[55%] text-right">{(contactDetails as any)?.email || "-"}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-muted-foreground">Phone</span>
-                     <span>{(contactDetails as any)?.phone || "-"}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-muted-foreground">Local time</span>
-                     <span>{(contactDetails as any)?.localTime || "-"}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-muted-foreground">Contact</span>
-                     <span className="truncate max-w-[55%] text-right">{(contactDetails as any)?.contact || selectedConversation.sender_name || "-"}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-muted-foreground">Country</span>
-                     <span>{(contactDetails as any)?.country || "-"}</span>
-                   </div>
-                 </div>
+              <div className="hidden lg:flex shrink-0 w-[320px] border-l bg-white p-4 flex-col gap-4 h-full overflow-y-auto">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative">
+                    <Avatar className="h-20 w-20">
+                      {isValidAvatar(selectedConversation.avatar) ? (
+                        <AvatarImage 
+                          src={selectedConversation.avatar} 
+                          alt={selectedConversation.name}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-blue-100 text-blue-600 text-3xl font-bold">
+                        {generateInitials(selectedConversation.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    {selectedConversation.platform && (
+                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm">
+                        {getChannelIcon(selectedConversation.platform)}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="font-bold text-lg text-gray-700 underline">{selectedConversation.name}</div>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="text-sm text-gray-500">{selectedConversation.page_name || selectedConversation.platform}</div>
+                  </div>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <span className={cn("flex items-center gap-1", isConnected ? "text-green-600" : "text-red-500")}>{isConnected ? "Online" : "Offline"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Platform</span>
+                    <span className="capitalize">{selectedConversation.platform || "-"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Last seen</span>
+                    <span>{(contactDetails as any)?.localTime || "-"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Email</span>
+                    <span className="truncate max-w-[55%] text-right">{(contactDetails as any)?.email || "-"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Phone</span>
+                    <span>{(contactDetails as any)?.phone || "-"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Local time</span>
+                    <span>{(contactDetails as any)?.localTime || "-"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Contact</span>
+                    <span className="truncate max-w-[55%] text-right">{(contactDetails as any)?.contact || selectedConversation.sender_name || "-"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Country</span>
+                    <span>{(contactDetails as any)?.country || "-"}</span>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <img src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1754993129/no_data.14591486_tv48zw.svg" alt="No chats" className="h-48 mx-auto mb-4" />
-                <h3 className="text-lg font-medium">No conversations</h3>
-                <p className="text-muted-foreground">When a chat arrives it will appear here automatically.</p>
+                <h3 className="text-lg font-medium">Select a conversations</h3>
+                <p className="text-muted-foreground">select a chat conversation to see chats.</p>
               </div>
             </div>
           )}
@@ -930,5 +882,3 @@ export default function InboxView() {
     </TooltipProvider>
   )
 }
-
-

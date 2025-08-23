@@ -54,14 +54,14 @@ export function Sidebar({
     <>
       <div
         className={cn(
-          "w-[320px] bg-background border-r flex flex-col transition-all duration-300 ease-in-out min-h-full",
+          "w-[320px] bg-background flex flex-col transition-all duration-300 ease-in-out min-h-full",
           "lg:relative lg:translate-x-0",
           leftSidebarOpen ? "fixed inset-y-0 left-0 z-50 translate-x-0" : "fixed inset-y-0 left-0 z-50 -translate-x-full lg:translate-x-0"
         )}
       >
         {/* Header with Search and Dropdown */}
-        <div className="border-b px-4 py-3">
-          <div className="flex items-center justify-end mb-3">
+        <div className="border-b px-4 py-2">
+          <div className="flex items-center justify-end mb-2">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setLeftSidebarOpen(false)}>
               <X className="h-4 w-4" />
             </Button>
@@ -143,13 +143,13 @@ export function Sidebar({
            </div>
 
            {/* Chat Count below Active Chats */}
-           <div className="mb-2">
+           <div className="mb-1">
              <span className="text-xs text-gray-500">{filteredConversations.length} Chats • {filteredConversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)} Unread</span>
            </div>
 
           {/* Filter Options */}
           {filterPopoverOpen && (
-            <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+            <div className="mb-2 p-2 bg-gray-50 rounded-lg">
               <div className="grid grid-cols-2 gap-2">
                 {["all", "open", "pending", "solved"].map((f) => (
                   <Button
@@ -196,7 +196,7 @@ export function Sidebar({
               <div
                 key={conversation.id}
                 className={cn(
-                  "px-4 py-3 hover:bg-green-50 cursor-pointer border-l-4 transition-all duration-200",
+                  "px-4 py-2 hover:bg-green-50 cursor-pointer border-l-4 transition-all duration-200",
                   selectedConversation?.id === conversation.id 
                     ? "border-l-green-500 bg-green-50" 
                     : "border-l-transparent hover:border-l-green-300"

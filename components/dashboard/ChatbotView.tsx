@@ -47,7 +47,7 @@ interface Chatbot {
   chats: string[]
   createdAt: string
   updatedAt: string
-  active: boolean // Added active property
+  active: boolean 
 }
 
 interface Pagination {
@@ -96,7 +96,7 @@ export default function ChatbotView() {
   const [channel, setChannel] = useState('')
   const [allFlows, setAllFlows] = useState<{ id: string, title: string }[]>([])
 
-  // Fetch all flows from /api/chat_flow/get_mine for the flow dropdown
+  
   const fetchAllFlows = async () => {
     try {
       const response = await serverHandler.get(`/api/chat_flow/get_mine`)
@@ -158,7 +158,7 @@ export default function ChatbotView() {
       const data = response.data as any
       
       if (data.success) {
-        // Only show active flows
+       
         const activeFlows = (data.data || []).filter((flow: Flow) => flow.isActive)
         setFlows(activeFlows)
       } else {
@@ -170,7 +170,7 @@ export default function ChatbotView() {
     }
   }
 
-  // Fetch all chatbots for assignment in modal
+  
   const fetchAllChatbots = async () => {
     try {
       const response = await serverHandler.get(`/api/chatbot/get_chatbot`)
@@ -230,7 +230,7 @@ export default function ChatbotView() {
     setFormData({
       title: '',
       flow_id: '',
-      for_all: true, // Always true when channel is selected
+      for_all: true, 
       chats: []
     })
     setChannel('')
@@ -359,7 +359,7 @@ export default function ChatbotView() {
     try {
       const response = await serverHandler.post('/api/chatbot/change_bot_status', {
         id: chatbot.id.toString(),
-        status: chatbot.active ? 0 : 1 // use .active, not .status
+        status: chatbot.active ? 0 : 1 
       })
       console.log('Status change response:', response.data)
 
