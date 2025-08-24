@@ -20,10 +20,15 @@ export const mediaUploadAPI = {
     uploadMediaToMeta: async (file: File, templateName: string): Promise<MediaUploadResponse> => {
         try {
             const formData = new FormData();
+            console.log("file",file);
             formData.append('file', file);
             formData.append('templet_name', templateName);
 
-            const response = await serverHandler.post(UserEndpoints.UPLOAD_MEDIA_META, formData);
+            const response = await serverHandler.post(UserEndpoints.UPLOAD_MEDIA_META, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
             return response.data as MediaUploadResponse || {
                 success: false,
                 error: 'Upload failed'
