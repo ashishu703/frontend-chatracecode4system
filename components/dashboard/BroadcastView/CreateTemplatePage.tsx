@@ -290,8 +290,6 @@ export function BroadcastTemplateBuilder() {
     }
   }, [updateFormField, formData.headerVariables, formData.bodyVariables]);
 
-
-
   // Save template function
   const handleSaveTemplate = useCallback(async () => {
     const validation = validateForm();
