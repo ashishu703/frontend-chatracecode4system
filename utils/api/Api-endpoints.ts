@@ -239,6 +239,10 @@ export class ChatFlowEndpoints {
   static readonly GET_FLOW_PERFORMANCE = '/api/chat_flow/performance';
 }
 
+export class BroadcastEndpoints {
+  static readonly GET_BROADCASTS = '/api/broadcast/get_broadcast';
+}
+
 // Helper functions
 export class EndpointHelpers {
   /**
@@ -292,5 +296,6 @@ export const API_ENDPOINTS = {
   Config: ConfigEndpoints,
   Template: TemplateEndpoints,
   ChatFlow: ChatFlowEndpoints,
+  Broadcast: BroadcastEndpoints,
   Helpers: EndpointHelpers,
 } as const;

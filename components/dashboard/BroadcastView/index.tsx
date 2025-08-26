@@ -7,7 +7,6 @@ import { BroadcastTemplateBuilder } from "./CreateTemplatePage"
 import SavedTemplatesPage from "./SavedTemplatesPage"
 import BroadcastPage from "./BroadcastPage"
 import BroadcastAnalyticsPage from "./BroadcastAnalyticsPage"
-import { Template, TemplateButton } from "./types"
 
 export default function WhatsAppTemplateManager() {
   // Get the current view from Redux to determine which page to show
@@ -39,105 +38,19 @@ export default function WhatsAppTemplateManager() {
       setCurrentPage("home")
     }
   }, [currentView])
-   const [selectedCategory, setSelectedCategory] = useState("")
-   const [currentTemplate, setCurrentTemplate] = useState<Template>({
-     id: "",
-     name: "",
-     category: "marketing",
-     language: "English (US)",
-     status: "DRAFT",
-     lastUpdated: new Date().toLocaleDateString(),
-     body: "",
-     buttons: [],
-     variables: [],
-     catalogEnabled: false,
-   })
-   const [savedTemplates, setSavedTemplates] = useState<Template[]>([])
 
-   const addVariable = (text: string) => {
-     const matches = text.match(/\{\{(\d+)\}\}/g)
-     if (matches) {
-       const variables = matches.map((match) => match.replace(/[{}]/g, ""))
-       setCurrentTemplate((prev) => ({
-         ...prev,
-         variables: [...new Set(variables)],
-       }))
-     }
-   }
-
-   const addButton = (type: TemplateButton["type"]) => {
-     const newButton: TemplateButton = {
-       id: Date.now().toString(),
-       type,
-       text: "",
-     }
-     setCurrentTemplate((prev) => ({
-       ...prev,
-       buttons: [...prev.buttons, newButton],
-     }))
-   }
-
-   const updateButton = (id: string, updates: Partial<TemplateButton>) => {
-     setCurrentTemplate((prev) => ({
-       ...prev,
-       buttons: prev.buttons.map((btn) => (btn.id === id ? { ...btn, ...updates } : btn)),
-     }))
-   }
-
-   const removeButton = (id: string) => {
-     setCurrentTemplate((prev) => ({
-       ...prev,
-       buttons: prev.buttons.filter((btn) => btn.id !== id),
-     }))
-   }
-
-   const saveTemplate = () => {
-     const template = {
-       ...currentTemplate,
-       id: currentTemplate.id || Date.now().toString(),
-       lastUpdated: new Date().toLocaleDateString(),
-     }
-     setSavedTemplates((prev) => {
-       const existing = prev.findIndex((t) => t.id === template.id)
-       if (existing >= 0) {
-         const updated = [...prev]
-         updated[existing] = template
-         return updated
-       }
-       return [...prev, template]
-     })
-     setCurrentPage("saved-templates")
-   }
-
-   const sendForApproval = () => {
-     setCurrentTemplate((prev) => ({ ...prev, status: "PENDING" }))
-     saveTemplate()
-   }
-
-   const useTemplate = (template: Template) => {
-     setCurrentTemplate({ ...template, id: "", status: "DRAFT", lastUpdated: new Date().toLocaleDateString() })
-     setCurrentPage("create-template")
-   }
 
    switch (currentPage) {
     case "prebuilt-templates":
-      return (
-        <PrebuiltTemplatesPage
-          selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
-          useTemplate={useTemplate}
-        />
-      )
+      return <PrebuiltTemplatesPage 
+        selectedCategory=""
+        setSelectedCategory={() => {}}
+        useTemplate={() => {}}
+      />
      case "create-template":
        return <BroadcastTemplateBuilder />
      case "saved-templates":
-       return (
-         <SavedTemplatesPage
-           savedTemplates={savedTemplates}
-           setCurrentTemplate={setCurrentTemplate}
-           setCurrentPage={setCurrentPage}
-         />
-       )
+       return <SavedTemplatesPage />
      case "broadcast":
        return <BroadcastPage />
      case "broadcast-analytics":

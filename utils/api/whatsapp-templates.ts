@@ -6,7 +6,7 @@ export interface WhatsAppTemplateButton {
     type: string;
     text: string;
     url?: string;
-    phone?: string;
+    phone_number?: string;
 }
 
 export interface WhatsAppTemplateComponent {
@@ -99,9 +99,14 @@ const convertButtonsToMetaFormat = (buttons: WhatsAppTemplateButton[]): MetaApiB
                 return {
                     type: 'PHONE_NUMBER',
                     text: button.text.trim(),
-                    phone: button.phone || ''
+                    phone_number: button.phone_number ? (button.phone_number.startsWith('+91') ? button.phone_number : '+91' + button.phone_number) : ''
                 };
             case 'Copy offer code':
+                return {
+                    type: 'COPY_CODE',
+                    text: button.text.trim(),
+                    example: button.url || 'OFFER_CODE'
+                };
             case 'Complete Flow':
             case 'Custom':
             default:

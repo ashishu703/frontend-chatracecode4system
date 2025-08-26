@@ -1,14 +1,18 @@
 "use client"
 
-import React, { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type React from "react"
+import { useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Calendar, Download, Search, ChevronLeft, ChevronRight, Info, Play, Filter, X } from "lucide-react"
+import { Search, ChevronLeft, ChevronRight, Info, Filter, X, CalendarDays } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { setCurrentView } from "@/store/slices/dashboardSlice"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { format, subDays } from "date-fns"
 
 interface BroadcastStats {
   sent: number
@@ -33,10 +37,18 @@ interface BroadcastData {
   status: "completed" | "failed" | "pending" | "processing" | "stopped"
 }
 
+interface DateRange {
+  from: Date | undefined
+  to: Date | undefined
+}
+
 export default function BroadcastAnalyticsPage() {
-  const [fromDate, setFromDate] = useState("")
-  const [toDate, setToDate] = useState("")
-  const [period, setPeriod] = useState("Last 7 days")
+  const [dateRange, setDateRange] = useState<DateRange>({
+    from: subDays(new Date(), 7),
+    to: new Date(),
+  })
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState("Latest")
   const [currentPage, setCurrentPage] = useState(1)
@@ -46,9 +58,9 @@ export default function BroadcastAnalyticsPage() {
     pending: false,
     processing: false,
     completed: false,
-    stopped: false
+    stopped: false,
   })
-  
+
   // Zero state
   const [stats] = useState<BroadcastStats>({
     sent: 0,
@@ -60,23 +72,35 @@ export default function BroadcastAnalyticsPage() {
     processing: 0,
     queued: 0,
   })
-  
+
   // Start with no broadcasts
   const [broadcasts] = useState<BroadcastData[]>([])
   const [loading] = useState(false)
 
+  const setPresetRange = (days: number) => {
+    setDateRange({
+      from: subDays(new Date(), days),
+      to: new Date(),
+    })
+    setIsCalendarOpen(false)
+  }
+
+  const formatDateRange = () => {
+    if (!dateRange.from) return "Select date range"
+    if (!dateRange.to) return format(dateRange.from, "MMM dd, yyyy")
+    return `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
+  }
+
   const StatCard = ({ title, value, icon }: { title: string; value: number; icon: React.ReactNode }) => (
-    <Card className="bg-gray-50">
-      <CardContent className="p-6">
+    <Card className="bg-white hover:shadow-lg transition-all duration-300 border border-gray-100 shadow-sm rounded-xl">
+      <CardContent className="p-6 h-32 flex flex-col justify-between">
         <div className="flex items-center justify-between">
-          <div>
-            <div className="text-3xl font-bold text-gray-900">{value}</div>
-            <div className="flex items-center mt-2 text-gray-600">
-              <span className="text-sm">{title}</span>
-              <Info className="w-4 h-4 ml-1 text-gray-400" />
-            </div>
-          </div>
-          <div className="text-2xl">{icon}</div>
+          <div className="text-4xl font-bold text-gray-900">{value}</div>
+          <div className="text-3xl opacity-80">{icon}</div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{title}</span>
+          <Info className="w-4 h-4 text-gray-400" />
         </div>
       </CardContent>
     </Card>
@@ -84,29 +108,35 @@ export default function BroadcastAnalyticsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "completed": return "bg-green-100 text-green-800"
-      case "processing": return "bg-blue-100 text-blue-800"
-      case "pending": return "bg-yellow-100 text-yellow-800"
-      case "stopped": return "bg-red-100 text-red-800"
-      case "failed": return "bg-red-100 text-red-800"
-      default: return "bg-gray-100 text-gray-800"
+      case "completed":
+        return "bg-green-100 text-green-800"
+      case "processing":
+        return "bg-blue-100 text-blue-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "stopped":
+        return "bg-red-100 text-red-800"
+      case "failed":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
     }
   }
 
-  const filteredBroadcasts = broadcasts.filter(broadcast => {
+  const filteredBroadcasts = broadcasts.filter((broadcast) => {
     const matchesSearch = broadcast.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const hasFiltersSelected = Object.values(selectedFilters).some(filter => filter)
-    
+    const hasFiltersSelected = Object.values(selectedFilters).some((filter) => filter)
+
     if (!hasFiltersSelected) return matchesSearch
-    
+
     const matchesFilter = selectedFilters[broadcast.status as keyof typeof selectedFilters]
     return matchesSearch && matchesFilter
   })
 
   const handleFilterChange = (filterType: keyof typeof selectedFilters) => {
-    setSelectedFilters(prev => ({
+    setSelectedFilters((prev) => ({
       ...prev,
-      [filterType]: !prev[filterType]
+      [filterType]: !prev[filterType],
     }))
   }
 
@@ -121,79 +151,110 @@ export default function BroadcastAnalyticsPage() {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <div className="border-b bg-white px-6 py-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-gray-900">Date range filter</h1>
-          <div className="flex items-center space-x-3">
-            <Button variant="outline" size="sm" className="text-blue-600 border-blue-200">
-              <Play className="w-4 h-4 mr-1" />
-              Watch Tutorial
-            </Button>
-            <Button className="bg-green-600 hover:bg-green-700 text-white">
-              New Broadcast
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Date Range Filters */}
-      <div className="px-6 py-6 bg-gray-50 border-b">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date picker from</label>
-            <div className="relative">
-              <Input type="text" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="pr-10" />
-              <Calendar className="absolute right-3 top-3 w-4 h-4 text-gray-400" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date picker to</label>
-            <div className="relative">
-              <Input type="text" value={toDate} onChange={(e) => setToDate(e.target.value)} className="pr-10" />
-              <Calendar className="absolute right-3 top-3 w-4 h-4 text-gray-400" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Period</label>
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Last 7 days">Last 7 days</SelectItem>
-                <SelectItem value="Last 30 days">Last 30 days</SelectItem>
-                <SelectItem value="Last 90 days">Last 90 days</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button className="bg-green-600 hover:bg-green-700 text-white">Apply now</Button>
-            <Button variant="outline">
-              <Download className="w-4 h-4 mr-1" />
-              Export
-            </Button>
-            <div className="flex items-center text-sm text-gray-600">
-              <span>Messaging-Limit: -</span>
-              <Info className="w-4 h-4 ml-1 text-gray-400" />
-            </div>
+        <div className="flex items-center justify-end">
+          <div className="flex items-center space-x-4">
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-64 justify-start text-left font-normal bg-transparent rounded-lg"
+                >
+                  <CalendarDays className="mr-2 h-4 w-4" />
+                  {formatDateRange()}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <div className="flex">
+                  {/* Preset options */}
+                  <div className="border-r p-3 space-y-1">
+                    <div className="text-sm font-medium text-gray-700 mb-2">Quick Select</div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-sm"
+                      onClick={() => setPresetRange(7)}
+                    >
+                      Last 7 days
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-sm"
+                      onClick={() => setPresetRange(30)}
+                    >
+                      Last 30 days
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-sm"
+                      onClick={() => setPresetRange(90)}
+                    >
+                      Last 90 days
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-sm"
+                      onClick={() => setPresetRange(365)}
+                    >
+                      Last year
+                    </Button>
+                  </div>
+                  {/* Calendar */}
+                  <CalendarComponent
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={(range) => {
+                      if (range) {
+                        setDateRange({
+                          from: range.from || undefined,
+                          to: range.to || undefined,
+                        })
+                      } else {
+                        setDateRange({ from: undefined, to: undefined })
+                      }
+                    }}
+                    numberOfMonths={2}
+                  />
+                </div>
+                <div className="border-t p-3 flex justify-end space-x-2">
+                  <Button variant="outline" size="sm" onClick={() => setIsCalendarOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={() => setIsCalendarOpen(false)}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button className="bg-green-600 hover:bg-green-700 text-white">New Broadcast</Button>
           </div>
         </div>
       </div>
 
       {/* Overview Stats */}
-      <div className="px-6 py-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
-          <StatCard title="Sent" value={stats.sent} icon="✓" />
-          <StatCard title="Delivered" value={stats.delivered} icon="📨" />
-          <StatCard title="Read" value={stats.read} icon="👁" />
-          <StatCard title="Replied" value={stats.replied} icon="↩" />
-          <StatCard title="Sending" value={stats.sending} icon="▶" />
-          <StatCard title="Failed" value={stats.failed} icon="✕" />
+      <div className="px-6 py-8 bg-gradient-to-br from-gray-50 to-white">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Overview</h2>
+          <p className="text-gray-600">Track your broadcast performance metrics</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <StatCard title="Processing" value={stats.processing} icon="🔄" />
+
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+          <StatCard title="Sent" value={stats.sent} icon="📤" />
+          <StatCard title="Delivered" value={stats.delivered} icon="📨" />
+          <StatCard title="Read" value={stats.read} icon="👁️" />
+          <StatCard title="Replied" value={stats.replied} icon="💬" />
+          <StatCard title="Sending" value={stats.sending} icon="⏳" />
+          <StatCard title="Failed" value={stats.failed} icon="❌" />
+          <StatCard title="Processing" value={stats.processing} icon="⚙️" />
           <StatCard title="Queued" value={stats.queued} icon="📋" />
-          <div className="md:col-span-4"></div>
         </div>
       </div>
 
@@ -205,7 +266,9 @@ export default function BroadcastAnalyticsPage() {
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-600">Sorted by:</span>
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Latest">Latest</SelectItem>
                   <SelectItem value="Oldest">Oldest</SelectItem>
@@ -214,7 +277,12 @@ export default function BroadcastAnalyticsPage() {
               </Select>
             </div>
             <div className="relative">
-              <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 w-64" />
+              <Input
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 w-64"
+              />
               <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowFilterModal(true)}>
@@ -246,8 +314,14 @@ export default function BroadcastAnalyticsPage() {
                   <tr>
                     <td colSpan={9} className="py-16">
                       <div className="flex flex-col items-center justify-center">
-                        <img src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1754993129/no_data.14591486_tv48zw.svg" alt="No data" className="w-56 h-56 object-contain mb-4" />
-                        <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={goToNewTemplate}>New Template</Button>
+                        <img
+                          src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1754993129/no_data.14591486_tv48zw.svg"
+                          alt="No data"
+                          className="w-56 h-56 object-contain mb-4"
+                        />
+                        <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={goToNewTemplate}>
+                          New Template
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -261,8 +335,14 @@ export default function BroadcastAnalyticsPage() {
                       <td className="py-3 px-4">{broadcast.replied}</td>
                       <td className="py-3 px-4">{broadcast.recipients}</td>
                       <td className="py-3 px-4 text-red-600">{broadcast.failed}</td>
-                      <td className="py-3 px-4"><Badge className={`${getStatusColor(broadcast.status)} capitalize`}>{broadcast.status}</Badge></td>
-                      <td className="py-3 px-4"><Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">⋯</Button></td>
+                      <td className="py-3 px-4">
+                        <Badge className={`${getStatusColor(broadcast.status)} capitalize`}>{broadcast.status}</Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
+                          ⋯
+                        </Button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -273,8 +353,13 @@ export default function BroadcastAnalyticsPage() {
               <div className="flex items-center justify-between px-6 py-4 border-t">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-600">Rows per page:</span>
-                  <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(parseInt(value))}>
-                    <SelectTrigger className="w-16"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onValueChange={(value) => setItemsPerPage(Number.parseInt(value))}
+                  >
+                    <SelectTrigger className="w-16">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="5">5</SelectItem>
                       <SelectItem value="10">10</SelectItem>
@@ -284,12 +369,24 @@ export default function BroadcastAnalyticsPage() {
                   </Select>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-600">{startIndex + 1}–{Math.min(endIndex, filteredBroadcasts.length)} of {filteredBroadcasts.length}</span>
+                  <span className="text-sm text-gray-600">
+                    {startIndex + 1}–{Math.min(endIndex, filteredBroadcasts.length)} of {filteredBroadcasts.length}
+                  </span>
                   <div className="flex items-center space-x-1">
-                    <Button variant="ghost" size="sm" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                    >
                       <ChevronLeft className="w-4 h-4" /> Previous
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages || filteredBroadcasts.length === 0}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages || filteredBroadcasts.length === 0}
+                    >
                       Next <ChevronRight className="w-4 h-4" />
                     </Button>
                   </div>
@@ -315,19 +412,28 @@ export default function BroadcastAnalyticsPage() {
               <div className="space-y-3">
                 {Object.entries(selectedFilters).map(([key, checked]) => (
                   <div key={key} className="flex items-center space-x-3">
-                    <input type="checkbox" id={key} checked={checked} onChange={() => handleFilterChange(key as keyof typeof selectedFilters)} className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                    <input
+                      type="checkbox"
+                      id={key}
+                      checked={checked}
+                      onChange={() => handleFilterChange(key as keyof typeof selectedFilters)}
+                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
                     <label htmlFor={key} className="text-sm text-gray-700 uppercase">
-                      {key === 'pending' && 'PENDING'}
-                      {key === 'processing' && 'PROCESSING'}
-                      {key === 'completed' && 'COMPLETED'}
-                      {key === 'stopped' && 'STOPPED'}
+                      {key === "pending" && "PENDING"}
+                      {key === "processing" && "PROCESSING"}
+                      {key === "completed" && "COMPLETED"}
+                      {key === "stopped" && "STOPPED"}
                     </label>
                   </div>
                 ))}
               </div>
             </div>
             <div className="flex justify-end">
-              <Button className="bg-green-600 hover:bg-green-700 text-white px-8" onClick={() => setShowFilterModal(false)}>
+              <Button
+                className="bg-green-600 hover:bg-green-700 text-white px-8"
+                onClick={() => setShowFilterModal(false)}
+              >
                 Save
               </Button>
             </div>
