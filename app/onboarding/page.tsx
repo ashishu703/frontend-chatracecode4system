@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useDispatch } from "react-redux"
+import { useDispatch, useSelector } from "react-redux"
 import { connectPlatform } from "@/store/slices/authSlice"
 import { Check, ArrowRight, AlertCircle, CheckCircle } from "lucide-react"
 import serverHandler from "@/utils/serverHandler"
@@ -16,26 +16,32 @@ const platforms = [
   {
     id: "whatsapp",
     name: "WhatsApp Business",
-    icon: "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg",
-    description: "Connect your WhatsApp Business account for messaging automation",
+    icon: "💬",
+    description: "Your customers love WhatsApp! Let's connect your business account so you can chat with them easily.",
+    buttonText: "Connect WhatsApp",
+    buttonIcon: "🚀",
+    footerText: "Takes about 2 minutes",
+    color: "bg-green-50 border-green-200"
   },
   {
     id: "messenger",
     name: "Facebook Messenger",
-    icon: "https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg",
-    description: "Integrate Facebook Messenger for customer support",
-  },
-  {
-    id: "google",
-    name: "Google Workspace",
-    icon: "https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg",
-    description: "Connect Google services for enhanced productivity",
+    icon: "💙",
+    description: "Reach your Facebook followers directly! Perfect for customer support and building relationships.",
+    buttonText: "Connect Facebook",
+    buttonIcon: "✨",
+    footerText: "Super quick setup",
+    color: "bg-blue-50 border-blue-200"
   },
   {
     id: "instagram",
     name: "Instagram Business",
-    icon: "https://upload.wikimedia.org/wikipedia/commons/e/e7/Instagram_logo_2016.svg",
-    description: "Link your Instagram Business account for social management",
+    icon: "📷",
+    description: "Turn your Instagram DMs into a powerful business tool. Your visual content deserves great conversations!",
+    buttonText: "Connect Instagram",
+    buttonIcon: "🌸",
+    footerText: "Just a few clicks away",
+    color: "bg-pink-50 border-pink-200"
   },
 ]
 
@@ -48,9 +54,69 @@ export default function OnboardingPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [waCode, setWaCode] = useState<string | null>(null)
   const [waAccountInfo, setWaAccountInfo] = useState<any | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasExistingConnections, setHasExistingConnections] = useState(false)
+
+  useEffect(() => {
+    const checkExistingConnections = async () => {
+      try {
+        
+        const token = 
+          (typeof window !== 'undefined' && window.localStorage.getItem('serviceToken')) ||
+          (typeof window !== 'undefined' && window.localStorage.getItem('adminToken')) ||
+          (typeof window !== 'undefined' && window.localStorage.getItem('agentToken')) ||
+          null
+
+        if (!token) {
+          console.log('No token found, proceeding with onboarding')
+          setIsLoading(false)
+          return
+        }
+
+        let userId = null
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          userId = payload.id || payload.userId || payload.sub
+        } catch (e) {
+          console.log('Could not decode token, using fallback')
+        }
+
+        if (userId) {
+          const response = await fetch(`/api/user/get_connected_accounts?user_id=${userId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.data && data.data.length > 0) {
+              console.log('User already has connected platforms:', data.data)
+              setHasExistingConnections(true)
+              // Redirect to dashboard immediately
+              router.replace('/dashboard')
+              return
+            }
+          }
+        }
+      } catch (error) {
+        console.log('Error checking existing connections:', error)
+        // Continue with onboarding if there's an error
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkExistingConnections()
+  }, [router])
 
   // Check for URL parameters on mount
   useEffect(() => {
+    if (isLoading || hasExistingConnections) return
+
     const urlParams = new URLSearchParams(window.location.search);
     const errorParam = urlParams.get('error');
     const platformParam = urlParams.get('platform');
@@ -75,10 +141,12 @@ export default function OnboardingPage() {
       setSuccess('WhatsApp Business connected successfully!');
       setConnectedPlatforms(prev => [...prev, 'whatsapp']);
     }
-  }, []);
+  }, [isLoading, hasExistingConnections]);
 
   // Listen for WhatsApp Embedded Signup FINISH message
   useEffect(() => {
+    if (isLoading || hasExistingConnections) return
+
     const handlePostMessage = (event: MessageEvent) => {
       if (!['https://www.facebook.com', 'https://web.facebook.com'].includes(event.origin)) return;
       try {
@@ -95,10 +163,12 @@ export default function OnboardingPage() {
     };
     window.addEventListener('message', handlePostMessage);
     return () => window.removeEventListener('message', handlePostMessage);
-  }, []);
+  }, [isLoading, hasExistingConnections]);
 
   // Finalize auth when both code and account info exist
   useEffect(() => {
+    if (isLoading || hasExistingConnections) return
+
     const finalize = async () => {
       if (!waCode || !waAccountInfo) return;
       try {
@@ -131,7 +201,7 @@ export default function OnboardingPage() {
       }
     };
     finalize();
-  }, [waCode, waAccountInfo]);
+  }, [waCode, waAccountInfo, isLoading, hasExistingConnections]);
 
   const handlePlatformConnect = async (platformId: string) => {
     setIsConnecting(platformId);
@@ -239,29 +309,63 @@ export default function OnboardingPage() {
 
   const canProceed = connectedPlatforms.length > 0
 
+  // Show loading state while checking existing connections
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking your account...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render onboarding if user already has connections
+  if (hasExistingConnections) {
+    return null
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-12">
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <div className="relative">
-              <Image
-                src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1752042604/mbg_logo_l7xfr2.png"
-                alt="MBG Logo"
-                width={56}
-                height={56}
-                className="rounded-xl shadow-sm"
-              />
+    <div className="min-h-screen bg-white">
+      <div className="max-w-6xl mx-auto px-6 py-12">
+        {/* Progress Tracker */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          className="flex items-center justify-center mb-16"
+        >
+          <div className="flex items-center space-x-8">
+            {/* Step 1: Start */}
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 bg-teal-600 rounded-full flex items-center justify-center mb-2">
+                <Check className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-sm font-medium text-gray-900">Start</span>
             </div>
-            <span className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-              MBG
-            </span>
+            
+            {/* Connector Line */}
+            <div className="w-16 h-0.5 bg-teal-600"></div>
+            
+            {/* Step 2: Connect */}
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mb-2">
+                <span className="text-white font-semibold text-lg">2</span>
+              </div>
+              <span className="text-sm font-medium text-gray-900">Connect</span>
+            </div>
+            
+            {/* Connector Line */}
+            <div className="w-16 h-0.5 bg-gray-300"></div>
+            
+            {/* Step 3: Done */}
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center mb-2">
+                <span className="text-gray-600 font-semibold text-lg">3</span>
+              </div>
+              <span className="text-sm font-medium text-gray-500">Done!</span>
+            </div>
           </div>
-          <h1 className="text-4xl font-bold text-slate-800 mb-4">Connect Your Platforms</h1>
-          <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
-            Choose the platforms you'd like to integrate.
-          </p>
         </motion.div>
 
         {/* Error and Success Messages */}
@@ -292,7 +396,7 @@ export default function OnboardingPage() {
         )}
 
         {/* Platform Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           {platforms.map((platform, index) => {
             const isConnected = connectedPlatforms.includes(platform.id)
             const isLoading = isConnecting === platform.id
@@ -304,40 +408,35 @@ export default function OnboardingPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <Card className="group relative overflow-hidden bg-white border border-slate-200 hover:border-slate-300 transition-all duration-300 hover:shadow-lg">
+                <Card className={`relative overflow-hidden border-2 rounded-xl ${platform.color} hover:shadow-lg transition-all duration-300`}>
                   <CardContent className="p-6">
-                    <div className="flex items-start gap-4 mb-6">
-                      <div className="relative">
-                        <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center group-hover:bg-slate-100 transition-colors">
-                          <Image
-                            src={platform.icon || "/placeholder.svg"}
-                            alt={platform.name}
-                            width={24}
-                            height={24}
-                            className="object-contain"
-                          />
-                        </div>
-                        {isConnected && (
-                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                            <Check className="w-3 h-3 text-white" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-slate-800 mb-1">{platform.name}</h3>
-                        <p className="text-slate-500 text-sm leading-relaxed">{platform.description}</p>
+                    {/* Platform Icon */}
+                    <div className="flex justify-center mb-4">
+                      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm">
+                        <span className="text-2xl">{platform.icon}</span>
                       </div>
                     </div>
 
+                    {/* Platform Title */}
+                    <h3 className="text-xl font-bold text-gray-900 text-center mb-3">
+                      {platform.name}
+                    </h3>
+
+                    {/* Platform Description */}
+                    <p className="text-gray-600 text-center text-sm leading-relaxed mb-6">
+                      {platform.description}
+                    </p>
+
+                    {/* Connect Button */}
                     <Button
                       onClick={() => handlePlatformConnect(platform.id)}
                       disabled={isConnected || isLoading}
-                      className={`w-full h-11 font-medium transition-all duration-200 ${
+                      className={`w-full h-12 font-medium text-white bg-teal-600 hover:bg-teal-700 transition-all duration-200 rounded-lg ${
                         isConnected
-                          ? "bg-gradient-to-r from-blue-500 to-purple-500 hover:shadow-md text-white cursor-default"
+                          ? "bg-green-600 hover:bg-green-700 cursor-default"
                           : isLoading
-                            ? "bg-gradient-to-r from-blue-500 to-purple-500 cursor-not-allowed"
-                            : "bg-gradient-to-r from-blue-500 to-purple-500 hover:shadow-md"
+                            ? "bg-teal-600 cursor-not-allowed"
+                            : "bg-teal-600 hover:bg-teal-700"
                       }`}
                     >
                       {isLoading ? (
@@ -352,11 +451,16 @@ export default function OnboardingPage() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          Connect {platform.name.split(" ")[0]}
-                          <ArrowRight className="w-4 h-4" />
+                          {platform.buttonText}
+                          <span className="text-sm">{platform.buttonIcon}</span>
                         </div>
                       )}
                     </Button>
+
+                    {/* Footer Text */}
+                    <p className="text-gray-500 text-xs text-center mt-3">
+                      {platform.footerText}
+                    </p>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -381,7 +485,7 @@ export default function OnboardingPage() {
               Ready to proceed to dashboard
             </motion.div>
           )}
-          <p className="text-slate-400 text-sm">
+          <p className="text-gray-400 text-sm">
             {canProceed
               ? "You can add more platforms later from your dashboard settings."
               : "Connect at least one platform to access your dashboard."}

@@ -53,11 +53,11 @@ export default function Sidebar() {
     }
   }
 
-  return (
-    < div
-      className={`fixed left-0 top-0 h-full bg-white shadow-lg border-r border-gray-200 transition-all duration-300 z-50 ${
-        sidebarOpen ? "w-64" : "w-16"
-      }`}
+     return (
+     <div
+       className={`fixed left-0 top-0 h-full bg-white shadow-lg border-r border-gray-200 transition-all duration-300 z-50 ${
+         sidebarOpen ? "w-64" : "w-16"
+       }`}
       style={{
         display: "flex",
         flexDirection: "column",

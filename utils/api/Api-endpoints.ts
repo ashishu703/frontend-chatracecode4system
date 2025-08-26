@@ -42,6 +42,12 @@ export class UserEndpoints {
   // Account Management
   static readonly DELETE_ACCOUNT = '/api/user/delete_account';
   static readonly EXPORT_DATA = '/api/user/export_data';
+
+  // Phonebook
+  static readonly IMPORT_CONTACTS = '/api/phonebook/import_contacts';
+  static readonly DELETE_CONTACTS = '/api/phonebook/del_contacts';
+  static readonly GET_UID_CONTACTS = '/api/phonebook/get_uid_contacts';
+  static readonly ADD_SINGLE_CONTACT = '/api/phonebook/add_single_contact';
 }
 
 export class AdminEndpoints {
@@ -85,7 +91,7 @@ export class AdminEndpoints {
   
   // Plans & Subscriptions
   static readonly GET_PLANS = '/api/admin/plans';
-  static readonly CREATE_PLAN = '/api/admin/plans';
+  static readonly ADD_PLAN = '/api/admin/add_plan';
   static readonly UPDATE_PLAN = '/api/admin/plans/:id';
   static readonly DELETE_PLAN = '/api/admin/plans/:id';
   
