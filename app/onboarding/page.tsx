@@ -56,10 +56,21 @@ export default function OnboardingPage() {
   const [waAccountInfo, setWaAccountInfo] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [hasExistingConnections, setHasExistingConnections] = useState(false)
+  const [isForcedOnboarding, setIsForcedOnboarding] = useState(false)
 
   useEffect(() => {
     const checkExistingConnections = async () => {
       try {
+        // Check if force parameter is present to skip existing connection check
+        const urlParams = new URLSearchParams(window.location.search);
+        const forceParam = urlParams.get('force');
+        
+        if (forceParam === 'true') {
+          console.log('Force parameter detected, skipping existing connection check')
+          setIsForcedOnboarding(true)
+          setIsLoading(false)
+          return
+        }
         
         const token = 
           (typeof window !== 'undefined' && window.localStorage.getItem('serviceToken')) ||
@@ -115,11 +126,12 @@ export default function OnboardingPage() {
 
   // Check for URL parameters on mount
   useEffect(() => {
-    if (isLoading || hasExistingConnections) return
+    if (isLoading || (hasExistingConnections && !isForcedOnboarding)) return
 
     const urlParams = new URLSearchParams(window.location.search);
     const errorParam = urlParams.get('error');
     const platformParam = urlParams.get('platform');
+    const forceParam = urlParams.get('force');
     
     if (errorParam) {
       setError(`Failed to connect ${platformParam || 'platform'}: ${errorParam}`);
@@ -129,23 +141,59 @@ export default function OnboardingPage() {
     const messengerConnected = urlParams.get('messenger_connected');
     const whatsappConnected = urlParams.get('whatsapp_connected');
     
+    // If coming from Channels page with a specific platform, highlight it
+    if (platformParam && forceParam === 'true') {
+      // Don't auto-connect, just show the platform is selected
+      console.log(`Platform ${platformParam} selected for connection`);
+    }
+    
     if (instagramConnected) {
       setSuccess('Instagram connected successfully!');
       setConnectedPlatforms(prev => [...prev, 'instagram']);
+      // Redirect to channels page after successful connection
+      setTimeout(() => {
+        window.location.href = '/dashboard/settings/channels?instagram_connected=true';
+      }, 800);
     }
     if (messengerConnected) {
       setSuccess('Facebook Messenger connected successfully!');
       setConnectedPlatforms(prev => [...prev, 'messenger']);
+      // Redirect to channels page after successful connection
+      setTimeout(() => {
+        window.location.href = '/dashboard/settings/channels?messenger_connected=true';
+      }, 800);
     }
     if (whatsappConnected) {
       setSuccess('WhatsApp Business connected successfully!');
       setConnectedPlatforms(prev => [...prev, 'whatsapp']);
+      // Redirect to channels page after successful connection
+      setTimeout(() => {
+        window.location.href = '/dashboard/settings/channels?whatsapp_connected=true';
+      }, 800);
     }
   }, [isLoading, hasExistingConnections]);
 
+  // Redirect to channels page after successful connections
+  useEffect(() => {
+    if (isLoading || (hasExistingConnections && !isForcedOnboarding)) return
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const instagramConnected = urlParams.get('instagram_connected');
+    const messengerConnected = urlParams.get('messenger_connected');
+    const whatsappConnected = urlParams.get('whatsapp_connected');
+    
+    // If any platform was successfully connected, redirect to channels page
+    if (instagramConnected || messengerConnected || whatsappConnected) {
+      const platform = instagramConnected ? 'instagram' : messengerConnected ? 'messenger' : 'whatsapp';
+      setTimeout(() => {
+        window.location.href = `/dashboard/settings/channels?${platform}_connected=true`;
+      }, 800);
+    }
+  }, [isLoading, hasExistingConnections, isForcedOnboarding]);
+
   // Listen for WhatsApp Embedded Signup FINISH message
   useEffect(() => {
-    if (isLoading || hasExistingConnections) return
+    if (isLoading || (hasExistingConnections && !isForcedOnboarding)) return
 
     const handlePostMessage = (event: MessageEvent) => {
       if (!['https://www.facebook.com', 'https://web.facebook.com'].includes(event.origin)) return;
@@ -167,7 +215,7 @@ export default function OnboardingPage() {
 
   // Finalize auth when both code and account info exist
   useEffect(() => {
-    if (isLoading || hasExistingConnections) return
+    if (isLoading || (hasExistingConnections && !isForcedOnboarding)) return
 
     const finalize = async () => {
       if (!waCode || !waAccountInfo) return;
@@ -187,9 +235,9 @@ export default function OnboardingPage() {
           setSuccess('WhatsApp Business connected successfully!');
           setConnectedPlatforms(prev => prev.includes('whatsapp') ? prev : [...prev, 'whatsapp']);
           setIsConnecting(null);
-          // Redirect to dashboard after successful connection
+          // Redirect to channels page after successful connection
           setTimeout(() => {
-            window.location.href = '/dashboard?whatsapp_connected=true';
+            window.location.href = '/dashboard/settings/channels?whatsapp_connected=true';
           }, 800);
         } else {
           throw new Error(resp?.data?.message || 'Failed to connect WhatsApp');
@@ -298,7 +346,7 @@ export default function OnboardingPage() {
 
       if (connectedPlatforms.length === 0) {
         setTimeout(() => {
-          router.push("/dashboard");
+          router.push("/dashboard/settings/channels");
         }, 800);
       }
     } catch (error) {
@@ -321,8 +369,8 @@ export default function OnboardingPage() {
     )
   }
 
-  // Don't render onboarding if user already has connections
-  if (hasExistingConnections) {
+  // Don't render onboarding if user already has connections (unless forced)
+  if (hasExistingConnections && !isForcedOnboarding) {
     return null
   }
 
@@ -400,6 +448,10 @@ export default function OnboardingPage() {
           {platforms.map((platform, index) => {
             const isConnected = connectedPlatforms.includes(platform.id)
             const isLoading = isConnecting === platform.id
+            const urlParams = new URLSearchParams(window.location.search);
+            const platformParam = urlParams.get('platform');
+            const forceParam = urlParams.get('force');
+            const isSelectedFromChannels = platformParam === platform.id && forceParam === 'true';
 
             return (
               <motion.div
@@ -408,7 +460,9 @@ export default function OnboardingPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <Card className={`relative overflow-hidden border-2 rounded-xl ${platform.color} hover:shadow-lg transition-all duration-300`}>
+                <Card className={`relative overflow-hidden border-2 rounded-xl ${platform.color} hover:shadow-lg transition-all duration-300 ${
+                  isSelectedFromChannels ? 'ring-4 ring-teal-500 ring-opacity-50' : ''
+                }`}>
                   <CardContent className="p-6">
                     {/* Platform Icon */}
                     <div className="flex justify-center mb-4">
@@ -420,6 +474,11 @@ export default function OnboardingPage() {
                     {/* Platform Title */}
                     <h3 className="text-xl font-bold text-gray-900 text-center mb-3">
                       {platform.name}
+                      {isSelectedFromChannels && (
+                        <span className="block text-sm font-normal text-teal-600 mt-1">
+                          Selected for connection
+                        </span>
+                      )}
                     </h3>
 
                     {/* Platform Description */}

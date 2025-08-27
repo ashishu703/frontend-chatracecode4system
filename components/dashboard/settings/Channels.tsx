@@ -47,6 +47,7 @@ export default function ChannelsSettings() {
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const user = useSelector((state: any) => state.auth.user)
   const [instagramConfig, setInstagramConfig] = useState<{ authURI?: string } | undefined>()
 
@@ -62,6 +63,33 @@ export default function ChannelsSettings() {
     }
     return result
   }
+
+  // Check for successful connection parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const instagramConnected = urlParams.get('instagram_connected');
+    const messengerConnected = urlParams.get('messenger_connected');
+    const whatsappConnected = urlParams.get('whatsapp_connected');
+    
+    if (instagramConnected || messengerConnected || whatsappConnected) {
+      if (instagramConnected) {
+        setSuccessMessage('Instagram connected successfully!');
+      } else if (messengerConnected) {
+        setSuccessMessage('Facebook Messenger connected successfully!');
+      } else if (whatsappConnected) {
+        setSuccessMessage('WhatsApp connected successfully!');
+      }
+      
+      // Clear URL parameters
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('instagram_connected');
+      newUrl.searchParams.delete('messenger_connected');
+      newUrl.searchParams.delete('whatsapp_connected');
+      window.history.replaceState({}, '', newUrl.toString());
+      
+      setTimeout(() => setSuccessMessage(null), 5000);
+    }
+  }, []);
 
   // Fetch connected accounts on component mount
   useEffect(() => {
@@ -247,7 +275,7 @@ export default function ChannelsSettings() {
     }
 
     fetchConnectedAccounts()
-  }, [user?.id])
+  }, [user?.id, successMessage])
 
   const isConnected = (platform: string) => {
     // Handle different platform name variations
@@ -307,13 +335,223 @@ export default function ChannelsSettings() {
   }
 
   const handleChannelConnect = async (platform: string) => {
-    // Redirect to onboarding page for connection
-    window.location.href = `/onboarding?platform=${platform}`
+    // Redirect to onboarding page for connection with force flag
+    window.location.href = `/onboarding?platform=${platform}&force=true`
   }
 
   const handleChannelDisconnect = async (platform: string) => {
-    // TODO: Implement disconnect functionality
-    console.log(`Disconnecting ${platform}`)
+    try {
+      setError(null);
+      setSuccessMessage(null);
+      
+      const accounts = getConnectedAccounts(platform);
+      if (accounts.length === 0) {
+        console.log(`No ${platform} accounts to disconnect`);
+        return;
+      }
+
+      // Show confirmation dialog
+      const confirmMessage = `Are you sure you want to disconnect your ${platform} account? This will remove the connection and you'll need to reconnect it later.`;
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+
+      // For each connected account, disconnect it
+      for (const account of accounts) {
+        const accountId = account.social_account_id || account.account_id || account.id;
+        
+        if (platform === 'facebook') {
+          // Call the messenger accounts delete endpoint
+          const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/messanger/accounts/${accountId}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              // Add authorization header if needed
+              'Authorization': `Bearer ${localStorage.getItem('serviceToken') || localStorage.getItem('adminToken') || localStorage.getItem('agentToken') || ''}`
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to disconnect ${platform} account`);
+          }
+        } else if (platform === 'whatsapp') {
+          // Call the whatsapp accounts delete endpoint
+          const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/whatsapp/accounts/${accountId}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              // Add authorization header if needed
+              'Authorization': `Bearer ${localStorage.getItem('serviceToken') || localStorage.getItem('adminToken') || localStorage.getItem('agentToken') || ''}`
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to disconnect ${platform} account`);
+          }
+        }
+      }
+      
+      // Refresh the connected accounts by calling the function directly
+      const fetchConnectedAccounts = async () => {
+        // Resolve userId from Redux or localStorage
+        let resolvedUserId: string | null = user?.id || null;
+        if (!resolvedUserId) {
+          try {
+            const userLS = localStorage.getItem('user');
+            const parsed = userLS ? JSON.parse(userLS) : null;
+            resolvedUserId = parsed?.id || parsed?.uid || null;
+          } catch {}
+        }
+
+        try {
+          setLoading(true)
+          // Get auth token from localStorage
+          const serviceToken = localStorage.getItem('serviceToken');
+          const adminToken = localStorage.getItem('adminToken');
+          const agentToken = localStorage.getItem('agentToken');
+          const token = serviceToken || adminToken || agentToken;
+
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+
+          if (resolvedUserId) {
+            const response = await fetch(`/api/user/get_connected_accounts?user_id=${resolvedUserId}`, {
+              method: 'GET',
+              headers,
+              credentials: 'include',
+            });
+
+            const data = await response.json()
+
+            if (data.success) {
+              setConnectedAccounts(dedupeAccounts((data.data || []) as ConnectedAccount[]))
+            } else {
+              // If authentication failed, try calling backend directly
+              if (data.message === 'Authentication token required' || String(data.message || '').includes('uid')) {
+                try {
+                  const [facebookData, instagramData, whatsappData] = await Promise.all([
+                    fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/messanger/accounts`, {
+                      method: 'GET',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      }
+                    }).then(res => res.json()),
+                    fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/accounts`, {
+                      method: 'GET',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      }
+                    }).then(res => res.json()),
+                    fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/whatsapp/accounts`, {
+                      method: 'GET',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      }
+                    }).then(res => res.json())
+                  ]);
+                  
+                  // Combine all profiles
+                  const allProfiles = [
+                    ...(facebookData?.data?.profiles || facebookData?.profiles || []),
+                    ...(instagramData?.data?.profiles || instagramData?.profiles || []),
+                    ...(whatsappData?.data?.profiles || whatsappData?.profiles || [])
+                  ];
+                  
+                  const connectedAccounts = allProfiles.map((profile: any) => ({
+                    id: profile.id,
+                    platform: profile.platform,
+                    account_name: profile.name,
+                    account_id: profile.social_user_id,
+                    username: profile.username,
+                    avatar: profile.avatar,
+                    social_account_id: profile.social_account_id,
+                    connected_at: new Date().toISOString(),
+                    status: 'active'
+                  }));
+                  
+                  setConnectedAccounts(dedupeAccounts(connectedAccounts));
+                } catch (directErr) {
+                  setError('Failed to fetch connected accounts');
+                }
+              }
+            }
+          } else {
+            try {
+              const [facebookData, instagramData, whatsappData] = await Promise.all([
+                fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/messanger/accounts`, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  }
+                }).then(res => res.json()),
+                fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/accounts`, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  }
+                }).then(res => res.json()),
+                fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/whatsapp/accounts`, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  }
+                }).then(res => res.json())
+              ]);
+
+              const allProfiles = [
+                ...(facebookData?.data?.profiles || facebookData?.profiles || []),
+                ...(instagramData?.data?.profiles || instagramData?.profiles || []),
+                ...(whatsappData?.data?.profiles || whatsappData?.profiles || [])
+              ];
+
+              const connectedAccounts = allProfiles.map((profile: any) => ({
+                id: profile.id,
+                platform: profile.platform,
+                account_name: profile.name,
+                account_id: profile.social_user_id,
+                username: profile.username,
+                avatar: profile.avatar,
+                social_account_id: profile.social_account_id,
+                connected_at: new Date().toISOString(),
+                status: 'active'
+              }));
+
+              setConnectedAccounts(dedupeAccounts(connectedAccounts));
+            } catch (directErr) {
+              setError('Failed to fetch connected accounts');
+            }
+          }
+        } catch (err) {
+          setError('Failed to fetch connected accounts')
+        } finally {
+          setLoading(false)
+        }
+      };
+
+      await fetchConnectedAccounts();
+      setSuccessMessage(`${platform} account(s) disconnected successfully`);
+      console.log(`${platform} account(s) disconnected successfully`);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error: any) {
+      console.error(`Error disconnecting ${platform}:`, error);
+      setError(`Failed to disconnect ${platform} account: ${error.message || 'Unknown error'}`);
+      
+      // Clear error message after 5 seconds
+      setTimeout(() => setError(null), 5000);
+    }
   }
 
   if (loading) {
@@ -362,6 +600,12 @@ export default function ChannelsSettings() {
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+          
+          {successMessage && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-green-700 text-sm">{successMessage}</p>
             </div>
           )}
           
