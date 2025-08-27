@@ -1,7 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,28 +14,17 @@ import { setCurrentView } from "@/store/slices/dashboardSlice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { format, subDays } from "date-fns"
+import { fetchBroadcasts } from "@/utils/api/broadcast"
+import type { BroadcastItem, BroadcastPagination } from "@/types/broadcast/broadcast"
 
 interface BroadcastStats {
   sent: number
   delivered: number
-  read: number
   replied: number
   sending: number
   failed: number
   processing: number
   queued: number
-}
-
-interface BroadcastData {
-  id: string
-  name: string
-  scheduled: string
-  successful: number
-  read: number
-  replied: number
-  recipients: number
-  failed: number
-  status: "completed" | "failed" | "pending" | "processing" | "stopped"
 }
 
 interface DateRange {
@@ -44,38 +34,60 @@ interface DateRange {
 
 export default function BroadcastAnalyticsPage() {
   const [dateRange, setDateRange] = useState<DateRange>({
-    from: subDays(new Date(), 7),
-    to: new Date(),
+    from: undefined,
+    to: undefined,
   })
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
-
   const [searchQuery, setSearchQuery] = useState("")
-  const [sortBy, setSortBy] = useState("Latest")
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(5)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [selectedFilters, setSelectedFilters] = useState({
     pending: false,
     processing: false,
-    completed: false,
+    finished: false,
+    failed: false,
     stopped: false,
   })
 
-  // Zero state
-  const [stats] = useState<BroadcastStats>({
-    sent: 0,
-    delivered: 0,
-    read: 0,
-    replied: 0,
-    sending: 0,
-    failed: 0,
-    processing: 0,
-    queued: 0,
+  const dispatch = useDispatch()
+
+  const { data: broadcastData, isLoading, error, refetch } = useQuery({
+    queryKey: ['broadcasts', currentPage, itemsPerPage, searchQuery, selectedFilters],
+    queryFn: () => fetchBroadcasts({
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchQuery,
+      status: Object.entries(selectedFilters)
+        .filter(([_, checked]) => checked)
+        .map(([key, _]) => key.toUpperCase()),
+      dateRange: dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined
+    }),
+    staleTime: 2 * 60 * 1000,
+    enabled: true,
   })
 
-  // Start with no broadcasts
-  const [broadcasts] = useState<BroadcastData[]>([])
-  const [loading] = useState(false)
+  useEffect(() => {
+    refetch()
+  }, [])
+
+  const broadcasts: BroadcastItem[] = broadcastData?.data || []
+  const pagination: BroadcastPagination = broadcastData?.pagination || {
+    totalItems: 0,
+    totalPages: 1,
+    currentPage: 1,
+    pageSize: 10
+  }
+
+  const stats: BroadcastStats = {
+    sent: broadcasts.filter(b => b.status === "FINISHED").length,
+    delivered: broadcasts.filter(b => b.status === "FINISHED").length,
+    replied: 0,
+    sending: broadcasts.filter(b => b.status === "PROCESSING").length,
+    failed: broadcasts.filter(b => b.status === "FAILED").length,
+    processing: broadcasts.filter(b => b.status === "PROCESSING").length,
+    queued: broadcasts.filter(b => b.status === "PENDING").length,
+  }
 
   const setPresetRange = (days: number) => {
     setDateRange({
@@ -85,9 +97,21 @@ export default function BroadcastAnalyticsPage() {
     setIsCalendarOpen(false)
   }
 
+  const handleDateSelect = (range: any) => {
+    if (range) {
+      setDateRange({
+        from: range.from || undefined,
+        to: range.to || undefined,
+      })
+    } else {
+      setDateRange({ from: undefined, to: undefined })
+    }
+  }
+
   const formatDateRange = () => {
-    if (!dateRange.from) return "Select date range"
-    if (!dateRange.to) return format(dateRange.from, "MMM dd, yyyy")
+    if (!dateRange.from && !dateRange.to) return "Select date range"
+    if (!dateRange.from) return "Select start date"
+    if (!dateRange.to) return "Select end date"
     return `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
   }
 
@@ -107,31 +131,44 @@ export default function BroadcastAnalyticsPage() {
   )
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "processing":
-        return "bg-blue-100 text-blue-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "stopped":
-        return "bg-red-100 text-red-800"
-      case "failed":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+    const statusColors = {
+      "FINISHED": "bg-green-100 text-green-800",
+      "PROCESSING": "bg-blue-100 text-blue-800",
+      "PENDING": "bg-yellow-100 text-yellow-800",
+      "STOPPED": "bg-red-100 text-red-800",
+      "FAILED": "bg-red-100 text-red-800"
     }
+    return statusColors[status as keyof typeof statusColors] || "bg-gray-100 text-gray-800"
+  }
+
+  const getStatusDisplayName = (status: string) => {
+    const statusNames = {
+      "FINISHED": "Completed",
+      "PROCESSING": "Processing",
+      "PENDING": "Pending",
+      "STOPPED": "Stopped",
+      "FAILED": "Failed"
+    }
+    return statusNames[status as keyof typeof statusNames] || status
   }
 
   const filteredBroadcasts = broadcasts.filter((broadcast) => {
-    const matchesSearch = broadcast.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = broadcast.title.toLowerCase().includes(searchQuery.toLowerCase())
     const hasFiltersSelected = Object.values(selectedFilters).some((filter) => filter)
 
     if (!hasFiltersSelected) return matchesSearch
 
-    const matchesFilter = selectedFilters[broadcast.status as keyof typeof selectedFilters]
+    const statusKey = broadcast.status.toLowerCase()
+    const matchesFilter = selectedFilters[statusKey as keyof typeof selectedFilters]
     return matchesSearch && matchesFilter
   })
+
+  const totalPages = pagination.totalPages || 0
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentBroadcasts = filteredBroadcasts.slice(startIndex, endIndex)
+
+  const goToNewTemplate = () => dispatch(setCurrentView("create-template"))
 
   const handleFilterChange = (filterType: keyof typeof selectedFilters) => {
     setSelectedFilters((prev) => ({
@@ -140,16 +177,32 @@ export default function BroadcastAnalyticsPage() {
     }))
   }
 
-  const totalPages = Math.ceil(filteredBroadcasts.length / itemsPerPage) || 1
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const currentBroadcasts = filteredBroadcasts.slice(startIndex, endIndex)
-  const dispatch = useDispatch()
-  const goToNewTemplate = () => dispatch(setCurrentView("create-template"))
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading broadcasts...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Data</h2>
+          <p className="text-gray-600 mb-4">Failed to load broadcast data</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <div className="border-b bg-white px-6 py-4">
         <div className="flex items-center justify-end">
           <div className="flex items-center space-x-4">
@@ -163,74 +216,30 @@ export default function BroadcastAnalyticsPage() {
                   {formatDateRange()}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
+              <PopoverContent className="w-auto p-4 rounded-xl" align="end" sideOffset={5}>
                 <div className="flex">
-                  {/* Preset options */}
-                  <div className="border-r p-3 space-y-1">
+                  <div className="border-r p-2 space-y-1 w-44">
                     <div className="text-sm font-medium text-gray-700 mb-2">Quick Select</div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-sm"
-                      onClick={() => setPresetRange(7)}
-                    >
-                      Last 7 days
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-sm"
-                      onClick={() => setPresetRange(30)}
-                    >
-                      Last 30 days
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-sm"
-                      onClick={() => setPresetRange(90)}
-                    >
-                      Last 90 days
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-sm"
-                      onClick={() => setPresetRange(365)}
-                    >
-                      Last year
-                    </Button>
+                    {[7, 30, 90, 365].map((days) => (
+                      <Button
+                        key={days}
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-sm"
+                        onClick={() => setPresetRange(days)}
+                      >
+                        Last {days} {days === 1 ? 'day' : 'days'}
+                      </Button>
+                    ))}
                   </div>
-                  {/* Calendar */}
                   <CalendarComponent
                     initialFocus
                     mode="range"
                     defaultMonth={dateRange?.from}
                     selected={dateRange}
-                    onSelect={(range) => {
-                      if (range) {
-                        setDateRange({
-                          from: range.from || undefined,
-                          to: range.to || undefined,
-                        })
-                      } else {
-                        setDateRange({ from: undefined, to: undefined })
-                      }
-                    }}
+                    onSelect={handleDateSelect}
                     numberOfMonths={2}
                   />
-                </div>
-                <div className="border-t p-3 flex justify-end space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => setIsCalendarOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700"
-                    onClick={() => setIsCalendarOpen(false)}
-                  >
-                    Apply
-                  </Button>
                 </div>
               </PopoverContent>
             </Popover>
@@ -239,80 +248,80 @@ export default function BroadcastAnalyticsPage() {
         </div>
       </div>
 
-      {/* Overview Stats */}
       <div className="px-6 py-8 bg-gradient-to-br from-gray-50 to-white">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Overview</h2>
           <p className="text-gray-600">Track your broadcast performance metrics</p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 mb-4">
           <StatCard title="Sent" value={stats.sent} icon="📤" />
           <StatCard title="Delivered" value={stats.delivered} icon="📨" />
-          <StatCard title="Read" value={stats.read} icon="👁️" />
           <StatCard title="Replied" value={stats.replied} icon="💬" />
           <StatCard title="Sending" value={stats.sending} icon="⏳" />
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
           <StatCard title="Failed" value={stats.failed} icon="❌" />
           <StatCard title="Processing" value={stats.processing} icon="⚙️" />
           <StatCard title="Queued" value={stats.queued} icon="📋" />
         </div>
       </div>
 
-      {/* Broadcast List */}
       <div className="px-6 pb-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Broadcast list</h2>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-600">Sorted by:</span>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Latest">Latest</SelectItem>
-                  <SelectItem value="Oldest">Oldest</SelectItem>
-                  <SelectItem value="Name">Name</SelectItem>
-                </SelectContent>
-              </Select>
+        <div className="mb-6">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Broadcast list ({pagination.totalItems} total)
+            </h2>
+          </div>
+          
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search broadcasts..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-full bg-white border-gray-200 focus:border-green-500 focus:ring-green-500"
+                />
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600 font-medium">Filters:</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setShowFilterModal(true)}
+                  className="border-gray-300 hover:border-green-500 hover:bg-green-50 transition-colors"
+                >
+                  <Filter className="w-4 h-4 mr-2" />
+                  Configure
+                </Button>
+              </div>
             </div>
-            <div className="relative">
-              <Input
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-64"
-              />
-              <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setShowFilterModal(true)}>
-              <Filter className="w-4 h-4" />
-            </Button>
-            <Button className="bg-green-600 hover:bg-green-700 text-white">Updated: Just now</Button>
           </div>
         </div>
 
-        {/* Table */}
         <Card>
           <CardContent className="p-0">
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-gray-50">
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Broadcast name</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Template</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Phonebook</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Scheduled</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Successful</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Read</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Replied</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Recipients</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Failed</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Created</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {currentBroadcasts.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-16">
+                    <td colSpan={7} className="py-16">
                       <div className="flex flex-col items-center justify-center">
                         <img
                           src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1754993129/no_data.14591486_tv48zw.svg"
@@ -328,15 +337,24 @@ export default function BroadcastAnalyticsPage() {
                 ) : (
                   currentBroadcasts.map((broadcast) => (
                     <tr key={broadcast.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4 font-medium">{broadcast.name}</td>
-                      <td className="py-3 px-4 text-gray-600">{broadcast.scheduled}</td>
-                      <td className="py-3 px-4">{broadcast.successful}</td>
-                      <td className="py-3 px-4">{broadcast.read}</td>
-                      <td className="py-3 px-4">{broadcast.replied}</td>
-                      <td className="py-3 px-4">{broadcast.recipients}</td>
-                      <td className="py-3 px-4 text-red-600">{broadcast.failed}</td>
+                      <td className="py-3 px-4 font-medium">{broadcast.title}</td>
+                      <td className="py-3 px-4 text-gray-600">
+                        <div>
+                          <div className="font-medium">{broadcast.templet.name}</div>
+                          <div className="text-sm text-gray-500">{broadcast.templet.category}</div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{broadcast.phonebook.name}</td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {format(new Date(broadcast.schedule), "MMM dd, yyyy HH:mm")}
+                      </td>
                       <td className="py-3 px-4">
-                        <Badge className={`${getStatusColor(broadcast.status)} capitalize`}>{broadcast.status}</Badge>
+                        <Badge className={`${getStatusColor(broadcast.status)} capitalize`}>
+                          {getStatusDisplayName(broadcast.status)}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {format(new Date(broadcast.createdAt), "MMM dd, yyyy")}
                       </td>
                       <td className="py-3 px-4">
                         <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
@@ -349,7 +367,7 @@ export default function BroadcastAnalyticsPage() {
               </tbody>
             </table>
 
-            {currentBroadcasts.length > 0 && (
+            {pagination.totalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-4 border-t">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-600">Rows per page:</span>
@@ -370,7 +388,7 @@ export default function BroadcastAnalyticsPage() {
                 </div>
                 <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-600">
-                    {startIndex + 1}–{Math.min(endIndex, filteredBroadcasts.length)} of {filteredBroadcasts.length}
+                    {startIndex + 1}–{Math.min(endIndex, pagination.totalItems)} of {pagination.totalItems}
                   </span>
                   <div className="flex items-center space-x-1">
                     <Button
@@ -385,7 +403,7 @@ export default function BroadcastAnalyticsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages || filteredBroadcasts.length === 0}
+                      disabled={currentPage === totalPages}
                     >
                       Next <ChevronRight className="w-4 h-4" />
                     </Button>
@@ -397,18 +415,18 @@ export default function BroadcastAnalyticsPage() {
         </Card>
       </div>
 
-      {/* Filter Modal */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg w-96 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">Attributes</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
               <Button variant="ghost" size="sm" onClick={() => setShowFilterModal(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
             <div className="mb-6">
-              <p className="text-sm text-gray-600 mb-4">Choose attributes to filter</p>
+              <p className="text-sm text-gray-600 mb-4">Choose status filters</p>
+              
               <div className="space-y-3">
                 {Object.entries(selectedFilters).map(([key, checked]) => (
                   <div key={key} className="flex items-center space-x-3">
@@ -422,7 +440,8 @@ export default function BroadcastAnalyticsPage() {
                     <label htmlFor={key} className="text-sm text-gray-700 uppercase">
                       {key === "pending" && "PENDING"}
                       {key === "processing" && "PROCESSING"}
-                      {key === "completed" && "COMPLETED"}
+                      {key === "finished" && "FINISHED"}
+                      {key === "failed" && "FAILED"}
                       {key === "stopped" && "STOPPED"}
                     </label>
                   </div>
