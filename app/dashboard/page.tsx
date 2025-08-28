@@ -21,7 +21,6 @@ import { FlowBuilder } from "@/components/flow-integration/flow-builder"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { login as loginAction } from '@/store/slices/authSlice';
 import serverHandler from '@/utils/serverHandler';
 import AllFlowsPage from "@/components/dashboard/allflows"
 import AllTemplatesPage from "@/components/flow-integration/alltemplates"
@@ -55,62 +54,30 @@ export default function DashboardPage() {
   const { logout } = useAuth();
   const { sidebarOpen } = useSelector((state: RootState) => state.ui);
   const { currentView } = useSelector((state: RootState) => state.dashboard);
-  const user = useSelector((state: RootState) => state.auth.user);
+  const { user } = useSelector((state: RootState) => state.auth);
   const [showBackAsAdmin, setShowBackAsAdmin] = useState(false);
   const [showLoginAsAdmin, setShowLoginAsAdmin] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const initializeDashboard = async () => {
       try {
-        // Check if user is authenticated
-        const token = localStorage.getItem('serviceToken');
-        if (!token) {
-          router.push('/login');
-          return;
-        }
-
-        // Restore user from localStorage first
-        const userLS = localStorage.getItem('user');
-        console.log('User data from localStorage:', userLS);
-        if (userLS) {
+        // Fetch dashboard data only if not already loaded
+        if (!dashboardData) {
+          setLoading(true);
+          setError(undefined);
           try {
-            const parsed = JSON.parse(userLS);
-            if (parsed && parsed.id && parsed.username) {
-              console.log('Dispatching user data to Redux:', parsed);
-              dispatch(loginAction(parsed));
-            }
-          } catch (error) {
-            console.error('Failed to parse user data:', error);
+            const res = await serverHandler.get('/api/user/dashboard');
+            setDashboardData((res.data as any).data);
+          } catch (err) {
+            console.error('Dashboard fetch error:', err);
+            setError('Failed to load dashboard data');
+          } finally {
+            setLoading(false);
           }
-        } else {
-          console.log('No user data found in localStorage');
-        }
-
-        // Restore last selected dashboard view from localStorage
-        try {
-          const storedView = localStorage.getItem('dashboardCurrentView');
-          if (storedView) {
-            dispatch(setCurrentView(storedView));
-          }
-        } catch (error) {
-          console.error('Failed to restore dashboard view:', error);
-        }
-
-        // Fetch dashboard data
-        setLoading(true);
-        setError(undefined);
-        try {
-          const res = await serverHandler.get('/api/user/dashboard');
-          setDashboardData((res.data as any).data);
-        } catch (err) {
-          console.error('Dashboard fetch error:', err);
-          setError('Failed to load dashboard data');
-        } finally {
-          setLoading(false);
         }
 
         // Set admin options
@@ -139,22 +106,13 @@ export default function DashboardPage() {
       }
     };
 
-    initializeDashboard();
-  }, [dispatch, router]);
+    // Only initialize if user is available
+    if (user) {
+      initializeDashboard();
+    }
+  }, [user, dashboardData]);
 
   const renderCurrentView = () => {
-    // Check if user is authenticated
-    if (!user || !user.id) {
-      return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading user data...</p>
-          </div>
-        </div>
-      );
-    }
-
     switch (currentView) {
       case "dashboard":
         return (
@@ -208,19 +166,6 @@ export default function DashboardPage() {
       default:
         return <DashboardView />
     }
-  }
-
-  // Show loading state if user data is not yet loaded
-  if (!user || !user.id) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Loading Dashboard</h2>
-          <p className="text-gray-600">Please wait while we set up your dashboard...</p>
-        </div>
-      </div>
-    );
   }
 
   return (

@@ -1,8 +1,9 @@
 "use client"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useSelector } from "react-redux"
+import { useSelector, useDispatch } from "react-redux"
 import type { RootState } from "@/store/store"
+import { setCurrentView } from "@/store/slices/dashboardSlice"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
@@ -54,6 +55,7 @@ export default function AllFlowsPage() {
   const [sortBy, setSortBy] = useState('createdAt')
   const [sortOrder, setSortOrder] = useState('desc')
   const router = useRouter()
+  const dispatch = useDispatch()
   const { sidebarOpen } = useSelector((state: RootState) => state.ui)
 
   const fetchFlows = async () => {
@@ -185,7 +187,7 @@ export default function AllFlowsPage() {
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            <Button onClick={() => router.push('/flow-integration')} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={() => dispatch(setCurrentView('flows'))} className="bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
               Create New Flow
             </Button>

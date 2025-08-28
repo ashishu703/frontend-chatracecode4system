@@ -24,7 +24,7 @@ const menuItems = [
       { id: "broadcast-messages", label: "Broadcast", icon: "fas fa-paper-plane" }
     ]
   },
-  { id: "flows", label: "Flows", icon: "fas fa-project-diagram" },
+  // { id: "flows", label: "Flows", icon: "fas fa-project-diagram" },
   // { id: "templates", label: "Meta Templates", icon: "fas fa-file-alt" },
   // { id: "features", label: "Chat Widget", icon: "fas fa-comment-dots" },
   { id: "chatbot", label: "Auto Response", icon: "fas fa-robot" },

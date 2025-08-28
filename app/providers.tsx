@@ -3,7 +3,8 @@
 import type React from "react"
 
 import { Provider } from "react-redux"
-import { store } from "@/store/store"
+import { PersistGate } from 'redux-persist/integration/react'
+import { store, persistor } from "@/store/store"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SocketProvider } from "@/contexts/socket-context";
 
@@ -12,9 +13,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <Provider store={store}>
-        <SocketProvider>
-          {children}
-        </SocketProvider>
+        <PersistGate loading={null} persistor={persistor}>
+          <SocketProvider>
+            {children}
+          </SocketProvider>
+        </PersistGate>
       </Provider>
     </QueryClientProvider>
   );
