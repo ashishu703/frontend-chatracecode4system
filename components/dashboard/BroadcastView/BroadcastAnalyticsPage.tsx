@@ -33,10 +33,7 @@ interface DateRange {
 }
 
 export default function BroadcastAnalyticsPage() {
-  const [dateRange, setDateRange] = useState<DateRange>({
-    from: undefined,
-    to: undefined,
-  })
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined })
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -53,7 +50,7 @@ export default function BroadcastAnalyticsPage() {
   const dispatch = useDispatch()
 
   const { data: broadcastData, isLoading, error, refetch } = useQuery({
-    queryKey: ['broadcasts', currentPage, itemsPerPage, searchQuery, selectedFilters],
+    queryKey: ['broadcasts', currentPage, itemsPerPage, searchQuery, selectedFilters, dateRange],
     queryFn: () => fetchBroadcasts({
       page: currentPage,
       limit: itemsPerPage,
@@ -64,7 +61,6 @@ export default function BroadcastAnalyticsPage() {
       dateRange: dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined
     }),
     staleTime: 2 * 60 * 1000,
-    enabled: true,
   })
 
   useEffect(() => {
@@ -95,17 +91,14 @@ export default function BroadcastAnalyticsPage() {
       to: new Date(),
     })
     setIsCalendarOpen(false)
+    setTimeout(() => refetch(), 100)
   }
 
   const handleDateSelect = (range: any) => {
-    if (range) {
-      setDateRange({
-        from: range.from || undefined,
-        to: range.to || undefined,
-      })
-    } else {
-      setDateRange({ from: undefined, to: undefined })
-    }
+    setDateRange({
+      from: range?.from || undefined,
+      to: range?.to || undefined,
+    })
   }
 
   const formatDateRange = () => {
@@ -232,14 +225,39 @@ export default function BroadcastAnalyticsPage() {
                       </Button>
                     ))}
                   </div>
-                  <CalendarComponent
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={handleDateSelect}
-                    numberOfMonths={2}
-                  />
+                  <div className="p-2">
+                    <CalendarComponent
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={handleDateSelect}
+                      numberOfMonths={2}
+                    />
+                    <div className="flex items-center justify-end space-x-2 mt-4 pt-4 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDateRange({ from: undefined, to: undefined });
+                          setIsCalendarOpen(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => {
+                          setIsCalendarOpen(false);
+                          refetch();
+                        }}
+                        disabled={!dateRange.from || !dateRange.to}
+                      >
+                        Apply Filter
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>
@@ -289,15 +307,14 @@ export default function BroadcastAnalyticsPage() {
               </div>
               
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600 font-medium">Filters:</span>
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={() => setShowFilterModal(true)}
-                  className="border-gray-300 hover:border-green-500 hover:bg-green-50 transition-colors"
+                  className="bg-gradient-to-r from-white to-gray-50 border-2 border-gray-200 px-5 py-2.5 rounded-xl font-semibold text-gray-700 shadow-sm"
                 >
-                  <Filter className="w-4 h-4 mr-2" />
-                  Configure
+                  <Filter className="w-4 h-4 mr-2 text-green-600" />
+                  Filter
                 </Button>
               </div>
             </div>

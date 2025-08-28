@@ -104,6 +104,11 @@ export class AdminEndpoints {
   static readonly GET_USER_REPORTS = '/api/admin/reports/users';
   static readonly GET_REVENUE_REPORTS = '/api/admin/reports/revenue';
   static readonly GET_USAGE_REPORTS = '/api/admin/reports/usage';
+
+  // Social Login && meta platforms
+  static readonly GET_SOCIAL_LOGIN_DETAILS = '/api/web/get_web_public';
+  static readonly UPDATE_META_PLATFORMS = '/api/web/update_web_config';
+  static readonly UPDATE_SOCIAL_LOGIN='/api/admin/update_social_login';
   
   // Logs & Monitoring
   static readonly GET_SYSTEM_LOGS = '/api/admin/logs/system';
