@@ -121,7 +121,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       console.log('Admin socket connection allowed for testing');
     }
 
-    let wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4600"
+    let wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4500"
     // Convert WebSocket URL to HTTP URL for Socket.IO
     if (wsUrl.startsWith("ws://")) wsUrl = wsUrl.replace("ws://", "http://")
     if (wsUrl.startsWith("wss://")) wsUrl = wsUrl.replace("wss://", "https://")

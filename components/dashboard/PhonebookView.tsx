@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/hooks/use-toast"
 import { Filter, ChevronLeft, ChevronRight, UserPlus, Upload, Trash2, Search } from "lucide-react"
 import serverHandler from "@/utils/serverHandler"
+import { UserEndpoints } from "@/utils/api/Api-endpoints"
 
 export default function PhonebookView() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -20,6 +21,15 @@ export default function PhonebookView() {
   const [assignedTo, setAssignedTo] = useState<{ [key: string]: string }>({})
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    first_name: "",
+    last_name: "",
+    phone: "",
+    email: "",
+    gender: ""
+  })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
@@ -33,20 +43,20 @@ export default function PhonebookView() {
   } = useQuery({
     queryKey: ["contacts"],
     queryFn: async () => {
-      const res = await serverHandler.get("/api/phonebook/get_uid_contacts")
-      if (!res.data.success) throw new Error(res.data.msg || "Failed to fetch contacts")
-      return res.data.data
+      const res = await serverHandler.get(UserEndpoints.GET_UID_CONTACTS)
+      const data = res.data as any
+      if (!data.success) throw new Error(data.msg || "Failed to fetch contacts")
+      return data.data
     },
     gcTime: 5 * 60 * 1000,
   })
 
-  // Filter contacts based on active filter and search
   const filteredContacts = (contacts || []).filter((c: any) => {
-    // Apply search term
     if (searchTerm) {
       const matchesSearch =
         c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.phone?.includes(searchTerm) ||
+        c.mobile?.includes(searchTerm) ||
         c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (c.first_name && c.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (c.last_name && c.last_name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -54,7 +64,6 @@ export default function PhonebookView() {
       if (!matchesSearch) return false
     }
 
-    // Apply active filter
     if (activeFilter.type && activeFilter.value) {
       switch (activeFilter.type) {
         case "gender":
@@ -72,13 +81,11 @@ export default function PhonebookView() {
     return true
   })
 
-  // Pagination logic
   const totalPages = Math.ceil(filteredContacts.length / pageSize)
   const startIndex = (currentPage - 1) * pageSize
   const endIndex = startIndex + pageSize
   const paginatedContacts = filteredContacts.slice(startIndex, endIndex)
 
-  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1)
   }, [activeFilter, searchTerm])
@@ -90,9 +97,10 @@ export default function PhonebookView() {
   } = useQuery({
     queryKey: ["userInfo"],
     queryFn: async () => {
-      const res = await serverHandler.get("/api/user/get_me")
-      if (!res.data.success) throw new Error(res.data.msg || "Failed to fetch user info")
-      return res.data.data
+      const res = await serverHandler.get(UserEndpoints.GET_PROFILE)
+      const data = res.data as any
+      if (!data.success) throw new Error(data.msg || "Failed to fetch user info")
+      return data.data
     },
     gcTime: 5 * 60 * 1000,
   })
@@ -100,14 +108,21 @@ export default function PhonebookView() {
   // Add Contact
   const addContactMutation = useMutation({
     mutationFn: async (payload: any) => {
-      const res = await serverHandler.post("/api/phonebook/add_single_contact", payload)
-      return res.data
+      const res = await serverHandler.post(UserEndpoints.ADD_SINGLE_CONTACT, payload)
+      return res.data as any
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       if (data.success) {
         toast({ title: "Success", description: "Contact added", variant: "default" })
         queryClient.invalidateQueries({ queryKey: ["contacts"] })
         setAddContactModal(false)
+        setFormData({
+          first_name: "",
+          last_name: "",
+          phone: "",
+          email: "",
+          gender: ""
+        })
       } else {
         toast({ title: "Error", description: data.msg, variant: "destructive" })
       }
@@ -120,12 +135,12 @@ export default function PhonebookView() {
   // Import Contacts
   const importContactsMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const res = await serverHandler.post("/api/phonebook/import_contacts", formData, {
+      const res = await serverHandler.post(UserEndpoints.IMPORT_CONTACTS, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       })
-      return res.data
+      return res.data as any
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       if (data.success) {
         toast({ title: "Success", description: "Contacts imported", variant: "default" })
         queryClient.invalidateQueries({ queryKey: ["contacts"] })
@@ -146,10 +161,10 @@ export default function PhonebookView() {
   // Delete Contacts
   const deleteContactsMutation = useMutation({
     mutationFn: async (selected: string[]) => {
-      const res = await serverHandler.post("/api/phonebook/del_contacts", { selected })
-      return res.data
+      const res = await serverHandler.post(UserEndpoints.DELETE_CONTACTS, { selected })
+      return res.data as any
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       if (data.success) {
         toast({ title: "Success", description: "Contacts deleted", variant: "default" })
         queryClient.invalidateQueries({ queryKey: ["contacts"] })
@@ -163,20 +178,16 @@ export default function PhonebookView() {
     },
   })
 
-  // Handlers for forms
   function handleAddContact(e: any) {
     e.preventDefault()
-    const form = e.target
     
-    // Get phonebook_id from user info or create a default one
     const phonebook_id = userInfo?.phonebook_id || userInfo?.id || 1
     
     const payload = {
-      first_name: form.first_name.value.trim(),
-      last_name: form.last_name.value.trim(),
-      phone: form.phone.value.trim(),
-      email: form.email.value.trim() || null,
-      gender: form.gender.value,
+      mobile: formData.phone.trim(),
+      name: `${formData.first_name.trim()} ${formData.last_name.trim()}`.trim(),
+      email: formData.email.trim() || null,
+      gender: formData.gender,
       source: "Manual",
       phonebook_id: phonebook_id,
     }
@@ -190,11 +201,13 @@ export default function PhonebookView() {
 
     const formData = new FormData()
     formData.append("file", file)
+    formData.append("id", userInfo?.phonebook_id || userInfo?.id || 1)
+    formData.append("phonebook_name", userInfo?.phonebook_name || "Default Phonebook")
     importContactsMutation.mutate(formData)
   }
 
   function downloadCSVTemplate() {
-    const headers = ["first_name", "last_name", "phone", "email", "gender", "source"]
+    const headers = ["name", "mobile", "email", "gender", "source"]
     const csvContent = headers.join(",") + "\n"
     const blob = new Blob([csvContent], { type: "text/csv" })
     const url = window.URL.createObjectURL(blob)
@@ -227,10 +240,8 @@ export default function PhonebookView() {
     setSearchTerm("")
   }
 
-  // Get unique sources from contacts
-  const uniqueSources = [...new Set((contacts || []).map((c: any) => c.source).filter(Boolean))]
+  const uniqueSources = [...new Set((contacts || []).map((c: any) => (c as any).source).filter(Boolean))] as string[]
 
-  // UI
   return (
     <div className="space-y-6">
       <Card className="bg-white shadow-lg border-0">
@@ -423,6 +434,7 @@ export default function PhonebookView() {
                     />
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile</th>
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">Source</th>
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">Assigned To</th>
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">Last Seen Date</th>
@@ -431,7 +443,7 @@ export default function PhonebookView() {
               <tbody>
                 {contactsLoading ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-12">
+                    <td colSpan={6} className="text-center py-12">
                       <div className="flex items-center justify-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                         <span className="ml-3 text-gray-600">Loading contacts...</span>
@@ -440,14 +452,14 @@ export default function PhonebookView() {
                   </tr>
                 ) : contactsError ? (
                   <tr>
-                    <td colSpan={5} className="text-center text-red-500 py-12">
+                    <td colSpan={6} className="text-center text-red-500 py-12">
                       <i className="fas fa-exclamation-triangle text-2xl mb-2"></i>
                       <div>{contactsError.message}</div>
                     </td>
                   </tr>
                 ) : paginatedContacts.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-12">
+                    <td colSpan={6} className="text-center py-12">
                       <i className="fas fa-search text-gray-400 text-2xl mb-2"></i>
                       <div className="text-gray-600">No contacts found.</div>
                     </td>
@@ -481,11 +493,11 @@ export default function PhonebookView() {
                             ? `${contact.first_name} ${contact.last_name}`
                             : contact.name || "N/A"}
                         </div>
-                        {(contact.phone || contact.email) && (
-                          <div className="text-sm text-gray-500">
-                            {contact.phone} {contact.email && `• ${contact.email}`}
-                          </div>
-                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-sm text-gray-700">
+                          {contact.mobile || contact.phone || "N/A"}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
@@ -588,11 +600,35 @@ export default function PhonebookView() {
             animate={{ opacity: 1, scale: 1 }}
           >
             <h2 className="text-xl font-bold mb-4 text-gray-800">Add New Contact</h2>
-            <Input name="first_name" placeholder="First Name" required className="mb-3" />
-            <Input name="last_name" placeholder="Last Name" required className="mb-3" />
-            <Input name="phone" placeholder="Phone Number" required className="mb-3" />
-            <Input name="email" placeholder="Email (Optional)" type="email" className="mb-3" />
-            <Select name="gender" required>
+            <Input 
+              placeholder="First Name" 
+              required 
+              className="mb-3"
+              value={formData.first_name}
+              onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+            />
+            <Input 
+              placeholder="Last Name" 
+              required 
+              className="mb-3"
+              value={formData.last_name}
+              onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+            />
+            <Input 
+              placeholder="Phone Number" 
+              required 
+              className="mb-3"
+              value={formData.phone}
+              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+            />
+            <Input 
+              placeholder="Email (Optional)" 
+              type="email" 
+              className="mb-3"
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            />
+            <Select value={formData.gender} onValueChange={(value) => setFormData(prev => ({ ...prev, gender: value }))} required>
               <SelectTrigger className="mb-4">
                 <SelectValue placeholder="Select Gender" />
               </SelectTrigger>

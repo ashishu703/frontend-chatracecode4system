@@ -12,6 +12,12 @@ import {
   Video as VideoIcon,
   File,
   ChevronDown,
+  ArrowRight,
+  ExternalLink,
+  Phone,
+  ClipboardList,
+  MessageCircle,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,10 +38,9 @@ import {
   buildMetaTemplateBody,
 } from "@/utils/api/whatsapp-templates";
 import { mediaUploadAPI } from "@/utils/api/media-upload";
-import { UserEndpoints, WhatsAppEndpoints } from "@/utils/api/Api-endpoints";
 import { toast } from "@/hooks/use-toast";
 
-// Constants and Types - all inline for better maintainability
+// Constants
 const BROADCAST_TYPES = ["None", "Text", "Image", "Video", "Document"] as const;
 const BUTTON_TYPES = {
   QUICK_REPLY: ["Custom"],
@@ -69,7 +74,7 @@ interface ButtonConfig {
   type: string;
   text: string;
   url?: string;
-  phone?: string;
+  phone_number?: string;
 }
 
 interface VariableConfig {
@@ -101,12 +106,12 @@ const initialFormData: TemplateFormData = {
   category: "Marketing",
   language: "en",
   broadcastType: "Text",
-  headerText: "Our {{1}} is on!",
+  headerText: "",
   headerUrl: "",
   bodyText: "Shop now through {{1}} .",
   footerText: "",
-  buttons: [{ id: "1", type: "Custom", text: "Unsubscribe from Promos" }],
-  headerVariables: [{ name: "1", value: "Summer Sale" }],
+  buttons: [],
+  headerVariables: [],
   bodyVariables: [
     { name: "1", value: "the end of August" },
   ],
@@ -114,17 +119,7 @@ const initialFormData: TemplateFormData = {
   catalogId: "",
 };
 
-// Utility functions
-const escapeRegex = (string: string): string => {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-};
 
-const replaceVariables = (text: string, variables: VariableConfig[]): string => {
-  return variables.reduce((result, variable) => {
-    const regex = new RegExp(`\\{\\{${escapeRegex(variable.name)}\\}\\}`, "g");
-    return result.replace(regex, variable.value);
-  }, text);
-};
 
 export function BroadcastTemplateBuilder() {
   // State management
@@ -133,10 +128,11 @@ export function BroadcastTemplateBuilder() {
   const [showButtonDropdown, setShowButtonDropdown] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Computed values and utility functions - inline for better performance
+  // Computed values
   const computedValues = useMemo(() => {
     const buttonCounts = formData.buttons.reduce((acc, button) => {
       acc[button.type] = (acc[button.type] || 0) + 1;
@@ -153,20 +149,7 @@ export function BroadcastTemplateBuilder() {
     };
   }, [formData.buttons, formData.headerVariables.length, formData.bodyVariables.length]);
 
-  const utilityFunctions = useMemo(() => ({
-    getCharacterCount: (text: string, max: number) => `${String(text || "").length}/${max}`,
-    getButtonLimit: (type: string) => {
-      const limit = BUTTON_LIMITS[type as keyof typeof BUTTON_LIMITS];
-      return limit === Infinity ? "" : `${limit} button${limit > 1 ? "s" : ""} maximum`;
-    },
-    canAddButtonType: (type: string) => {
-      const limit = BUTTON_LIMITS[type as keyof typeof BUTTON_LIMITS];
-      if (limit === Infinity) return true;
-      const existingCount = computedValues.buttonCounts[type] || 0;
-      return existingCount < limit;
-    },
-    getMaxChars: (type: string) => type === "Custom" ? MAX_CUSTOM_CHARS : MAX_URL_CHARS,
-  }), [computedValues.buttonCounts]);
+
 
   const whatsAppPreviewProps = useMemo(() => ({
     headerType: formData.broadcastType,
@@ -188,18 +171,62 @@ export function BroadcastTemplateBuilder() {
     formData.buttons
   ]);
 
-  const validateForm = useCallback((): { isValid: boolean; errors: string[] } => {
-    const errors: string[] = [];
+  const validateForm = useCallback((): { isValid: boolean; errors: Record<string, string> } => {
+    const errors: Record<string, string> = {};
 
-    if (!formData.templateName.trim()) errors.push("Template name is required");
-    if (!formData.category.trim()) errors.push("Category is required");
-    if (!formData.bodyText.trim()) errors.push("Body text is required");
-    if (formData.templateName.length > 512) errors.push("Template name must be 512 characters or less");
-    if (formData.bodyText.length > 1024) errors.push("Body text must be 1024 characters or less");
-    if (formData.headerText.length > 60) errors.push("Header text must be 60 characters or less");
-    if (formData.footerText.length > 60) errors.push("Footer text must be 60 characters or less");
+    // Template name validation
+    if (!formData.templateName.trim()) {
+      errors.templateName = "Template name is required";
+    } else if (formData.templateName.length > 512) {
+      errors.templateName = "Template name must be 512 characters or less";
+    }
 
-    return { isValid: errors.length === 0, errors };
+    // Category validation
+    if (!formData.category.trim()) {
+      errors.category = "Category is required";
+    }
+
+    // Body text validation
+    if (!formData.bodyText.trim()) {
+      errors.bodyText = "Body text is required";
+    } else if (formData.bodyText.length > 1024) {
+      errors.bodyText = "Body text must be 1024 characters or less";
+    }
+
+    // Header text validation
+    if (formData.headerText.length > 60) {
+      errors.headerText = "Header text must be 60 characters or less";
+    }
+
+    // Footer text validation
+    if (formData.footerText.length > 60) {
+      errors.footerText = "Footer text must be 60 characters or less";
+    }
+
+    // Button validations
+    formData.buttons.forEach((button, index) => {
+      const buttonKey = `button_${index}`;
+      
+      if (!button.text.trim()) {
+        errors[`${buttonKey}_text`] = "Button text is required";
+      }
+      
+      if (button.type === "Call phone number") {
+        if (!button.phone_number || button.phone_number.length < 10) {
+          errors[`${buttonKey}_phone`] = "Phone number is required and must be at least 10 digits";
+        }
+      }
+      
+      if (button.type === "Copy offer code" && !button.url) {
+        errors[`${buttonKey}_url`] = "Offer code is required";
+      }
+      
+      if (button.type === "Visit website" && !button.url) {
+        errors[`${buttonKey}_url`] = "URL is required for Visit website button";
+      }
+    });
+
+    return { isValid: Object.keys(errors).length === 0, errors };
   }, [formData]);
 
   // Form update functions
@@ -208,8 +235,20 @@ export function BroadcastTemplateBuilder() {
   }, []);
 
   const updateFormField = useCallback((field: keyof TemplateFormData, value: any) => {
-      updateFormData({ [field]: value });
-  }, [updateFormData]);
+    // Special handling for template name - convert spaces to underscores and uppercase to lowercase
+    let processedValue = value;
+    if (field === "templateName") {
+      processedValue = value.replace(/\s+/g, '_').toLowerCase();
+    }
+    updateFormData({ [field]: processedValue });
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  }, [updateFormData, validationErrors]);
 
   const handleMediaUpload = useCallback(async (file: File) => {
     setIsUploadingMedia(true);
@@ -261,7 +300,6 @@ export function BroadcastTemplateBuilder() {
     value: string
   ) => {
     const currentVariables = [...formData[field]];
-    // Only allow updating the value, not the name (since names are numbered)
     if (property === "value") {
       currentVariables[index] = { ...currentVariables[index], [property]: value };
       updateFormField(field, currentVariables);
@@ -272,7 +310,15 @@ export function BroadcastTemplateBuilder() {
   const handleTextChange = useCallback((field: "headerText" | "bodyText", value: string) => {
     updateFormField(field, value);
     
-    // Extract only numbered variables like {{1}}, {{2}}, etc
+    // Clear validation error for this field
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+    
     const numberedVariables = value.match(/\{\{\d+\}\}/g) || [];
     const variableNumbers = numberedVariables.map(v => v.replace(/\{\{|\}\}/g, ''));
     
@@ -284,28 +330,24 @@ export function BroadcastTemplateBuilder() {
       return existing || { name: number, value: `Variable ${number}` };
     });
     
-    // Only update if variables actually changed
     if (JSON.stringify(newVariables) !== JSON.stringify(currentVariables)) {
       updateFormField(variableField, newVariables);
     }
-  }, [updateFormField, formData.headerVariables, formData.bodyVariables]);
+  }, [updateFormField, formData.headerVariables, formData.bodyVariables, validationErrors]);
 
   // Save template function
   const handleSaveTemplate = useCallback(async () => {
     const validation = validateForm();
+    
     if (!validation.isValid) {
-      toast({
-        title: "Validation Error",
-        description: validation.errors.join(", "),
-        variant: "warning",
-      });
+      setValidationErrors(validation.errors);
       return;
     }
 
     setIsSubmitting(true);
     
     const metaTemplateBody = buildMetaTemplateBody(
-      formData.templateName.trim(),
+      formData.templateName.trim().replace(/\s+/g, '_').toLowerCase(),
       formData.language,
       formData.category.trim(),
       formData.broadcastType,
@@ -327,6 +369,7 @@ export function BroadcastTemplateBuilder() {
         variant: "success",
       });
       setFormData(initialFormData);
+      setValidationErrors({});
     } else {
       toast({
         title: "Submission Failed",
@@ -344,22 +387,63 @@ export function BroadcastTemplateBuilder() {
         const newButton: ButtonConfig = {
           id: Date.now().toString(),
           type,
-          text: type === "Custom" ? "Custom button" : type,
+          text: type === "Custom" ? "Custom button" 
+                : type === "Copy offer code" ? "Copy Code" 
+                : type === "Call phone number" ? "Call"
+                : type,
         };
         updateFormData({ buttons: [...formData.buttons, newButton] });
         setShowButtonDropdown(false);
+        
+        // Clear button validation errors when adding new button
+        setValidationErrors(prev => {
+          const newErrors = { ...prev };
+          Object.keys(newErrors).forEach(key => {
+            if (key.startsWith('button_')) {
+              delete newErrors[key];
+            }
+          });
+          return newErrors;
+        });
       }
   }, [computedValues.canAddMoreButtons, formData.buttons, updateFormData]);
 
   const removeButton = useCallback((id: string) => {
+    const buttonIndex = formData.buttons.findIndex(b => b.id === id);
     updateFormData({ buttons: formData.buttons.filter(b => b.id !== id) });
+    
+    // Clear validation errors for the removed button
+    if (buttonIndex !== -1) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        Object.keys(newErrors).forEach(key => {
+          if (key.startsWith(`button_${buttonIndex}_`)) {
+            delete newErrors[key];
+          }
+        });
+        return newErrors;
+      });
+    }
   }, [formData.buttons, updateFormData]);
 
   const updateButton = useCallback((id: string, field: string, value: string) => {
       updateFormData({
-      buttons: formData.buttons.map(b => b.id === id ? { ...b, [field]: value } : b)
+        buttons: formData.buttons.map(b => b.id === id ? { ...b, [field]: value } : b)
       });
-  }, [formData.buttons, updateFormData]);
+      
+      // Clear validation error for this button field
+      const buttonIndex = formData.buttons.findIndex(b => b.id === id);
+      if (buttonIndex !== -1) {
+        const errorKey = `button_${buttonIndex}_${field === 'phone_number' ? 'phone' : field === 'url' ? 'url' : 'text'}`;
+        if (validationErrors[errorKey]) {
+          setValidationErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[errorKey];
+            return newErrors;
+          });
+        }
+      }
+  }, [formData.buttons, updateFormData, validationErrors]);
 
   // Text formatting functions
   const insertEmoji = useCallback((emoji: string) => {
@@ -421,14 +505,7 @@ export function BroadcastTemplateBuilder() {
     </div>
   ), [updateVariable]);
 
-  const renderVariablePreview = useCallback((text: string, variables: VariableConfig[]) => (
-    <div className="mt-3 p-2 bg-white rounded border">
-      <div className="text-xs text-gray-500 mb-1">Preview:</div>
-      <div className="text-sm text-gray-700">
-        {replaceVariables(text, variables)}
-      </div>
-    </div>
-  ), []);
+
 
   const renderHeaderInputs = useCallback(() => {
     if (formData.broadcastType === "Text") {
@@ -463,7 +540,7 @@ export function BroadcastTemplateBuilder() {
             <span className={`text-xs ${
               formData.headerText.length > 50 ? "text-yellow-600" : "text-gray-500"
             }`}>
-              {utilityFunctions.getCharacterCount(formData.headerText, 60)}
+              {`${formData.headerText.length}/60`}
             </span>
             {formData.headerText.length > 50 && (
               <span className="text-xs text-yellow-600">Getting long</span>
@@ -474,7 +551,6 @@ export function BroadcastTemplateBuilder() {
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">
               <div className="text-sm font-medium text-gray-700 mb-2">Header Variables:</div>
               {renderVariableInputs(formData.headerVariables, "headerVariables")}
-              {renderVariablePreview(formData.headerText, formData.headerVariables)}
             </div>
           )}
         </div>
@@ -525,7 +601,7 @@ export function BroadcastTemplateBuilder() {
     }
 
     return null;
-  }, [formData, computedValues, addVariable, handleTextChange, updateFormField, utilityFunctions, renderVariableInputs, renderVariablePreview]);
+  }, [formData, computedValues, addVariable, handleTextChange, updateFormField, renderVariableInputs]);
 
   const renderButtonRow = useCallback((button: ButtonConfig) => (
       <div key={button.id} className="flex items-center gap-4">
@@ -538,30 +614,77 @@ export function BroadcastTemplateBuilder() {
           </SelectTrigger>
           <SelectContent>
           {computedValues.buttonTypeOptions.map((type: string) => (
-            <SelectItem key={type} value={type}>{type}</SelectItem>
+              <SelectItem key={type} value={type}>
+              <div className="flex items-center gap-2">
+                {type === "Custom" && <ArrowRight className="w-4 h-4" />}
+                {type === "Visit website" && <ExternalLink className="w-4 h-4" />}
+                {type === "Call on WhatsApp" && <MessageCircle className="w-4 h-4" />}
+                {type === "Call phone number" && <Phone className="w-4 h-4" />}
+                {type === "Complete Flow" && <ClipboardList className="w-4 h-4" />}
+                {type === "Copy offer code" && <Copy className="w-4 h-4" />}
+                {type}
+              </div>
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Input
-          value={button.text}
-          onChange={(e) => updateButton(button.id, "text", e.target.value)}
-          placeholder="Button label"
-          className="w-48"
-        />
+        <div className="relative">
+          <Input
+            value={button.text}
+            onChange={(e) => updateButton(button.id, "text", e.target.value)}
+            placeholder="Button label"
+            className={`w-48 ${
+              validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_text`]
+                ? "border-red-300 focus:border-red-500"
+                : "border-gray-200"
+            }`}
+          />
+          {validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_text`] && (
+            <div className="text-xs text-red-500 mt-1">{validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_text`]}</div>
+          )}
+        </div>
 
         {button.type === "Call phone number" ? (
           <div className="relative flex-1">
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-600">+91</div>
-            <Input
-              value={button.phone || ""}
-            onChange={(e) => updateButton(button.id, "phone", e.target.value)}
-              placeholder="Phone number"
-              className="pl-12 pr-12"
-            />
-            <div className="absolute bottom-1 right-2 text-xs text-gray-500">
-            {utilityFunctions.getCharacterCount(button.phone || "", MAX_PHONE_CHARS)}
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-600 z-10">+91</div>
+              <Input
+                value={button.phone_number || ""}
+                onChange={(e) => updateButton(button.id, "phone_number", e.target.value)}
+                placeholder="Phone number"
+                className={`pl-12 pr-12 ${
+                  validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_phone`]
+                    ? "border-red-300 focus:border-red-500"
+                    : "border-gray-200"
+                }`}
+              />
+                          <div className="absolute bottom-1 right-2 text-xs text-gray-500">
+              {`${(button.phone_number || "").length}/${MAX_PHONE_CHARS}`}
             </div>
+            </div>
+            {validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_phone`] && (
+              <div className="text-xs text-red-500 mt-1">{validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_phone`]}</div>
+            )}
+          </div>
+        ) : button.type === "Copy offer code" ? (
+          <div className="relative flex-1">
+            <Input
+              value={button.url || ""}
+              onChange={(e) => updateButton(button.id, "url", e.target.value)}
+              placeholder="Enter offer code (e.g., SUMMER20)"
+              className={`pr-16 ${
+                validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_url`]
+                  ? "border-red-300 focus:border-red-500"
+                  : "border-gray-200"
+              }`}
+            />
+            <div className="absolute bottom-1 right-2 text-xs  text-gray-500">
+              {`${(button.url || "").length}/${MAX_URL_CHARS}`}
+            </div>
+            {validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_url`] && (
+              <div className="text-xs text-red-500 mt-1">{validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_url`]}</div>
+            )}
           </div>
         ) : button.type === "Custom" || button.type === "Call on WhatsApp" ? null : (
           <div className="relative flex-1">
@@ -570,12 +693,17 @@ export function BroadcastTemplateBuilder() {
               onChange={(e) => updateButton(button.id, "url", e.target.value)}
               placeholder="Enter URL"
               className={`pr-16 ${
-                button.type === "Visit website" ? "border-red-300" : ""
+                validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_url`]
+                  ? "border-red-300 focus:border-red-500"
+                  : "border-gray-200"
               }`}
             />
             <div className="absolute bottom-1 right-2 text-xs text-gray-500">
-            {utilityFunctions.getCharacterCount(button.url || "", utilityFunctions.getMaxChars(button.type))}
+              {`${(button.url || "").length}/${button.type === "Custom" ? MAX_CUSTOM_CHARS : MAX_URL_CHARS}`}
             </div>
+            {validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_url`] && (
+              <div className="text-xs text-red-500 mt-1">{validationErrors[`button_${formData.buttons.findIndex(b => b.id === button.id)}_url`]}</div>
+            )}
           </div>
         )}
 
@@ -588,38 +716,63 @@ export function BroadcastTemplateBuilder() {
           <Trash2 className="w-4 h-4" />
         </Button>
       </div>
-  ), [computedValues.buttonTypeOptions, updateButton, utilityFunctions, removeButton]);
+  ), [computedValues.buttonTypeOptions, updateButton, removeButton]);
 
   const renderButtonDropdown = useCallback(() => (
-      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
-        <div className="p-2">
+      <div className="bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto w-96">
+        <div className="p-3">
           <div className="mb-2">
-          <div className="font-semibold text-sm text-gray-900 px-2 py-1">Quick reply buttons</div>
+          <div className="font-medium text-sm text-gray-700 px-2 py-1 mb-1">Quick reply buttons</div>
             {BUTTON_TYPES.QUICK_REPLY.map((type) => (
               <button
                 key={type}
                 onClick={() => addButton(type)}
-                disabled={!utilityFunctions.canAddButtonType(type)}
-                className="w-full text-left px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={(() => {
+                  const limit = BUTTON_LIMITS[type as keyof typeof BUTTON_LIMITS];
+                  if (limit === Infinity) return false;
+                  const existingCount = computedValues.buttonCounts[type] || 0;
+                  return existingCount >= limit;
+                })()}
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 rounded-md transition-colors border border-transparent hover:border-gray-200"
               >
-                {type}
+                                  <div className="flex-shrink-0 w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                    <ArrowRight className="w-4 h-4 text-green-600" />
+                  </div>
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="font-medium text-gray-900">{type}</span>
+                </div>
               </button>
             ))}
           </div>
           <div className="border-t border-gray-200 my-2"></div>
           <div>
-          <div className="font-semibold text-sm text-gray-900 px-2 py-1">Call to action buttons</div>
+                      <div className="font-medium text-sm text-gray-700 px-2 py-1 mb-1">Call to action buttons</div>
             {BUTTON_TYPES.CALL_TO_ACTION.map((type) => (
               <button
                 key={type}
                 onClick={() => addButton(type)}
-                disabled={!utilityFunctions.canAddButtonType(type)}
-                className="w-full text-left px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={(() => {
+                  const limit = BUTTON_LIMITS[type as keyof typeof BUTTON_LIMITS];
+                  if (limit === Infinity) return false;
+                  const existingCount = computedValues.buttonCounts[type] || 0;
+                  return existingCount >= limit;
+                })()}
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 rounded-md transition-colors border border-transparent hover:border-gray-200"
               >
-                <div className="flex flex-col">
-                  <span>{type}</span>
+                <div className="flex-shrink-0 w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                  {type === "Visit website" && <ExternalLink className="w-4 h-4 text-blue-600" />}
+                  {type === "Call on WhatsApp" && <MessageCircle className="w-4 h-4 text-green-600" />}
+                  {type === "Call phone number" && <Phone className="w-4 h-4 text-red-600" />}
+                  {type === "Complete Flow" && <ClipboardList className="w-4 h-4 text-purple-600" />}
+                  {type === "Copy offer code" && <Copy className="w-4 h-4 text-orange-600" />}
+                </div>
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="font-medium text-gray-900">{type}</span>
                   <span className="text-xs text-gray-500">
-                    {utilityFunctions.getButtonLimit(type)}
+                    {(() => {
+                      const limit = BUTTON_LIMITS[type as keyof typeof BUTTON_LIMITS];
+                      return limit === Infinity ? "" : `${limit} button${limit > 1 ? "s" : ""} maximum`;
+                    })()}
                   </span>
                 </div>
               </button>
@@ -627,7 +780,7 @@ export function BroadcastTemplateBuilder() {
           </div>
         </div>
       </div>
-  ), [addButton, utilityFunctions]);
+  ), [addButton]);
 
   return (
     <div className="relative h-screen overflow-hidden bg-gray-50 pr-80">
@@ -642,7 +795,7 @@ export function BroadcastTemplateBuilder() {
               value={formData.templateName}
               onChange={(e) => updateFormField("templateName", e.target.value)}
               className={`w-full ${
-                !formData.templateName.trim()
+                validationErrors.templateName
                   ? "border-red-300 focus:border-red-500"
                   : formData.templateName.length > 450
                   ? "border-yellow-300 focus:border-yellow-500"
@@ -654,14 +807,14 @@ export function BroadcastTemplateBuilder() {
               <span className={`text-xs ${
                 formData.templateName.length > 450 ? "text-yellow-600" : "text-gray-500"
               }`}>
-                {utilityFunctions.getCharacterCount(formData.templateName, 512)}
+                {`${formData.templateName.length}/512`}
               </span>
-              {!formData.templateName.trim() && (
-                <span className="text-xs text-red-500">Template name is required</span>
+              {validationErrors.templateName && (
+                <span className="text-xs text-red-500">{validationErrors.templateName}</span>
               )}
               {formData.templateName.length > 450 && formData.templateName.trim() && (
-                  <span className="text-xs text-yellow-600">Getting long</span>
-                )}
+                <span className="text-xs text-yellow-600">Getting long</span>
+              )}
             </div>
           </div>
 
@@ -673,7 +826,7 @@ export function BroadcastTemplateBuilder() {
               value={formData.category}
               onValueChange={(value) => updateFormField("category", value)}
             >
-              <SelectTrigger className={!formData.category.trim() ? "border-red-300 focus:border-red-500" : ""}>
+              <SelectTrigger className={validationErrors.category ? "border-red-300 focus:border-red-500" : ""}>
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
@@ -682,8 +835,8 @@ export function BroadcastTemplateBuilder() {
                 {/* <SelectItem value="Authentication">Authentication</SelectItem> */}
               </SelectContent>
             </Select>
-            {!formData.category.trim() && (
-              <span className="text-xs text-red-500 mt-1">Category is required</span>
+            {validationErrors.category && (
+              <span className="text-xs text-red-500 mt-1">{validationErrors.category}</span>
             )}
           </div>
 
@@ -705,8 +858,8 @@ export function BroadcastTemplateBuilder() {
           </div>
         </div>
 
-        {/* Catalog ID Section */}
-        <div className="mb-8 flex items-center gap-4">
+        {/* Catalog ID Section - Hidden for now */}
+        {/* <div className="mb-8 flex items-center gap-4">
           <label className="flex items-center space-x-2">
             <input
               type="checkbox"
@@ -724,7 +877,7 @@ export function BroadcastTemplateBuilder() {
               className="w-48"
             />
           )}
-        </div>
+        </div> */}
 
         {/* Broadcast Header Section */}
         <div className="mb-8">
@@ -768,27 +921,27 @@ export function BroadcastTemplateBuilder() {
             </Button>
           </div>
           <p className="text-sm text-gray-600 mb-4">
-            Make your messages personal using variables like <span className="text-green-600">{"{{name}}"}</span>,{" "}
-            <span className="text-green-600">{"{{code}}"}</span> etc. Variables will be automatically numbered and sent to Meta API!
+            Make your messages personal using variables like <span className="text-green-600">{"{{1}}"}</span>,{" "}
+            <span className="text-green-600">{"{{2}}"}</span> etc. Variables will be automatically numbered and sent to Meta API!
           </p>
 
-          <div className="flex items-center gap-2 mb-2 p-2 border-b border-gray-200">
-            <Button variant="ghost" size="sm" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
-              <Smile className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => wrapSelection("*", "*")}>
-              <Bold className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => wrapSelection("_", "_")}>
-              <Italic className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => wrapSelection("~", "~")}>
-              <Strikethrough className="w-4 h-4" />
-            </Button>
-            <div className="ml-auto text-sm text-gray-500">
-              {utilityFunctions.getCharacterCount(formData.bodyText, MAX_BODY_CHARS)}
-            </div>
-          </div>
+                        <div className="flex items-center gap-2 mb-2 p-2 border-b border-gray-200">
+                <Button variant="ghost" size="sm" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
+                  <Smile className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => wrapSelection("*", "*")}>
+                  <Bold className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => wrapSelection("_", "_")}>
+                  <Italic className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => wrapSelection("~", "~")}>
+                  <Strikethrough className="w-4 h-4" />
+                </Button>
+                <div className="ml-auto text-sm text-gray-500">
+                  {`${formData.bodyText.length}/${MAX_BODY_CHARS}`}
+                </div>
+              </div>
 
           {showEmojiPicker && (
             <div className="absolute z-10">
@@ -808,7 +961,7 @@ export function BroadcastTemplateBuilder() {
             value={formData.bodyText}
             onChange={(e) => handleTextChange("bodyText", e.target.value)}
             className={`min-h-[120px] resize-none border p-3 ${
-              !formData.bodyText.trim()
+              validationErrors.bodyText
                 ? "border-red-300 focus:border-red-500"
                 : formData.bodyText.length > 900
                 ? "border-yellow-300 focus:border-yellow-500"
@@ -818,13 +971,13 @@ export function BroadcastTemplateBuilder() {
           />
 
           <div className="flex justify-between items-center mt-1">
-            <span className={`text-xs ${
-              formData.bodyText.length > 900 ? "text-yellow-600" : "text-gray-500"
-            }`}>
-              {utilityFunctions.getCharacterCount(formData.bodyText, MAX_BODY_CHARS)}
-            </span>
-            {!formData.bodyText.trim() && (
-              <span className="text-xs text-red-500">Body text is required</span>
+                          <span className={`text-xs ${
+                formData.bodyText.length > 900 ? "text-yellow-600" : "text-gray-500"
+              }`}>
+                {`${formData.bodyText.length}/${MAX_BODY_CHARS}`}
+              </span>
+            {validationErrors.bodyText && (
+              <span className="text-xs text-red-500">{validationErrors.bodyText}</span>
             )}
             {formData.bodyText.length > 900 && formData.bodyText.trim() && (
               <span className="text-xs text-yellow-600">Getting long</span>
@@ -835,7 +988,6 @@ export function BroadcastTemplateBuilder() {
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">
               <div className="text-sm font-medium text-gray-700 mb-2">Body Variables:</div>
               {renderVariableInputs(formData.bodyVariables, "bodyVariables")}
-              {renderVariablePreview(formData.bodyText, formData.bodyVariables)}
             </div>
           )}
         </div>
@@ -865,7 +1017,7 @@ export function BroadcastTemplateBuilder() {
               <span className={`text-xs ${
                 formData.footerText.length > 50 ? "text-yellow-600" : "text-gray-500"
               }`}>
-                {utilityFunctions.getCharacterCount(formData.footerText, 60)}
+                {`${formData.footerText.length}/60`}
               </span>
               {formData.footerText.length > 50 && (
                 <span className="text-xs text-yellow-600">Getting long</span>
@@ -892,7 +1044,7 @@ export function BroadcastTemplateBuilder() {
                 <Button
                   variant="outline"
                   onClick={() => setShowButtonDropdown(!showButtonDropdown)}
-                  className="border-dashed border-gray-300 text-gray-600 hover:border-gray-400 bg-transparent flex items-center justify-between px-4 py-2"
+                  className="border-dashed border-gray-300 text-gray-600 hover:border-gray-400 bg-transparent flex items-center justify-between px-4 py-2 w-48"
                 >
                   <div className="flex items-center">
                     <Plus className="w-4 h-4 mr-2" />
@@ -900,7 +1052,11 @@ export function BroadcastTemplateBuilder() {
                   </div>
                   <ChevronDown className="w-4 h-4" />
                 </Button>
-                {showButtonDropdown && renderButtonDropdown()}
+                {showButtonDropdown && (
+                  <div className="absolute bottom-full left-0 mb-2 w-48 z-20">
+                    {renderButtonDropdown()}
+                  </div>
+                )}
               </div>
             )}
 

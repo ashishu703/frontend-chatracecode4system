@@ -12,15 +12,44 @@ interface AuthState {
   connectedPlatforms: string[]
 }
 
-const initialState: AuthState = {
-  user: null,
-  isAuthenticated: false,
-  connectedPlatforms: [],
+// Get initial state from localStorage if available
+const getInitialState = (): AuthState => {
+  if (typeof window === 'undefined') {
+    return {
+      user: null,
+      isAuthenticated: false,
+      connectedPlatforms: [],
+    }
+  }
+
+  try {
+    const userLS = localStorage.getItem('user')
+    const token = localStorage.getItem('serviceToken')
+    
+    if (userLS && token) {
+      const user = JSON.parse(userLS)
+      if (user && user.id && user.username) {
+        return {
+          user,
+          isAuthenticated: true,
+          connectedPlatforms: [],
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to restore auth state:', error)
+  }
+
+  return {
+    user: null,
+    isAuthenticated: false,
+    connectedPlatforms: [],
+  }
 }
 
 const authSlice = createSlice({
   name: "auth",
-  initialState,
+  initialState: getInitialState(),
   reducers: {
     login: (state, action: PayloadAction<User>) => {
       state.user = action.payload

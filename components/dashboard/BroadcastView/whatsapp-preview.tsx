@@ -158,9 +158,7 @@ export function WhatsAppPreview({
                   >
                     {getButtonIcon(button.type)}
                     <span className="text-gray-700 font-medium text-xs">
-                      {button.type === "Call phone number"
-                        ? String(button.phone || button.text || "Call")
-                        : String(button.text || "Button")}
+                      {String(button.text || "Button")}
                     </span>
                   </div>
                 ))}

@@ -66,11 +66,11 @@ export default function GeneralSettings() {
             {/* Fallback Flow */}
             <div className="space-y-2">
               <Label htmlFor="fallback-flow" className="text-sm font-medium">
-                Fallback Flow
+                Default Flow
               </Label>
               <Select value={selectedFallback} onValueChange={setSelectedFallback}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select fallback flow" />
+                  <SelectValue placeholder="Select default flow" />
                 </SelectTrigger>
                 <SelectContent>
                   {fallbackFlows.map((flow) => (

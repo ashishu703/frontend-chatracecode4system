@@ -11,7 +11,7 @@ interface User {
 
 interface AuthReturn {
   login: (email: string, password: string) => Promise<any>;
-  register: (email: string, name: string, password: string, mobile_with_country_code: string, acceptPolicy: boolean) => Promise<any>;
+  register: (email: string, name: string, password: string, mobile_with_country_code: string, acceptPolicy: boolean, plan_id: string) => Promise<any>;
   loginWithGoogle: (token: string) => Promise<any>;
   loginWithFacebook: (token: string, userId: string, email: string, name: string) => Promise<any>;
   adminLogin: (email: string, password: string) => Promise<any>;
@@ -47,7 +47,7 @@ export function useAuth(): AuthReturn {
     }
   };
 
-  const register = async (email: string, name: string, password: string, mobile_with_country_code: string, acceptPolicy: boolean | number) => {
+  const register = async (email: string, name: string, password: string, mobile_with_country_code: string, acceptPolicy: boolean | number, plan_id: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -56,7 +56,8 @@ export function useAuth(): AuthReturn {
         name,
         password,
         mobile_with_country_code,
-        acceptPolicy
+        acceptPolicy,
+        plan_id
       });
       // Optionally store in localStorage for demo purposes
       window.localStorage.setItem('users', JSON.stringify(response.data));

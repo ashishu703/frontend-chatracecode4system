@@ -21,7 +21,6 @@ import { FlowBuilder } from "@/components/flow-integration/flow-builder"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { login as loginAction } from '@/store/slices/authSlice';
 import serverHandler from '@/utils/serverHandler';
 import AllFlowsPage from "@/components/dashboard/allflows"
 import AllTemplatesPage from "@/components/flow-integration/alltemplates"
@@ -55,64 +54,63 @@ export default function DashboardPage() {
   const { logout } = useAuth();
   const { sidebarOpen } = useSelector((state: RootState) => state.ui);
   const { currentView } = useSelector((state: RootState) => state.dashboard);
-  const user = useSelector((state: RootState) => state.auth.user);
+  const { user } = useSelector((state: RootState) => state.auth);
   const [showBackAsAdmin, setShowBackAsAdmin] = useState(false);
   const [showLoginAsAdmin, setShowLoginAsAdmin] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    // Restore last selected dashboard view from localStorage on mount
-    try {
-      const storedView = localStorage.getItem('dashboardCurrentView');
-      if (storedView) {
-        dispatch(setCurrentView(storedView));
-      }
-    } catch {}
-
-    const fetchDashboard = async () => {
-      setLoading(true);
-      setError(undefined);
+    const initializeDashboard = async () => {
       try {
-        const res = await serverHandler.get('/api/user/dashboard');
-        setDashboardData((res.data as any).data);
-      } catch (err) {
-        setError('Failed to load dashboard data');
-      } finally {
+        // Fetch dashboard data only if not already loaded
+        if (!dashboardData) {
+          setLoading(true);
+          setError(undefined);
+          try {
+            const res = await serverHandler.get('/api/user/dashboard');
+            setDashboardData((res.data as any).data);
+          } catch (err) {
+            console.error('Dashboard fetch error:', err);
+            setError('Failed to load dashboard data');
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        // Set admin options
+        const hasAdminToken = !!localStorage.getItem('adminToken');
+        setShowBackAsAdmin(hasAdminToken);
+        setShowLoginAsAdmin(!!(user && user.username && localStorage.getItem('role') === 'user' && hasAdminToken));
+
+        // Handle OAuth tokens in URL
+        try {
+          const url = new URL(window.location.href);
+          const oauthToken = url.searchParams.get('token');
+          if (oauthToken) {
+            localStorage.setItem('serviceToken', oauthToken);
+            localStorage.setItem('role', 'user');
+            url.searchParams.delete('token');
+            window.history.replaceState({}, '', url.toString());
+          }
+        } catch (error) {
+          console.error('OAuth token handling error:', error);
+        }
+
+      } catch (error) {
+        console.error('Dashboard initialization error:', error);
+        setError('Failed to initialize dashboard');
         setLoading(false);
       }
     };
-    fetchDashboard();
-    // Only show admin options if adminToken exists (i.e., user was auto-logged in from admin panel)
-    const hasAdminToken = !!localStorage.getItem('adminToken');
-    setShowBackAsAdmin(hasAdminToken);
-    setShowLoginAsAdmin(!!(user && user.username && localStorage.getItem('role') === 'user' && hasAdminToken));
-    // Always restore user from localStorage on mount
-    const userLS = localStorage.getItem('user');
-    if (userLS) {
-      try {
-        const parsed = JSON.parse(userLS);
-        if (parsed && parsed.id && parsed.username) {
-          dispatch(loginAction(parsed));
-        }
-      } catch {}
+
+    // Only initialize if user is available
+    if (user) {
+      initializeDashboard();
     }
-    // If a token is present in URL (from OAuth), persist it and reload user
-    try {
-      const url = new URL(window.location.href);
-      const oauthToken = url.searchParams.get('token');
-      if (oauthToken) {
-        localStorage.setItem('serviceToken', oauthToken);
-        // optionally keep role as user
-        localStorage.setItem('role', 'user');
-        // Clean the URL param
-        url.searchParams.delete('token');
-        window.history.replaceState({}, '', url.toString());
-      }
-    } catch {}
-  }, [dispatch, user]);
+  }, [user, dashboardData]);
 
   const renderCurrentView = () => {
     switch (currentView) {
