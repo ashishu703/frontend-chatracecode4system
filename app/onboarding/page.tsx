@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import { useDispatch, useSelector } from "react-redux"
 import { connectPlatform } from "@/store/slices/authSlice"
 import { Check, ArrowRight, AlertCircle, CheckCircle } from "lucide-react"
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 import { initFacebookLogin } from "@/lib/facebook"
 
 const platforms = [

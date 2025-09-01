@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation"
 import { useDispatch } from "react-redux"
 import { login } from "@/store/slices/authSlice"
 import { useAuth } from '@/hooks/useAuth';
-import serverHandler from "@/utils/serverHandler";
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
 import { useToast } from '@/hooks/use-toast';
 
 function uuidv4() {

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useToast } from "@/components/ui/use-toast"
 import { useNodeContext } from "../node-context"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 
 const initializeOptions = (optionsData: any[]) => {
   if (!optionsData || !Array.isArray(optionsData) || optionsData.length === 0) {

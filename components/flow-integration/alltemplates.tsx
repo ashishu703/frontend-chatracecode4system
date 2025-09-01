@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import serverHandler from '@/utils/serverHandler'
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler'
 import { useToast } from '@/hooks/use-toast'
 
 interface Template {

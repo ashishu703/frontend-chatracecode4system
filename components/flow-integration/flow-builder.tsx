@@ -27,7 +27,7 @@ import type { FlowData, NodeData, FlowTemplate } from "@/types/flow-integration/
 import { ChevronRight, ChevronLeft, Eye, Plus, ZoomIn, ZoomOut, Layout, Save } from "lucide-react"
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import serverHandler from '@/utils/serverHandler';
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import { Button } from "./ui/button";
 import type { Node as XYNode } from '@xyflow/react';
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";

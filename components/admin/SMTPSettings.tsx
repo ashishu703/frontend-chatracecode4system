@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Mail, Save, TestTube } from "lucide-react"
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 
 export default function SMTPSettings() {
   const { toast } = useToast()

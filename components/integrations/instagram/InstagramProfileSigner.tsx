@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 
 type InstagramAccount = {
   social_account_id: string

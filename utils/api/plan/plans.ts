@@ -1,4 +1,4 @@
-import serverHandler from '../serverHandler';
+import serverHandler from '../enpointsUtils/serverHandler';
 
 // Plan interface matching the database schema
 export interface Plan {

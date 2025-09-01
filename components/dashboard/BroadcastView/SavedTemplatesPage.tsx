@@ -9,7 +9,6 @@ import {
   CheckCircle, 
   Clock, 
   XCircle, 
-  Edit, 
   Search,
   ChevronDown,
   Filter,
@@ -18,26 +17,15 @@ import {
   FileText,
   X,
   Trash2,
-  MoreHorizontal,
-  Eye
+  MoreHorizontal
 } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { setCurrentView } from "@/store/slices/dashboardSlice"
-import { whatsappTemplatesAPI } from "@/utils/api/whatsapp-templates"
-import { formatDateToIST } from "@/utils/date.utils"
+import { whatsappTemplatesAPI } from "@/utils/api/broadcast/whatsapp-templates"
+import { formatDateToIST } from "@/utils/api/utility/date.utils"
 import { useToast } from "@/components/ui/use-toast"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-
-// Types
-interface Template {
-  id: string
-  name: string
-  category: string
-  status: TemplateStatus
-  language: string
-  lastUpdated: string
-  body: string
-}
+import { TempleteItem } from "@/types/broadcast/broadCastResponse"
 
 type TemplateStatus = 'APPROVED' | 'PENDING' | 'REJECTED' | 'DRAFT'
 
@@ -50,8 +38,8 @@ interface StatusFilter {
 type SortOption = 'latest' | 'oldest' | 'name'
 
 interface SavedTemplatesPageProps {
-  savedTemplates?: Template[]
-  setCurrentTemplate?: (template: Template) => void
+  savedTemplates?: TempleteItem[]
+  setCurrentTemplate?: (template: TempleteItem) => void
   setCurrentPage?: (page: "home" | "create-template") => void
 }
 
@@ -107,13 +95,12 @@ export default function SavedTemplatesPage({
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [statusFilters, setStatusFilters] = useState<StatusFilter[]>(STATUS_OPTIONS)
   const [currentPage, setCurrentPageState] = useState(1)
-  const [hoveredAction, setHoveredAction] = useState<{ id: string, action: string } | null>(null)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
-  const [templates, setTemplates] = useState<Template[]>([])
+  const [templates, setTemplates] = useState<TempleteItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null)
+  const [templateToDelete, setTemplateToDelete] = useState<TempleteItem | null>(null)
   const [deletingTemplate, setDeletingTemplate] = useState<string | null>(null)
 
   // Memoized values
@@ -155,19 +142,20 @@ export default function SavedTemplatesPage({
       
       const response = await whatsappTemplatesAPI.getMyMetaTemplates()
       
-      if (response.success && response.data) {
-        const transformedTemplates: Template[] = response.data.map((template: any) => ({
+      if (response) {
+        const transformedTemplates: TempleteItem[] = response.data.map((template: any) => ({
           id: template.id || template.template_id || '',
           name: template.name || template.template_name || '',
           category: template.category || 'marketing',
           status: (template.status || 'PENDING') as TemplateStatus,
           language: template.language || 'en',
           lastUpdated: template.updated_at || template.created_at || new Date().toISOString(),
-          body: template.body || template.message || ''
+          parameter_format: template.parameter_format || 'TEXT',
+          components: template.components || []
         }))
         setTemplates(transformedTemplates)
       } else {
-        setError(response.message || 'Failed to fetch templates')
+        setError('Failed to fetch templates')
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch templates')
@@ -215,12 +203,7 @@ export default function SavedTemplatesPage({
     setCurrentPageState(page)
   }, [])
 
-  const handleEditTemplate = useCallback((template: Template) => {
-    setCurrentTemplate?.(template)
-    setCurrentPage?.("create-template")
-  }, [setCurrentTemplate, setCurrentPage])
-
-  const handleDeleteTemplate = useCallback((template: Template) => {
+  const handleDeleteTemplate = useCallback((template: TempleteItem) => {
     setTemplateToDelete(template)
     setShowDeleteConfirm(true)
   }, [])
@@ -258,11 +241,6 @@ export default function SavedTemplatesPage({
     }
   }, [templateToDelete, fetchTemplates, toast])
 
-
-  const handleViewTemplate = useCallback((template: Template) => {
-    alert(`Template: ${template.name}\nCategory: ${template.category}\nStatus: ${template.status}\nBody: ${template.body}`)
-  }, [])
-
   const toggleDropdown = useCallback((templateId: string) => {
     setOpenDropdown(prev => prev === templateId ? null : templateId)
   }, [])
@@ -286,7 +264,7 @@ export default function SavedTemplatesPage({
 
 
 
-  const renderTableRow = useCallback((template: Template, index: number) => (
+  const renderTableRow = useCallback((template: TempleteItem, index: number) => (
     <tr key={template.id} className={`border-b border-gray-100 hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
       <td className="py-3 px-4">
         <span className="text-blue-600 font-medium cursor-pointer hover:underline">
@@ -297,7 +275,7 @@ export default function SavedTemplatesPage({
         {getCategoryLabel(template.category)}
       </td>
       <td className="py-3 px-4">
-        {getStatusBadge(template.status)}
+        {getStatusBadge(template.status as TemplateStatus)}
       </td>
       <td className="py-3 px-4 text-gray-700">{template.language}</td>
       <td className="py-3 px-4 text-gray-700">{formatDateToIST(template.lastUpdated)}</td>
@@ -315,42 +293,22 @@ export default function SavedTemplatesPage({
           {openDropdown === template.id && (
             <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px]">
               <button
-                className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-lg flex items-center gap-2 text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => {
-                  handleViewTemplate(template)
+                  handleDeleteTemplate(template)
                   setOpenDropdown(null)
                 }}
+                disabled={deletingTemplate === template.id}
               >
-                <Eye className="w-4 h-4" />
-                View
+                <Trash2 className="w-4 h-4" />
+                {deletingTemplate === template.id ? 'Deleting...' : 'Delete'}
               </button>
-              <button
-                className="w-full text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2"
-                onClick={() => {
-                  handleEditTemplate(template)
-                  setOpenDropdown(null)
-                }}
-              >
-                <Edit className="w-4 h-4" />
-                Edit
-              </button>
-                             <button
-                 className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-b-lg flex items-center gap-2 text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                 onClick={() => {
-                   handleDeleteTemplate(template)
-                   setOpenDropdown(null)
-                 }}
-                 disabled={deletingTemplate === template.id}
-               >
-                 <Trash2 className="w-4 h-4" />
-                 {deletingTemplate === template.id ? 'Deleting...' : 'Delete'}
-               </button>
             </div>
           )}
         </div>
       </td>
     </tr>
-  ), [getCategoryLabel, getStatusBadge, handleEditTemplate, handleDeleteTemplate, handleViewTemplate, toggleDropdown, openDropdown])
+  ), [getCategoryLabel, getStatusBadge, handleDeleteTemplate, toggleDropdown, openDropdown])
 
   const renderPagination = useCallback(() => (
     <div className="flex items-center gap-2">
@@ -389,10 +347,68 @@ export default function SavedTemplatesPage({
   // Loading state
   if (loading) {
     return (
-      <div className="bg-gray-50 flex items-center justify-center py-16">
-        <div className="flex flex-col items-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mb-4"></div>
-          <p className="text-gray-600 text-lg font-medium">Loading Templates...</p>
+      <div className="bg-gray-50">
+        <div className="max-w-7xl mx-auto p-4">
+          <div className="bg-white rounded-lg shadow-sm">
+            {/* Header Skeleton */}
+            <div className="border-b border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="space-y-2">
+                  <div className="h-8 w-64 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 w-96 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <div className="h-10 w-48 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-64 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-8 w-20 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+
+                         {/* Table Skeleton */}
+             <div className="overflow-x-auto">
+               <table className="w-full">
+                 <thead className="bg-gray-50 border-b border-gray-200">
+                   <tr>
+                     <th className="text-left py-3 px-4 font-medium text-gray-700">Template Name</th>
+                     <th className="text-left py-3 px-4 font-medium text-gray-700">Category</th>
+                     <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                     <th className="text-left py-3 px-4 font-medium text-gray-700">Language</th>
+                     <th className="text-left py-3 px-4 font-medium text-gray-700">Last Updated</th>
+                     <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+                   {Array.from({ length: 5 }).map((_, index) => (
+                     <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                       <td className="py-3 px-4">
+                         <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+                       </td>
+                       <td className="py-3 px-4">
+                         <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                       </td>
+                       <td className="py-3 px-4">
+                         <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+                       </td>
+                       <td className="py-3 px-4">
+                         <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
+                       </td>
+                       <td className="py-3 px-4">
+                         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                       </td>
+                       <td className="py-3 px-4">
+                         <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+                       </td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             </div>
+          </div>
         </div>
       </div>
     )

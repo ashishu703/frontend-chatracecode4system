@@ -1,415 +1,515 @@
-"use client"
-import { useState, useEffect, useRef } from "react"
-import { motion } from "framer-motion"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useToast } from "@/hooks/use-toast"
-import { Filter, ChevronLeft, ChevronRight, UserPlus, Upload, Trash2, Search } from "lucide-react"
-import serverHandler from "@/utils/serverHandler"
-import { UserEndpoints } from "@/utils/api/Api-endpoints"
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import {
+  UserPlus,
+  Upload,
+  Trash2,
+  Search,
+  Plus,
+  X,
+  FolderOpen,
+  Info,
+  MoreVertical,
+  Check,
+} from "lucide-react";
+import { Contact } from "@/utils/api/contacts/Contact";
 
 export default function PhonebookView() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [addContactModal, setAddContactModal] = useState(false)
-  const [importModal, setImportModal] = useState(false)
-  const [selectedContacts, setSelectedContacts] = useState<string[]>([])
-  const [showFilters, setShowFilters] = useState(false)
-  const [activeFilter, setActiveFilter] = useState<{ type: string; value: string }>({ type: "", value: "" })
-  const [assignedTo, setAssignedTo] = useState<{ [key: string]: string }>({})
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  
-  // Form state
-  const [formData, setFormData] = useState({
+  // Core state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPhonebook, setSelectedPhonebook] = useState<string>("all");
+  const [showAllTags, setShowAllTags] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [phonebookPage, setPhonebookPage] = useState(1);
+  const [phonebookPageSize] = useState(10);
+  const [allPhonebooks, setAllPhonebooks] = useState<any[]>([]);
+  const [assignedTo, setAssignedTo] = useState<{ [key: string]: string }>({});
+  const [addContactModal, setAddContactModal] = useState(false);
+  const [importModal, setImportModal] = useState(false);
+  const [addPhonebookModal, setAddPhonebookModal] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [contactForm, setContactForm] = useState({
     first_name: "",
     last_name: "",
     phone: "",
     email: "",
-    gender: ""
-  })
+    gender: "",
+  });
+  const [phonebookForm, setPhonebookForm] = useState({ name: "" });
+  const [tagSearchTerm, setTagSearchTerm] = useState("");
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // Fetch all contacts
-  const {
-    data: contacts,
-    isLoading: contactsLoading,
-    error: contactsError,
-  } = useQuery({
+  // API queries
+  const { data: contactsResponse, isLoading: contactsLoading } = useQuery({
     queryKey: ["contacts"],
-    queryFn: async () => {
-      const res = await serverHandler.get(UserEndpoints.GET_UID_CONTACTS)
-      const data = res.data as any
-      if (!data.success) throw new Error(data.msg || "Failed to fetch contacts")
-      return data.data
-    },
-    gcTime: 5 * 60 * 1000,
-  })
+    queryFn: Contact.getContacts,
+  });
 
-  const filteredContacts = (contacts || []).filter((c: any) => {
-    if (searchTerm) {
-      const matchesSearch =
-        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.phone?.includes(searchTerm) ||
-        c.mobile?.includes(searchTerm) ||
-        c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.first_name && c.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (c.last_name && c.last_name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const { data: phonebooksResponse, isLoading: phonebooksLoading } = useQuery({
+    queryKey: ["phonebooks", phonebookPage],
+    queryFn: () => Contact.getPhonebooks(phonebookPage, phonebookPageSize),
+  });
 
-      if (!matchesSearch) return false
+  const { data: userInfoResponse } = useQuery({
+    queryKey: ["userInfo"],
+    queryFn: Contact.getUserInfo,
+  });
+
+  // Extract data
+  const contacts = contactsResponse?.data || [];
+  const phonebooks = phonebooksResponse?.data || [];
+  const phonebookPagination = phonebooksResponse?.pagination;
+  const userInfo = userInfoResponse?.data;
+
+  // Initialize allPhonebooks
+  useEffect(() => {
+    if (phonebooks.length > 0 && phonebookPage === 1) {
+      setAllPhonebooks(phonebooks);
     }
+  }, [phonebooks, phonebookPage]);
 
-    if (activeFilter.type && activeFilter.value) {
-      switch (activeFilter.type) {
-        case "gender":
-          return c.gender === activeFilter.value
-        case "source":
-          return c.source === activeFilter.value
-        case "name":
-          const fullName = `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.name || '';
-          return fullName.toLowerCase().includes(activeFilter.value.toLowerCase())
-        default:
-          return true
+  // Click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showTagDropdown && !target.closest(".tag-dropdown-container")) {
+        setShowTagDropdown(false);
+        setTagSearchTerm("");
       }
-    }
+    };
 
-    return true
-  })
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showTagDropdown]);
 
-  const totalPages = Math.ceil(filteredContacts.length / pageSize)
-  const startIndex = (currentPage - 1) * pageSize
-  const endIndex = startIndex + pageSize
-  const paginatedContacts = filteredContacts.slice(startIndex, endIndex)
+  // Filter contacts
+  const filteredContacts = contacts.filter((contact: any) => {
+    if (
+      selectedPhonebook !== "all" &&
+      contact.phonebook_id?.toString() !== selectedPhonebook
+    )
+      return false;
+    if (!searchTerm) return true;
+
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      contact.name?.toLowerCase().includes(searchLower) ||
+      contact.phone?.includes(searchTerm) ||
+      contact.mobile?.includes(searchTerm) ||
+      contact.email?.toLowerCase().includes(searchLower) ||
+      contact.first_name?.toLowerCase().includes(searchLower) ||
+      contact.last_name?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  // Pagination
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedContacts = filteredContacts.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(filteredContacts.length / pageSize);
 
   useEffect(() => {
-    setCurrentPage(1)
-  }, [activeFilter, searchTerm])
+    setCurrentPage(1);
+  }, [searchTerm, selectedPhonebook]);
 
-  // Get current user's phonebook info
-  const {
-    data: userInfo,
-    isLoading: userLoading,
-  } = useQuery({
-    queryKey: ["userInfo"],
-    queryFn: async () => {
-      const res = await serverHandler.get(UserEndpoints.GET_PROFILE)
-      const data = res.data as any
-      if (!data.success) throw new Error(data.msg || "Failed to fetch user info")
-      return data.data
-    },
-    gcTime: 5 * 60 * 1000,
-  })
+  const loadMorePhonebooks = async () => {
+    if (phonebookPagination && phonebookPage < phonebookPagination.totalPages) {
+      const nextPage = phonebookPage + 1;
+      setPhonebookPage(nextPage);
+      try {
+        const nextPageResponse = await Contact.getPhonebooks(
+          nextPage,
+          phonebookPageSize
+        );
+        if (nextPageResponse.success && nextPageResponse.data) {
+          setAllPhonebooks((prev) => [...prev, ...nextPageResponse.data]);
+          toast({
+            title: "Success",
+            description: `Loaded ${nextPageResponse.data.length} more phonebooks`,
+          });
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load more phonebooks",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
-  // Add Contact
+  const showAllPhonebooks = async () => {
+    if (phonebookPagination && phonebookPagination.totalPages > 1) {
+      try {
+        const allPhonebooksData = [...phonebooks];
+        for (let page = 2; page <= phonebookPagination.totalPages; page++) {
+          const response = await Contact.getPhonebooks(page, phonebookPageSize);
+          if (response.success && response.data)
+            allPhonebooksData.push(...response.data);
+        }
+        setAllPhonebooks(allPhonebooksData);
+        setShowAllTags(true);
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load all phonebooks",
+          variant: "destructive",
+        });
+      }
+    } else {
+      setShowAllTags(true);
+    }
+  };
+
+  const displayPhonebooks = showAllTags ? allPhonebooks : phonebooks;
+  const filteredTags = displayPhonebooks.filter((phonebook: any) =>
+    phonebook.name.toLowerCase().includes(tagSearchTerm.toLowerCase())
+  );
+
   const addContactMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      const res = await serverHandler.post(UserEndpoints.ADD_SINGLE_CONTACT, payload)
-      return res.data as any
+    mutationFn: Contact.addContact,
+    onSuccess: () => {
+      toast({ title: "Success", description: "Contact added successfully" });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setAddContactModal(false);
+      setContactForm({
+        first_name: "",
+        last_name: "",
+        phone: "",
+        email: "",
+        gender: "",
+      });
+      setTagSearchTerm("");
+      setShowTagDropdown(false);
     },
-    onSuccess: (data: any) => {
-      if (data.success) {
-        toast({ title: "Success", description: "Contact added", variant: "default" })
-        queryClient.invalidateQueries({ queryKey: ["contacts"] })
-        setAddContactModal(false)
-        setFormData({
-          first_name: "",
-          last_name: "",
-          phone: "",
-          email: "",
-          gender: ""
-        })
-      } else {
-        toast({ title: "Error", description: data.msg, variant: "destructive" })
-      }
-    },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" })
-    },
-  })
-
-  // Import Contacts
-  const importContactsMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const res = await serverHandler.post(UserEndpoints.IMPORT_CONTACTS, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      })
-      return res.data as any
-    },
-    onSuccess: (data: any) => {
-      if (data.success) {
-        toast({ title: "Success", description: "Contacts imported", variant: "default" })
-        queryClient.invalidateQueries({ queryKey: ["contacts"] })
-        setImportModal(false)
-      } else {
-        toast({ title: "Error", description: data.msg, variant: "destructive" })
-      }
-    },
-    onError: (err: any) => {
+    onError: (error: any) =>
       toast({
         title: "Error",
-        description: "Failed to import contacts. Please check the CSV format.",
+        description: error.message,
         variant: "destructive",
-      })
-    },
-  })
+      }),
+  });
 
-  // Delete Contacts
-  const deleteContactsMutation = useMutation({
-    mutationFn: async (selected: string[]) => {
-      const res = await serverHandler.post(UserEndpoints.DELETE_CONTACTS, { selected })
-      return res.data as any
-    },
+  const addPhonebookMutation = useMutation({
+    mutationFn: Contact.addPhonebook,
     onSuccess: (data: any) => {
-      if (data.success) {
-        toast({ title: "Success", description: "Contacts deleted", variant: "default" })
-        queryClient.invalidateQueries({ queryKey: ["contacts"] })
-        setSelectedContacts([])
-      } else {
-        toast({ title: "Error", description: data.msg, variant: "destructive" })
-      }
+      toast({
+        title: "Success",
+        description: "Phonebook created successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["phonebooks"] });
+      setAddPhonebookModal(false);
+      setPhonebookForm({ name: "" });
+      if (data.data?.id) setSelectedPhonebook(data.data.id.toString());
     },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" })
-    },
-  })
+    onError: (error: any) =>
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      }),
+  });
 
-  function handleAddContact(e: any) {
-    e.preventDefault()
-    
-    const phonebook_id = userInfo?.phonebook_id || userInfo?.id || 1
-    
+  const deleteContactsMutation = useMutation({
+    mutationFn: Contact.deleteContacts,
+    onSuccess: () => {
+      toast({ title: "Success", description: "Contacts deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setSelectedContacts([]);
+    },
+    onError: (error: any) =>
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      }),
+  });
+
+  const handleAddContact = (e: React.FormEvent) => {
+    e.preventDefault();
+    const phonebookId =
+      selectedPhonebook !== "all"
+        ? selectedPhonebook
+        : userInfo?.phonebook_id || "1";
     const payload = {
-      mobile: formData.phone.trim(),
-      name: `${formData.first_name.trim()} ${formData.last_name.trim()}`.trim(),
-      email: formData.email.trim() || null,
-      gender: formData.gender,
+      mobile: contactForm.phone.trim(),
+      name: contactForm.last_name.trim()
+        ? `${contactForm.first_name.trim()} ${contactForm.last_name.trim()}`.trim()
+        : contactForm.first_name.trim(),
+      email: contactForm.email.trim() || null,
+      gender: contactForm.gender,
       source: "Manual",
-      phonebook_id: phonebook_id,
-    }
-    addContactMutation.mutate(payload)
-  }
+      id: phonebookId.toString(),
+    };
+    addContactMutation.mutate(payload);
+  };
 
-  function handleImportContacts(e: any) {
-    e.preventDefault()
-    const file = fileInputRef.current?.files?.[0]
-    if (!file) return
+  const handleAddPhonebook = (e: React.FormEvent) => {
+    e.preventDefault();
+    addPhonebookMutation.mutate({ name: phonebookForm.name });
+  };
 
-    const formData = new FormData()
-    formData.append("file", file)
-    formData.append("id", userInfo?.phonebook_id || userInfo?.id || 1)
-    formData.append("phonebook_name", userInfo?.phonebook_name || "Default Phonebook")
-    importContactsMutation.mutate(formData)
-  }
+  const handleDeleteSelected = () => {
+    if (selectedContacts.length > 0)
+      deleteContactsMutation.mutate({ selected: selectedContacts });
+  };
 
-  function downloadCSVTemplate() {
-    const headers = ["name", "mobile", "email", "gender", "source"]
-    const csvContent = headers.join(",") + "\n"
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "contacts_template.csv"
-    a.click()
-    window.URL.revokeObjectURL(url)
-  }
+  const handleAssignedToChange = (contactId: string, value: string) => {
+    setAssignedTo((prev) => ({ ...prev, [contactId]: value }));
+    toast({ title: "Success", description: `Contact assigned to ${value}` });
+  };
 
-  function handleAssignedToChange(contactId: string, value: string) {
-    setAssignedTo((prev) => ({
-      ...prev,
-      [contactId]: value,
-    }))
-    toast({ title: "Success", description: `Contact assigned to ${value}`, variant: "default" })
-  }
+  const getContactCount = (phonebookId: string) => {
+    if (phonebookId === "all") return contacts.length;
+    return contacts.filter(
+      (c: any) => c.phonebook_id?.toString() === phonebookId
+    ).length;
+  };
 
-  function handleFilterChange(type: string, value: string) {
-    if (value === "all" || value === "") {
-      setActiveFilter({ type: "", value: "" })
-    } else {
-      setActiveFilter({ type, value })
-    }
-    setShowFilters(false)
-  }
-
-  function clearFilters() {
-    setActiveFilter({ type: "", value: "" })
-    setSearchTerm("")
-  }
-
-  const uniqueSources = [...new Set((contacts || []).map((c: any) => (c as any).source).filter(Boolean))] as string[]
+  const shouldShowMoreButton =
+    phonebookPagination && phonebookPagination.totalItems > 10;
 
   return (
     <div className="space-y-6">
-      <Card className="bg-white shadow-lg border-0">
-        <CardHeader className="bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center text-xl font-semibold text-gray-800">
-              <i className="fas fa-address-book mr-3 text-gray-600"></i>
-              Phonebook
-            </CardTitle>
-            <div className="text-sm bg-gray-200 text-gray-700 px-3 py-1 rounded-full">
-              {filteredContacts.length} contacts
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          {/* Search and Action Buttons */}
-          <div className="flex items-center justify-between mb-6 gap-4">
-            <div className="flex items-center gap-3">
-              {/* Compact Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-48 h-9 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                />
+      <Card className="bg-white shadow-lg border-0 rounded-lg">
+        <CardHeader className="border-b">
+          <div className="flex items-center justify-end gap-3">
+            <div className="relative">
+              <div className="p-2.5 text-blue-600 cursor-help group rounded-lg transition-all duration-200">
+                <Info className="h-4 w-4" />
+                <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 shadow-lg text-black text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 w-80 pointer-events-none">
+                  <div className="absolute -top-1 right-4 w-2 h-2 bg-white border-l border-t border-gray-200 transform rotate-45"></div>
+                  <div className="px-2 py-3">
+                    <div className="text-gray-700 text-xs leading-relaxed">
+                      Organize your contacts with custom tags and manage them
+                      efficiently. Create, import, and organize contacts by
+                      purpose, priority, or any criteria.
+                    </div>
+                  </div>
+                </div>
               </div>
+            </div>
 
-              {/* Active filter indicator */}
-              {(activeFilter.type || searchTerm) && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    {activeFilter.type ? `${activeFilter.type}: ${activeFilter.value}` : 'Search active'}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 h-6 px-2">
-                    ✕
-                  </Button>
+            <Button
+              onClick={() => setAddContactModal(true)}
+              size="sm"
+              className="h-10 px-5 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Contact
+            </Button>
+
+            <div className="relative">
+              <Button
+                onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0 hover:bg-gray-100 border border-gray-200"
+              >
+                <MoreVertical className="h-5 w-5 text-gray-600" />
+              </Button>
+
+              {showOptionsMenu && (
+                <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-20">
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={() => {
+                        setAddPhonebookModal(true);
+                        setShowOptionsMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded-md flex items-center gap-2 text-blue-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create Tag
+                    </button>
+                    <button
+                      onClick={() => {
+                        setImportModal(true);
+                        setShowOptionsMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded-md flex items-center gap-2 text-blue-700"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Import Contacts
+                    </button>
+                    <div className="border-t border-gray-100 my-1" />
+                    <button
+                      onClick={() => {
+                        handleDeleteSelected();
+                        setShowOptionsMenu(false);
+                      }}
+                      disabled={selectedContacts.length === 0}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 rounded-md flex items-center gap-2 text-red-700 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete Selected ({selectedContacts.length})
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
+          </div>
+        </CardHeader>
 
-            <div className="flex items-center gap-2">
-              {/* Filter Button with Dropdown */}
-              <div className="relative">
-                <div className="group relative">
-                  <Button 
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="bg-gray-600 hover:bg-gray-700 text-white h-9 px-3"
-                    size="sm"
+        <CardContent className="p-6">
+          {/* Tags Section */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Tags</h3>
+
+            {phonebooksLoading ? (
+              <div className="flex flex-wrap gap-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    className="w-24 h-8 bg-gray-200 rounded-full animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {/* All Contacts Tag */}
+                <motion.button
+                  onClick={() => setSelectedPhonebook("all")}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+                    selectedPhonebook === "all"
+                      ? "border-blue-500 bg-blue-500 text-white"
+                      : "border-gray-300 bg-white text-gray-700 hover:border-blue-300"
+                  }`}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  <span className="text-sm font-medium">All Contacts</span>
+                  <span className="bg-white text-blue-600 text-xs px-1.5 py-0.5 rounded-full font-bold">
+                    {getContactCount("all")}
+                  </span>
+                </motion.button>
+
+                {/* Individual Tags */}
+                {displayPhonebooks.map((phonebook: any) => (
+                  <motion.button
+                    key={phonebook.id}
+                    onClick={() =>
+                      setSelectedPhonebook(phonebook.id.toString())
+                    }
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+                      selectedPhonebook === phonebook.id.toString()
+                        ? "border-green-500 bg-green-500 text-white"
+                        : "border-gray-300 bg-white text-gray-700 hover:border-green-300"
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                   >
-                    <Filter className="h-4 w-4" />
-                  </Button>
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    Filter
-                  </div>
-                </div>
+                    <FolderOpen className="h-3.5 w-3.5" />
+                    <span className="text-sm font-medium">
+                      {phonebook.name}
+                    </span>
+                    <span className="text-xs px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-600">
+                      {getContactCount(phonebook.id.toString())}
+                    </span>
+                    {selectedPhonebook === phonebook.id.toString() && (
+                      <Check className="h-3.5 w-3.5 text-white" />
+                    )}
+                  </motion.button>
+                ))}
 
-                {/* Filter Dropdown */}
-                {showFilters && (
-                  <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                    <div className="p-2">
-                      <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 mb-2">
-                        Gender
-                      </div>
-                      <button
-                        onClick={() => handleFilterChange("gender", "male")}
-                        className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
-                      >
-                        Male
-                      </button>
-                      <button
-                        onClick={() => handleFilterChange("gender", "female")}
-                        className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
-                      >
-                        Female
-                      </button>
-                      <button
-                        onClick={() => handleFilterChange("gender", "unknown")}
-                        className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
-                      >
-                        Unknown
-                      </button>
-                      
-                      <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 mt-2 mb-2 border-t border-gray-100 pt-2">
-                        Source
-                      </div>
-                      {uniqueSources.map((source: string) => (
-                        <button
-                          key={source}
-                          onClick={() => handleFilterChange("source", source)}
-                          className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
-                        >
-                          {source}
-                        </button>
-                      ))}
-                      
-                      <div className="border-t border-gray-100 mt-2 pt-2">
-                        <button
-                          onClick={() => handleFilterChange("", "")}
-                          className="w-full text-left px-2 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
-                        >
-                          Clear Filter
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                {/* Show All Button */}
+                {!showAllTags &&
+                  shouldShowMoreButton &&
+                  phonebookPagination &&
+                  phonebookPagination.totalPages > 1 && (
+                    <motion.button
+                      onClick={() => showAllPhonebooks()}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-400 hover:bg-blue-100"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <span className="text-sm font-medium">
+                        Show All ({phonebookPagination.totalItems - 10} more)
+                      </span>
+                    </motion.button>
+                  )}
+
+                {/* Show Less Button */}
+                {showAllTags && shouldShowMoreButton && (
+                  <motion.button
+                    onClick={() => setShowAllTags(false)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span className="text-sm font-medium">Show Less</span>
+                  </motion.button>
                 )}
-              </div>
 
-              {/* Add Contact Button */}
-              <div className="group relative">
-                <Button 
-                  onClick={() => setAddContactModal(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white h-9 px-3"
-                  size="sm"
+                {/* Create Tag Button */}
+                <motion.button
+                  onClick={() => setAddPhonebookModal(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
-                  <UserPlus className="h-4 w-4" />
-                </Button>
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  Add Contact
-                </div>
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="text-sm font-medium">Create Tag</span>
+                </motion.button>
               </div>
-
-              {/* Import Contacts Button */}
-              <div className="group relative">
-                <Button 
-                  onClick={() => setImportModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white h-9 px-3"
-                  size="sm"
-                >
-                  <Upload className="h-4 w-4" />
-                </Button>
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  Import Contacts
-                </div>
-              </div>
-
-              {/* Delete Selected Button */}
-              <div className="group relative">
-                <Button
-                  variant="destructive"
-                  onClick={() => deleteContactsMutation.mutate(selectedContacts)}
-                  disabled={selectedContacts.length === 0}
-                  className="h-9 px-3"
-                  size="sm"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  Delete Selected ({selectedContacts.length})
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* Results Info */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-sm text-gray-600">
-              Showing <span className="font-semibold">{startIndex + 1}-{Math.min(endIndex, filteredContacts.length)}</span> of <span className="font-semibold">{filteredContacts.length}</span> contacts
+          {/* Search Section */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search contacts..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-64 h-10"
+                />
+              </div>
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchTerm("")}
+                  className="h-6 w-6 p-0"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
             </div>
+
+            {/* Show dropdown for page size */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600">Show:</span>
-              <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(Number(value))}>
+              <Select
+                value={pageSize.toString()}
+                onValueChange={(value) => setPageSize(Number(value))}
+              >
                 <SelectTrigger className="w-20 h-8">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[10000] bg-white border border-gray-200 shadow-lg">
                   <SelectItem value="5">5</SelectItem>
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="25">25</SelectItem>
@@ -419,61 +519,93 @@ export default function PhonebookView() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-4 py-3 text-left w-12">
-                    <input
-                      type="checkbox"
-                      checked={paginatedContacts.length > 0 && selectedContacts.length === paginatedContacts.length}
-                      onChange={(e) =>
-                        setSelectedContacts(e.target.checked ? paginatedContacts.map((c: any) => c.id) : [])
-                      }
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Source</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Assigned To</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">Last Seen Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {contactsLoading ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-12">
-                      <div className="flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                        <span className="ml-3 text-gray-600">Loading contacts...</span>
+          {/* Contacts Table */}
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+              <div className="grid grid-cols-12 gap-4 items-center">
+                <div className="col-span-1">
+                  <input
+                    type="checkbox"
+                    checked={
+                      paginatedContacts.length > 0 &&
+                      selectedContacts.length === paginatedContacts.length
+                    }
+                    onChange={(e) =>
+                      setSelectedContacts(
+                        e.target.checked
+                          ? paginatedContacts.map((c: any) => c.id)
+                          : []
+                      )
+                    }
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <span className="text-xs font-medium text-gray-700">
+                    Contact Info
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-xs font-medium text-gray-700">
+                    Phone
+                  </span>
+                </div>
+                <div className="col-span-3">
+                  <span className="text-xs font-medium text-gray-700">Tag</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-xs font-medium text-gray-700">
+                    Assigned To
+                  </span>
+                </div>
+                <div className="col-span-1">
+                  <span className="text-xs font-medium text-gray-700">
+                    Actions
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {contactsLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-1">
+                        <div className="w-4 h-4 bg-gray-200 rounded animate-pulse" />
                       </div>
-                    </td>
-                  </tr>
-                ) : contactsError ? (
-                  <tr>
-                    <td colSpan={6} className="text-center text-red-500 py-12">
-                      <i className="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                      <div>{contactsError.message}</div>
-                    </td>
-                  </tr>
-                ) : paginatedContacts.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-12">
-                      <i className="fas fa-search text-gray-400 text-2xl mb-2"></i>
-                      <div className="text-gray-600">No contacts found.</div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedContacts.map((contact: any, index: number) => (
-                    <motion.tr
-                      key={contact.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="hover:bg-blue-50 border-b border-gray-100 transition-colors"
-                    >
-                      <td className="px-4 py-3">
+                      <div className="col-span-3">
+                        <div className="w-32 h-4 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                      <div className="col-span-2">
+                        <div className="w-20 h-4 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                      <div className="col-span-3">
+                        <div className="w-24 h-4 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                      <div className="col-span-1">
+                        <div className="w-16 h-4 bg-gray-200 rounded animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : paginatedContacts.length === 0 ? (
+                <div className="text-center text-gray-500 py-12">
+                  <div className="text-gray-600 font-medium mb-1">
+                    No contacts found
+                  </div>
+                  <div className="text-gray-500 text-sm">
+                    Try adjusting your search criteria
+                  </div>
+                </div>
+              ) : (
+                paginatedContacts.map((contact: any) => (
+                  <div
+                    key={contact.id}
+                    className="px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-1">
                         <input
                           type="checkbox"
                           checked={selectedContacts.includes(contact.id)}
@@ -481,228 +613,570 @@ export default function PhonebookView() {
                             setSelectedContacts(
                               e.target.checked
                                 ? [...selectedContacts, contact.id]
-                                : selectedContacts.filter((id) => id !== contact.id),
+                                : selectedContacts.filter(
+                                    (id) => id !== contact.id
+                                  )
                             )
                           }
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">
-                          {contact.first_name && contact.last_name
-                            ? `${contact.first_name} ${contact.last_name}`
-                            : contact.name || "N/A"}
+                      </div>
+                      <div className="col-span-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span className="text-white font-medium text-xs">
+                              {contact.first_name && contact.last_name
+                                ? `${contact.first_name.charAt(
+                                    0
+                                  )}${contact.last_name.charAt(0)}`
+                                : contact.name?.charAt(0) || "?"}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {contact.first_name && contact.last_name
+                                ? `${contact.first_name} ${contact.last_name}`
+                                : contact.name || "N/A"}
+                            </div>
+                            {contact.email && (
+                              <div className="text-sm text-gray-500">
+                                {contact.email}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm text-gray-700">
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-sm text-gray-900">
                           {contact.mobile || contact.phone || "N/A"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
-                          {contact.source || "Manual"}
                         </span>
-                      </td>
-                      <td className="px-4 py-3">
+                      </div>
+
+                      <div className="col-span-3">
+                        <span className="text-sm text-gray-900">
+                          {(() => {
+                            if (contact.phonebook_id) {
+                              const phonebook = displayPhonebooks.find(
+                                (p) =>
+                                  p.id.toString() ===
+                                  contact.phonebook_id.toString()
+                              );
+                              return phonebook ? phonebook.name : "Unknown Tag";
+                            }
+                            return "No Tag";
+                          })()}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
                         <Select
                           value={assignedTo[contact.id] || "unassigned"}
-                          onValueChange={(value) => handleAssignedToChange(contact.id, value)}
+                          onValueChange={(value) =>
+                            handleAssignedToChange(contact.id, value)
+                          }
                         >
-                          <SelectTrigger className="w-32 h-8 text-xs">
+                          <SelectTrigger className="w-full h-8 text-sm border-gray-200">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                          <SelectContent className="z-[10000] bg-white border border-gray-200 shadow-lg">
+                            <SelectItem value="unassigned">
+                              Unassigned
+                            </SelectItem>
                             <SelectItem value="ashish">Ashish</SelectItem>
+                            <SelectItem value="manager">Manager</SelectItem>
+                            <SelectItem value="team">Team</SelectItem>
                           </SelectContent>
                         </Select>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {contact.last_seen ? new Date(contact.last_seen).toLocaleDateString() : "Never"}
-                      </td>
-                    </motion.tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                      <div className="col-span-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                        >
+                          <MoreVertical className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6">
+          {/* Contact Count and Pagination */}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">
-                Page <span className="font-semibold">{currentPage}</span> of <span className="font-semibold">{totalPages}</span>
+                Showing{" "}
+                <span className="font-semibold">
+                  {startIndex + 1}-{Math.min(endIndex, filteredContacts.length)}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold">{filteredContacts.length}</span>{" "}
+                contacts
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="h-8"
-                >
-                  <ChevronLeft size={16} />
-                  Previous
-                </Button>
 
-                {/* Page numbers */}
-                <div className="flex gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum
-                    if (totalPages <= 5) {
-                      pageNum = i + 1
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i
-                    } else {
-                      pageNum = currentPage - 2 + i
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
                     }
-
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={currentPage === pageNum ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                        className="w-8 h-8 p-0"
-                      >
-                        {pageNum}
-                      </Button>
-                    )
-                  })}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
                 </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="h-8"
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </Button>
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
       {/* Add Contact Modal */}
       {addContactModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <motion.form 
-            onSubmit={handleAddContact} 
-            className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[90vh] overflow-y-auto"
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
+          <motion.div
+            className="bg-white p-6 rounded-xl shadow-2xl w-[550px] max-w-[90vw] max-h-[90vh] overflow-y-auto relative z-10"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
           >
-            <h2 className="text-xl font-bold mb-4 text-gray-800">Add New Contact</h2>
-            <Input 
-              placeholder="First Name" 
-              required 
-              className="mb-3"
-              value={formData.first_name}
-              onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-            />
-            <Input 
-              placeholder="Last Name" 
-              required 
-              className="mb-3"
-              value={formData.last_name}
-              onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-            />
-            <Input 
-              placeholder="Phone Number" 
-              required 
-              className="mb-3"
-              value={formData.phone}
-              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-            />
-            <Input 
-              placeholder="Email (Optional)" 
-              type="email" 
-              className="mb-3"
-              value={formData.email}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-            />
-            <Select value={formData.gender} onValueChange={(value) => setFormData(prev => ({ ...prev, gender: value }))} required>
-              <SelectTrigger className="mb-4">
-                <SelectValue placeholder="Select Gender" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="male">Male</SelectItem>
-                <SelectItem value="female">Female</SelectItem>
-                <SelectItem value="unknown">Unknown</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex gap-3 justify-end">
-              <Button type="button" variant="outline" onClick={() => setAddContactModal(false)}>
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                className="bg-green-600 hover:bg-green-700 text-white"
-                disabled={userLoading || addContactMutation.isPending}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl font-bold text-gray-900">
+                Add New Contact
+              </h2>
+              <button
+                onClick={() => {
+                  setAddContactModal(false);
+                  setTagSearchTerm("");
+                  setShowTagDropdown(false);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
-                <UserPlus className="h-4 w-4 mr-2" />
-                {addContactMutation.isPending ? "Adding..." : "Add Contact"}
-              </Button>
+                <X className="h-4 w-4 text-gray-500" />
+              </button>
             </div>
-          </motion.form>
+
+            <form onSubmit={handleAddContact} className="space-y-3">
+              {/* First Name */}
+              <div>
+                <label
+                  htmlFor="firstName"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  id="firstName"
+                  placeholder="Enter first name"
+                  required
+                  value={contactForm.first_name}
+                  onChange={(e) =>
+                    setContactForm((prev) => ({
+                      ...prev,
+                      first_name: e.target.value,
+                    }))
+                  }
+                  className="w-full h-10 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Last Name */}
+              <div>
+                <label
+                  htmlFor="lastName"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Last Name
+                </label>
+                <Input
+                  id="lastName"
+                  placeholder="Enter last name (optional)"
+                  value={contactForm.last_name}
+                  onChange={(e) =>
+                    setContactForm((prev) => ({
+                      ...prev,
+                      last_name: e.target.value,
+                    }))
+                  }
+                  className="w-full h-10 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Phone Number */}
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <label
+                    htmlFor="phone"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative group">
+                    <Info className="h-4 w-4 text-gray-400 cursor-help" />
+                    <div className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 shadow-lg text-black text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 w-64 pointer-events-none">
+                      <div className="absolute -bottom-1 right-4 w-2 h-2 bg-white border-l border-t border-gray-200 transform rotate-45"></div>
+                      <div className="px-3 py-2">
+                        <div className="text-gray-700 text-xs leading-relaxed">
+                          Enter a valid phone number (e.g., +91 98765 43210).
+                          Phone number should be unique and properly formatted.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <Input
+                  id="phone"
+                  placeholder="Enter phone number"
+                  type="tel"
+                  required
+                  value={contactForm.phone}
+                  onChange={(e) =>
+                    setContactForm((prev) => ({
+                      ...prev,
+                      phone: e.target.value,
+                    }))
+                  }
+                  className="w-full h-10 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  pattern="[0-9+\-\s()]+"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Email Address
+                </label>
+                <Input
+                  id="email"
+                  placeholder="Enter email address (optional)"
+                  type="email"
+                  value={contactForm.email}
+                  onChange={(e) =>
+                    setContactForm((prev) => ({
+                      ...prev,
+                      email: e.target.value,
+                    }))
+                  }
+                  className="w-full h-10 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Gender */}
+              <div>
+                <label
+                  htmlFor="gender"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Gender <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={contactForm.gender}
+                  onValueChange={(value) =>
+                    setContactForm((prev) => ({ ...prev, gender: value }))
+                  }
+                  required
+                >
+                  <SelectTrigger className="w-full h-10 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[10000] bg-white border border-gray-200 shadow-lg">
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="unknown">Prefer not to say</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Tag Selection */}
+              <div>
+                <label
+                  htmlFor="tag"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Assign to Tag <span className="text-red-500">*</span>
+                </label>
+
+                {/* Custom Searchable Dropdown */}
+                <div className="relative tag-dropdown-container">
+                  <div
+                    onClick={() => setShowTagDropdown(!showTagDropdown)}
+                    className="w-full h-10 px-3 py-2 border border-gray-300 rounded-md bg-white cursor-pointer hover:border-blue-500 focus:border-blue-500 focus:ring-blue-500 flex items-center justify-between"
+                  >
+                    <span
+                      className={
+                        selectedPhonebook !== "all"
+                          ? "text-gray-900"
+                          : "text-gray-500"
+                      }
+                    >
+                      {selectedPhonebook !== "all"
+                        ? displayPhonebooks.find(
+                            (p) => p.id.toString() === selectedPhonebook
+                          )?.name || "Select a tag"
+                        : "Select a tag for this contact"}
+                    </span>
+                    <svg
+                      className="w-4 h-4 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+
+                  {showTagDropdown && (
+                    <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-md shadow-lg z-[10000] max-h-60 overflow-hidden">
+                      {/* Search Input */}
+                      <div className="p-3 border-b border-gray-100">
+                        <Input
+                          placeholder="Search tags..."
+                          value={tagSearchTerm}
+                          onChange={(e) => setTagSearchTerm(e.target.value)}
+                          className="w-full"
+                          autoFocus
+                        />
+                      </div>
+
+                      {/* Options List */}
+                      <div className="max-h-48 overflow-y-auto">
+                        {/* All Contacts Option */}
+                        <div
+                          onClick={() => {
+                            setSelectedPhonebook("all");
+                            setShowTagDropdown(false);
+                            setTagSearchTerm("");
+                          }}
+                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100"
+                        >
+                          <div className="flex items-center gap-2">
+                            <FolderOpen className="h-4 w-4 text-blue-600" />
+                            <span className="font-medium text-blue-600">
+                              All Contacts
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Filtered Tags */}
+                        {filteredTags.map((phonebook: any) => (
+                          <div
+                            key={phonebook.id}
+                            onClick={() => {
+                              setSelectedPhonebook(phonebook.id.toString());
+                              setShowTagDropdown(false);
+                              setTagSearchTerm("");
+                            }}
+                            className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                          >
+                            <div className="flex items-center gap-2">
+                              <FolderOpen className="h-4 w-4 text-gray-600" />
+                              <span className="text-gray-900">
+                                {phonebook.name}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+
+                        {filteredTags.length === 0 && tagSearchTerm && (
+                          <div className="px-3 py-2 text-gray-500 text-sm text-center">
+                            No tags found matching "{tagSearchTerm}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 justify-end pt-3 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setAddContactModal(false);
+                    setTagSearchTerm("");
+                    setShowTagDropdown(false);
+                  }}
+                  className="px-4 py-2"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    addContactMutation.isPending ||
+                    !contactForm.first_name.trim() ||
+                    !contactForm.phone.trim() ||
+                    !contactForm.gender
+                  }
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700"
+                >
+                  {addContactMutation.isPending ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Adding...
+                    </div>
+                  ) : (
+                    "Add Contact"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </motion.div>
         </div>
       )}
 
-      {/* Import Contacts Modal */}
+      {/* Add Phonebook Modal */}
+      {addPhonebookModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
+          <motion.div
+            className="bg-white p-8 rounded-xl shadow-2xl w-[500px] max-w-[90vw] relative z-10"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">
+                Create New Tag
+              </h2>
+              <button
+                onClick={() => setAddPhonebookModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddPhonebook} className="space-y-6">
+              <div>
+                <label
+                  htmlFor="tagName"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Tag Name
+                </label>
+                <Input
+                  id="tagName"
+                  placeholder="Enter a descriptive name for your tag"
+                  required
+                  value={phonebookForm.name}
+                  onChange={(e) =>
+                    setPhonebookForm((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
+                  className="w-full h-12 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  maxLength={50}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  {phonebookForm.name.length}/50 characters
+                </p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">Tag Organization Tips:</p>
+                    <ul className="space-y-1 text-blue-700">
+                      <li>
+                        • Use clear, descriptive names (e.g., "VIP Customers",
+                        "Follow-up Required")
+                      </li>
+                      <li>
+                        • Keep names under 50 characters for better display
+                      </li>
+                      <li>
+                        • Tags help organize contacts by purpose, priority, or
+                        status
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddPhonebookModal(false)}
+                  className="px-6 py-2.5"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    addPhonebookMutation.isPending || !phonebookForm.name.trim()
+                  }
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700"
+                >
+                  {addPhonebookMutation.isPending ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Creating...
+                    </div>
+                  ) : (
+                    "Create Tag"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Import Modal */}
       {importModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <motion.form 
-            onSubmit={handleImportContacts} 
-            className="bg-white p-6 rounded-lg shadow-xl w-96"
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
+          <motion.div
+            className="bg-white p-6 rounded-lg shadow-xl w-96 relative z-10"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
           >
-            <h2 className="text-xl font-bold mb-4 text-gray-800">Import Contacts</h2>
-            <div className="mb-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={downloadCSVTemplate}
-                className="w-full mb-3"
-              >
-                <i className="fas fa-download mr-2"></i>
-                Download CSV Template
-              </Button>
-              <input 
-                ref={fileInputRef} 
-                type="file" 
-                accept=".csv" 
-                required 
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div className="flex gap-3 justify-end">
-              <Button type="button" variant="outline" onClick={() => setImportModal(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
-                <Upload className="h-4 w-4 mr-2" />
-                Import
+            <h2 className="text-xl font-bold mb-4">Import Contacts</h2>
+            <p className="text-gray-600 mb-4">
+              CSV import functionality coming soon...
+            </p>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => setImportModal(false)}>
+                Close
               </Button>
             </div>
-          </motion.form>
+          </motion.div>
         </div>
-      )}
-
-      {/* Click outside to close filter dropdown */}
-      {showFilters && (
-        <div 
-          className="fixed inset-0 z-5" 
-          onClick={() => setShowFilters(false)}
-        />
       )}
     </div>
-  )
+  );
 }

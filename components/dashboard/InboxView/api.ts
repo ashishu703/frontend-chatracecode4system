@@ -1,4 +1,4 @@
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 
 const getToken = () =>
   localStorage.getItem("serviceToken") || localStorage.getItem("adminToken") || ""

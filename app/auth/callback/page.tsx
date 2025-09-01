@@ -4,7 +4,7 @@ import React, { useEffect, Suspense } from "react"; // Import Suspense
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDispatch } from "react-redux";
 import { login as loginAction } from "@/store/slices/authSlice";
-import serverHandler from "@/utils/serverHandler";
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
 
 // Function to exchange authorization code for ID token
 const exchangeCodeForToken = async (code: string, googleClientId: string) => {

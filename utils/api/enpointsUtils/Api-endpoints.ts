@@ -48,6 +48,9 @@ export class UserEndpoints {
   static readonly DELETE_CONTACTS = '/api/phonebook/del_contacts';
   static readonly GET_UID_CONTACTS = '/api/phonebook/get_uid_contacts';
   static readonly ADD_SINGLE_CONTACT = '/api/phonebook/add_single_contact';
+  static readonly ADD_PHONEBOOK = '/api/phonebook/add';
+  static readonly GET_PHONEBOOKS = '/api/phonebook/get_by_uid';
+  static readonly DELETE_PHONEBOOK = '/api/phonebook/del_phonebook';
 }
 
 export class AdminEndpoints {
@@ -251,7 +254,9 @@ export class ChatFlowEndpoints {
 }
 
 export class BroadcastEndpoints {
-  static readonly GET_BROADCASTS = '/api/broadcast/get_broadcast';
+  static readonly GET_ALL_BROADCASTS_HISTORY = '/api/broadcast/get_broadcast';
+  static readonly GET_PHONEBOOKS_BY_UID_FOR_BROADCAST = '/api/phonebook/get_by_uid';
+  static readonly ADD_NEW_BROADCAST = '/api/broadcast/add_new';
 }
 
 // Helper functions

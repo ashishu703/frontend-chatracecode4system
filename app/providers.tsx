@@ -7,6 +7,7 @@ import { PersistGate } from 'redux-persist/integration/react'
 import { store, persistor } from "@/store/store"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SocketProvider } from "@/contexts/socket-context";
+import { AbortControllerProvider } from "@/contexts/abort-controller-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = new QueryClient();
@@ -15,7 +16,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
           <SocketProvider>
-            {children}
+            <AbortControllerProvider>
+              {children}
+            </AbortControllerProvider>
           </SocketProvider>
         </PersistGate>
       </Provider>

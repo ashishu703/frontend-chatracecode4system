@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { login as loginAction, logout as logoutAction, setToken, updateAgent } from '@/store/slices/agentAuthSlice';
-import serverHandler from '@/utils/serverHandler';
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 
 interface Agent {
   uid: string;

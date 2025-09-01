@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Filter, MessageSquare, Phone, Mail, Clock, User, Reply, Archive, Flag, Send, Paperclip, Mic } from 'lucide-react'
 import { useSelector } from "react-redux"
 import { RootState } from "@/store/store"
-import serverHandler from '@/utils/serverHandler'
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler'
 import { useToast } from "@/hooks/use-toast"
 
 interface Conversation {

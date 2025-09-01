@@ -1,10 +1,10 @@
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 import { 
   GoogleLoginSettings, 
   MetaPlatformsSettings, 
   SocialLoginResponse,
 } from "./types"
-import { AdminEndpoints } from "../Api-endpoints";
+import { AdminEndpoints } from "../enpointsUtils/Api-endpoints";
 
 export const socialLoginApi = {
 

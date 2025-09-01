@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import serverHandler from '@/utils/serverHandler';
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 
 const ICONS = [
   '/placeholder-logo.svg',

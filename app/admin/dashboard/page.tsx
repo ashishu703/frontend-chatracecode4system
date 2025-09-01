@@ -16,7 +16,7 @@ import AppConfiguration from "@/components/admin/AppConfiguration"
 import SMTPSettings from "@/components/admin/SMTPSettings"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import serverHandler from '@/utils/serverHandler';
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import { useEffect, useState } from 'react';
 
 interface AdminDashboardData {

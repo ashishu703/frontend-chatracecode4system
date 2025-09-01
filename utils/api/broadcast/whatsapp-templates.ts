@@ -1,5 +1,7 @@
-import serverHandler from '../serverHandler';
-import { WhatsAppEndpoints } from './Api-endpoints';
+import serverHandler from '../enpointsUtils/serverHandler';
+import { WhatsAppEndpoints } from '../enpointsUtils/Api-endpoints';
+import { TempleteItem } from '@/types/broadcast/broadCastResponse';
+import { GenericApiResponse } from '@/types/api/common';
 
 export interface WhatsAppTemplateButton {
     id: string;
@@ -42,15 +44,21 @@ export interface WhatsAppTemplateResponse {
 }
 
 export const whatsappTemplatesAPI = {
-    addMetaTemplate: async (templateData: WhatsAppTemplateData): Promise<WhatsAppTemplateResponse> => {
+    addMetaTemplate: async (templateData: WhatsAppTemplateData, options?: { abortKey?: string }): Promise<WhatsAppTemplateResponse> => {
         try {
-            const response = await serverHandler.post(WhatsAppEndpoints.ADD_META_TEMPLATE, templateData);
-            return response.data as WhatsAppTemplateResponse || {
+            const response = await serverHandler.post<WhatsAppTemplateResponse>(WhatsAppEndpoints.ADD_META_TEMPLATE, templateData, {
+                abortKey: options?.abortKey
+            });
+            return response.data || {
                 success: false,
                 msg: 'Unexpected error Occured',
                 response: null
             };
         } catch (error: any) {
+            if (error.message === 'Request cancelled') {
+                throw error;
+            }
+            
             const errorMsg = error.response?.data?.msg ||
                 error.response?.data?.message ||
                 error.message ||
@@ -64,12 +72,12 @@ export const whatsappTemplatesAPI = {
         }
     },
 
-    getMyMetaTemplates: async (): Promise<any> => {
+    getMyMetaTemplates: async (): Promise<GenericApiResponse<TempleteItem[]>> => {
         try {
-            const response = await serverHandler.get(WhatsAppEndpoints.GET_MY_META_TEMPLATES);
-            return response.data;
+            const response = await serverHandler.get<GenericApiResponse<TempleteItem[]>>(WhatsAppEndpoints.GET_MY_META_TEMPLATES);
+            return response.data;   
         } catch (error: any) {
-            return { success: false, msg: 'Failed to get templates' };
+            return { success: false, message: error.message || 'Failed to fetch templates', data: [] };
         }
     },
 

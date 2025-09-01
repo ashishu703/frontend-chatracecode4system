@@ -7,7 +7,13 @@ import {
   ToastProvider,
   ToastViewport,
 } from "@/components/ui/toast";
-import { CheckCircle, AlertCircle, AlertTriangle, XCircle } from "lucide-react";
+import {
+  CheckCircle,
+  AlertCircle,
+  AlertTriangle,
+  XCircle,
+  X,
+} from "lucide-react";
 
 export function Toaster() {
   const { toasts } = useToast();
@@ -49,12 +55,18 @@ export function Toaster() {
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center space-x-3">
                 {getIcon(variant)}
-                <span className="text-sm font-normal">
-                  {title && title}
-                  {description && description}
-                </span>
+                <div className="flex flex-col">
+                  {title && (
+                    <span className="text-sm font-semibold text-gray-900">
+                      {title}
+                    </span>
+                  )}
+                  {description && (
+                    <span className="text-sm text-gray-600">{description}</span>
+                  )}
+                </div>
               </div>
-              <ToastClose />
+              <ToastClose className="h-5 w-5" />
             </div>
           </Toast>
         );

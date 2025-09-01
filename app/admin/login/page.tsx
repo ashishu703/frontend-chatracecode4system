@@ -10,7 +10,7 @@ import Link from "next/link"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast"
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 
 export default function AdminLoginPage() {
   const router = useRouter();

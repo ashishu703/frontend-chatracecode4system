@@ -1,5 +1,5 @@
 "use client";
-import serverHandler from '@/utils/serverHandler';
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import { useQuery } from '@tanstack/react-query';
 import React, { createContext, useContext } from 'react';
 
