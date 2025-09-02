@@ -61,9 +61,10 @@ export class AdminEndpoints {
   static readonly UPDATE_PROFILE = '/api/admin/profile';
   
   // Dashboard
-  static readonly DASHBOARD = '/api/admin/dashboard';
-  static readonly GET_ANALYTICS = '/api/admin/analytics';
-  static readonly GET_STATS = '/api/admin/stats';
+  static readonly GET_ADMIN_DASHBOARD = '/api/admin/dashboard';
+  static readonly GET_ADMIN_ANALYTICS = '/api/admin/analytics';
+  static readonly GET_ADMIN_STATS = '/api/admin/stats';
+  static readonly SEND_ADMIN_RECOVERY = '/api/admin/send_resovery';
   
   // User Management
   static readonly GET_USERS = '/api/admin/users';

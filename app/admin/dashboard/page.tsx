@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import { useEffect, useState } from 'react';
+import { AdminEndpoints, API_ENDPOINTS } from "@/utils/api/enpointsUtils/Api-endpoints"
 
 interface AdminDashboardData {
   success: boolean;
@@ -57,10 +58,7 @@ export default function AdminDashboardPage() {
       setLoading(true);
       setError(undefined);
       try {
-        const res = await serverHandler({
-          method: "GET",
-          url: "/api/admin/dashboard",
-        });
+        const res = await serverHandler.get(AdminEndpoints.GET_ADMIN_DASHBOARD);
         if (res?.data && 'success' in res.data) {
           setDashboardData(res.data as AdminDashboardData);
         } else {
