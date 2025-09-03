@@ -61,6 +61,26 @@ export const Contact = {
     return data;
   },
 
+  reassignContactsToPhonebook: async (contactIds: number[], newPhonebookId: number): Promise<GenericApiResponse<{
+    updatedContacts: number;
+    newPhonebookId: number;
+    newPhonebookName: string;
+  }>> => {
+    const res = await serverHandler.post(UserEndpoints.REASSIGN_CONTACTS, {
+      contactIds,
+      newPhonebookId
+    });
+    const data = res.data as GenericApiResponse<{
+      updatedContacts: number;
+      newPhonebookId: number;
+      newPhonebookName: string;
+    }>;
+    if (!data.success) {
+      throw new Error((data as any).message || "Failed to reassign contacts");
+    }
+    return data;
+  },
+
   getUserInfo: async (): Promise<GenericApiResponse<{ id: string; phonebook_id: string; phonebook_name: string }>> => {
     const res = await serverHandler.get(UserEndpoints.GET_PROFILE);
     const data = res.data as GenericApiResponse<{ id: string; phonebook_id: string; phonebook_name: string }>;

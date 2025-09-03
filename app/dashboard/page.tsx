@@ -26,6 +26,7 @@ import AllFlowsPage from "@/components/dashboard/allflows"
 import AllTemplatesPage from "@/components/flow-integration/alltemplates"
 import AutomationToolsView from "@/components/dashboard/AutomationToolsView"
 import SettingsView from "@/components/dashboard/SettingsView"
+import { UserEndpoints } from "@/utils/api/enpointsUtils/Api-endpoints"
 
 const stats = [
   { title: "Total Messages", value: "3,196", change: "+12%", icon: MessageSquare },
@@ -70,7 +71,7 @@ export default function DashboardPage() {
           setLoading(true);
           setError(undefined);
           try {
-            const res = await serverHandler.get('/api/user/dashboard');
+            const res = await serverHandler.get(UserEndpoints.DASHBOARD);
             setDashboardData((res.data as any).data);
           } catch (err) {
             console.error('Dashboard fetch error:', err);
@@ -135,7 +136,7 @@ export default function DashboardPage() {
         )
       case "inbox":
         return <InboxView />
-      case "phonebook":
+      case "contacts":
         return <PhonebookView />
       case "broadcast":
         return <BroadcastView />

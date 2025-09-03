@@ -11,7 +11,7 @@ import { useState } from "react"
 const menuItems = [
   { id: "dashboard", label: "Analytics", icon: "fas fa-tachometer-alt" },
   { id: "inbox", label: "Inbox", icon: "fas fa-inbox" },
-  { id: "phonebook", label: "Contacts", icon: "fas fa-address-book" },
+  { id: "contacts", label: "Contacts", icon: "fas fa-address-book" },
   {
     id: "broadcast",
     label: "Broadcast",

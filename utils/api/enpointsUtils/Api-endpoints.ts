@@ -51,6 +51,7 @@ export class UserEndpoints {
   static readonly ADD_PHONEBOOK = '/api/phonebook/add';
   static readonly GET_PHONEBOOKS = '/api/phonebook/get_by_uid';
   static readonly DELETE_PHONEBOOK = '/api/phonebook/del_phonebook';
+  static readonly REASSIGN_CONTACTS = '/api/phonebook/reassign_contacts';
 }
 
 export class AdminEndpoints {
