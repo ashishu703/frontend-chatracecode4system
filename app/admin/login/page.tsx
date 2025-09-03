@@ -10,7 +10,8 @@ import Link from "next/link"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast"
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
+import { AdminEndpoints } from "@/utils/api/enpointsUtils/Api-endpoints"
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -46,12 +47,8 @@ export default function AdminLoginPage() {
 
     setRecoveryLoading(true);
     try {
-      const res = await serverHandler({
-        method: "POST",
-        url: "/api/admin/send_resovery",
-        data: {
-          email: formData.email
-        }
+      const res = await serverHandler.post(AdminEndpoints.SEND_ADMIN_RECOVERY, {
+        email: formData.email
       });
 
       toast({

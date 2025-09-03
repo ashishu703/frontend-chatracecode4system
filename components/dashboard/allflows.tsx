@@ -19,7 +19,7 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from '@/components/ui/pagination'
-import serverHandler from '@/utils/serverHandler'
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler'
 
 interface Flow {
   id: number

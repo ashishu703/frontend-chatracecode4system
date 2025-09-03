@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import type { Plan, SubscriptionStatus } from '@/utils/api/plans'
-import { userPlansAPI } from '@/utils/api/plans'
+import type { Plan, SubscriptionStatus } from '@/utils/api/plan/plans'
+import { userPlansAPI } from '@/utils/api/plan/plans'
 
 interface SubscriptionState {
   plans: Plan[]

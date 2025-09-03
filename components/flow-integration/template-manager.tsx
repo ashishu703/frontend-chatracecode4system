@@ -12,7 +12,7 @@ import type { Node, Edge } from "@xyflow/react"
 import type { NodeData, FlowTemplate } from "@/types/flow"
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import serverHandler from '@/utils/serverHandler';
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 
 interface TemplateManagerProps {
   nodes: Node<NodeData>[]

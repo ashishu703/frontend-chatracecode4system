@@ -9,7 +9,7 @@ import {
   setCurrentSubscription,
   clearError
 } from '@/store/slices/subscriptionSlice'
-import type { Plan, SubscriptionStatus } from '@/utils/api/plans'
+import type { Plan, SubscriptionStatus } from '@/utils/api/plan/plans'
 
 export function useSubscription() {
   const dispatch = useDispatch()

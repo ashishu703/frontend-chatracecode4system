@@ -1,5 +1,6 @@
-import serverHandler from '../serverHandler';
-import { UserEndpoints } from './Api-endpoints';
+import serverHandler from "../enpointsUtils/serverHandler";
+import { UserEndpoints } from "../enpointsUtils/Api-endpoints";
+
 
 export interface MediaUploadData {
     file: File;
@@ -8,33 +9,36 @@ export interface MediaUploadData {
 
 export interface MediaUploadResponse {
     success: boolean;
+    url?: string;
+    hash?: string;
     msg?: string;
-    data?: {
-        url: string;
-        hash: string;
-    };
     error?: string;
 }
 
 export const mediaUploadAPI = {
-    uploadMediaToMeta: async (file: File, templateName: string): Promise<MediaUploadResponse> => {
+    uploadMediaToMeta: async (file: File, templateName: string, options?: { abortKey?: string }): Promise<MediaUploadResponse> => {
         try {
             const formData = new FormData();
             console.log("file",file);
             formData.append('file', file);
             formData.append('templet_name', templateName);
 
-            const response = await serverHandler.post(UserEndpoints.UPLOAD_MEDIA_META, formData, {
+            const response = await serverHandler.post<MediaUploadResponse>(UserEndpoints.UPLOAD_MEDIA_META, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
-                }
+                },
+                abortKey: options?.abortKey
             });
-            return response.data as MediaUploadResponse || {
+            return response.data || {
                 success: false,
                 error: 'Upload failed'
             };
 
         } catch (error: any) {
+            if (error.message === 'Request cancelled') {
+                throw error;
+            }
+            
             const errorMsg = error.response?.data?.msg ||
                 error.response?.data?.message ||
                 error.message ||

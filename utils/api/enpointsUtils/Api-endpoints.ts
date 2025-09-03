@@ -48,6 +48,10 @@ export class UserEndpoints {
   static readonly DELETE_CONTACTS = '/api/phonebook/del_contacts';
   static readonly GET_UID_CONTACTS = '/api/phonebook/get_uid_contacts';
   static readonly ADD_SINGLE_CONTACT = '/api/phonebook/add_single_contact';
+  static readonly ADD_PHONEBOOK = '/api/phonebook/add';
+  static readonly GET_PHONEBOOKS = '/api/phonebook/get_by_uid';
+  static readonly DELETE_PHONEBOOK = '/api/phonebook/del_phonebook';
+  static readonly REASSIGN_CONTACTS = '/api/phonebook/reassign_contacts';
 }
 
 export class AdminEndpoints {
@@ -58,9 +62,10 @@ export class AdminEndpoints {
   static readonly UPDATE_PROFILE = '/api/admin/profile';
   
   // Dashboard
-  static readonly DASHBOARD = '/api/admin/dashboard';
-  static readonly GET_ANALYTICS = '/api/admin/analytics';
-  static readonly GET_STATS = '/api/admin/stats';
+  static readonly GET_ADMIN_DASHBOARD = '/api/admin/dashboard';
+  static readonly GET_ADMIN_ANALYTICS = '/api/admin/analytics';
+  static readonly GET_ADMIN_STATS = '/api/admin/stats';
+  static readonly SEND_ADMIN_RECOVERY = '/api/admin/send_resovery';
   
   // User Management
   static readonly GET_USERS = '/api/admin/users';
@@ -104,6 +109,11 @@ export class AdminEndpoints {
   static readonly GET_USER_REPORTS = '/api/admin/reports/users';
   static readonly GET_REVENUE_REPORTS = '/api/admin/reports/revenue';
   static readonly GET_USAGE_REPORTS = '/api/admin/reports/usage';
+
+  // Social Login && meta platforms
+  static readonly GET_SOCIAL_LOGIN_DETAILS = '/api/web/get_web_public';
+  static readonly UPDATE_META_PLATFORMS = '/api/web/update_web_config';
+  static readonly UPDATE_SOCIAL_LOGIN='/api/admin/update_social_login';
   
   // Logs & Monitoring
   static readonly GET_SYSTEM_LOGS = '/api/admin/logs/system';
@@ -246,7 +256,9 @@ export class ChatFlowEndpoints {
 }
 
 export class BroadcastEndpoints {
-  static readonly GET_BROADCASTS = '/api/broadcast/get_broadcast';
+  static readonly GET_ALL_BROADCASTS_HISTORY = '/api/broadcast/get_broadcast';
+  static readonly GET_PHONEBOOKS_BY_UID_FOR_BROADCAST = '/api/phonebook/get_by_uid';
+  static readonly ADD_NEW_BROADCAST = '/api/broadcast/add_new';
 }
 
 export class FacebookCommentEndpoints {

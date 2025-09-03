@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
-import serverHandler from '@/utils/serverHandler'
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler'
 
 // Lightweight event emitter to broadcast socket events across the app
 class SimpleEventEmitter {

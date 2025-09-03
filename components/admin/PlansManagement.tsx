@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { adminPlansAPI, Plan } from "@/utils/api/plans"
-import { formatPrice } from "@/utils/payment"
+import { adminPlansAPI, Plan } from "@/utils/api/plan/plans"
+import { formatPrice } from "@/utils/api/plan/payment"
 import { toast } from "sonner"
 
 export default function PlansManagement() {

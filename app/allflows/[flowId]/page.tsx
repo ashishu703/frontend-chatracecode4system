@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { FlowBuilder } from "@/components/flow-integration/flow-builder"
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 import { useToast } from "@/hooks/use-toast"
 
 export default function EditFlowPage() {

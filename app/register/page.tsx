@@ -13,7 +13,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { userPlansAPI, Plan } from '@/utils/api/plans';
+import { userPlansAPI, Plan } from '@/utils/api/plan/plans';
 import { toast } from 'sonner';
 
 export default function RegisterPage() {

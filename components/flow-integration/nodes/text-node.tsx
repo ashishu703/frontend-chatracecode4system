@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { useNodeContext } from "../node-context"
-import serverHandler from "@/utils/serverHandler"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 
 // HELPER: This function ensures every option has a unique/stable ID. This is crucial for fixing the connection bug.
 const initializeOptions = (optionsData) => {

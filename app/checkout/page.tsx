@@ -7,12 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { userPlansAPI, Plan } from "@/utils/api/plans"
-import { formatPrice, PaymentMethod } from "@/utils/payment"
+import { userPlansAPI, Plan } from "@/utils/api/plan/plans"
+import { formatPrice, PaymentMethod } from "@/utils/api/plan/payment"
 import { toast } from "sonner"
 import { ArrowLeft, CreditCard, Banknote, Check } from "lucide-react"
 import { FaPaypal } from "react-icons/fa"
-import serverHandler from '@/utils/serverHandler';
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import { useAuth } from '@/hooks/useAuth';
 // Razorpay script loader
 const loadRazorpayScript = () => {
