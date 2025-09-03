@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import serverHandler from '@/utils/serverHandler';
+import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 
 export interface Flow {
   id: string;

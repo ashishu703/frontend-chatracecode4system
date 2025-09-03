@@ -1,9 +1,9 @@
-import { FacebookCommentEndpoints, InstagramCommentEndpoints } from './Api-endpoints';
+import { FacebookCommentEndpoints, InstagramCommentEndpoints } from '../enpointsUtils/Api-endpoints';
 
 const getToken = () =>
   localStorage.getItem("serviceToken") || localStorage.getItem("adminToken") || "";
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:6400";
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:4500";
 
 // Types for comment automation settings
 export interface CommentAutomationSettings {

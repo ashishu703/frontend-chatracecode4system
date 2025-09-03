@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useFlows } from '@/hooks/useFlows';
-import { facebookCommentAPI, CommentAutomationSettings } from '@/utils/api/comment-automation-api';
+import { facebookCommentAPI, CommentAutomationSettings } from '@/utils/api/comment-automation/comment-automation-api';
 
 interface RadioOption {
   id: string;
