@@ -261,6 +261,46 @@ export class BroadcastEndpoints {
   static readonly ADD_NEW_BROADCAST = '/api/broadcast/add_new';
 }
 
+export class FacebookCommentEndpoints {
+  // Comment Automation Settings
+  static readonly SAVE_COMMENT_SETTINGS = '/api/facebook/comment/save_settings';
+  static readonly GET_COMMENT_SETTINGS = '/api/facebook/comment/get_settings';
+  static readonly UPDATE_COMMENT_SETTINGS = '/api/facebook/comment/update_settings';
+  static readonly DELETE_COMMENT_SETTINGS = '/api/facebook/comment/delete_settings';
+  
+  // Comment Tracking
+  static readonly TRACK_COMMENTS = '/api/facebook/comment/track';
+  static readonly GET_TRACKED_COMMENTS = '/api/facebook/comment/tracked';
+  
+  // Comment Replies
+  static readonly SEND_PRIVATE_REPLY = '/api/facebook/comment/private_reply';
+  static readonly SEND_PUBLIC_REPLY = '/api/facebook/comment/public_reply';
+  
+  // Analytics
+  static readonly GET_COMMENT_ANALYTICS = '/api/facebook/comment/analytics';
+  static readonly GET_REPLY_STATS = '/api/facebook/comment/reply_stats';
+}
+
+export class InstagramCommentEndpoints {
+  // Comment Automation Settings
+  static readonly SAVE_COMMENT_SETTINGS = '/api/instagram/comment/save_settings';
+  static readonly GET_COMMENT_SETTINGS = '/api/instagram/comment/get_settings';
+  static readonly UPDATE_COMMENT_SETTINGS = '/api/instagram/comment/update_settings';
+  static readonly DELETE_COMMENT_SETTINGS = '/api/instagram/comment/delete_settings';
+  
+  // Comment Tracking
+  static readonly TRACK_COMMENTS = '/api/instagram/comment/track';
+  static readonly GET_TRACKED_COMMENTS = '/api/instagram/comment/tracked';
+  
+  // Comment Replies
+  static readonly SEND_PRIVATE_REPLY = '/api/instagram/comment/private_reply';
+  static readonly SEND_PUBLIC_REPLY = '/api/instagram/comment/public_reply';
+  
+  // Analytics
+  static readonly GET_COMMENT_ANALYTICS = '/api/instagram/comment/analytics';
+  static readonly GET_REPLY_STATS = '/api/instagram/comment/reply_stats';
+}
+
 // Helper functions
 export class EndpointHelpers {
   /**
@@ -315,5 +355,7 @@ export const API_ENDPOINTS = {
   Template: TemplateEndpoints,
   ChatFlow: ChatFlowEndpoints,
   Broadcast: BroadcastEndpoints,
+  FacebookComment: FacebookCommentEndpoints,
+  InstagramComment: InstagramCommentEndpoints,
   Helpers: EndpointHelpers,
 } as const;

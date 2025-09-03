@@ -117,24 +117,134 @@ export default function InboxView() {
       const isAudioExt = ["mp3","wav","ogg","m4a","aac"].includes(extension)
       const isDocExt = ["pdf","doc","docx","ppt","pptx","xls","xlsx","csv","txt"].includes(extension)
       
-      if (url && (isImageExt || (!extension && (body.image_url || body.type === 'image')))) {
-        return { text, type: "image" as const, body: { url, caption: text } }
+      // CRITICAL FIX: Handle Instagram message types properly
+      // Check if we have a URL and determine type from extension or body type
+      if (url) {
+        if (isImageExt || (!extension && (body.image_url || body.type === 'image' || raw?.type === 'image'))) {
+          return { text, type: "image" as const, body: { url, caption: text } }
+        }
+        if (isVideoExt || body.video_url || (body.url && body.type === "video") || raw?.type === 'video') {
+          return { text, type: "video" as const, body: { url: url || body.video_url || body.url, caption: text } }
+        }
+        if (isAudioExt || body.audio_url || (body.url && body.type === "audio") || raw?.type === 'audio') {
+          return { text, type: "audio" as const, body: { url: url || body.audio_url || body.url, caption: text } }
+        }
+        if (isDocExt || body.document_url || body.file_url || (body.url && body.type === "document") || raw?.type === 'file' || raw?.type === 'document') {
+          return { text: text || body.filename || "Document", type: "file" as const, body: { url: url || body.document_url || body.file_url || body.url, caption: text, filename: body.filename || "Document", filesize: body.filesize || "" } }
+        }
+        if (isGifExt || body.gif_url || (body.url && body.type === "gif") || raw?.type === 'gif') {
+          return { text, type: "gif" as const, body: { url: url || body.gif_url || body.url, caption: text } }
+        }
       }
-      if ((url && isVideoExt) || body.video_url || (body.url && body.type === "video")) {
-        return { text, type: "video" as const, body: { url: url || body.video_url || body.url, caption: text } }
+      
+      // CRITICAL FIX: Handle Instagram message types when no URL but type is specified
+      if (raw?.type && raw.type !== 'text') {
+        if (raw.type === 'image' || raw.type === 'photo') {
+          return { text, type: "image" as const, body: { url: url || "", caption: text } }
+        }
+        if (raw.type === 'video') {
+          return { text, type: "video" as const, body: { url: url || "", caption: text } }
+        }
+        if (raw.type === 'audio' || raw.type === 'voice') {
+          return { text, type: "audio" as const, body: { url: url || "", caption: text } }
+        }
+        if (raw.type === 'file' || raw.type === 'document') {
+          return { text: text || "Document", type: "file" as const, body: { url: url || "", caption: text, filename: "Document", filesize: "" } }
+        }
       }
-      if ((url && isAudioExt) || body.audio_url || (body.url && body.type === "audio")) {
-        return { text, type: "audio" as const, body: { url: url || body.audio_url || body.url, caption: text } }
+      
+      // CRITICAL FIX: Handle Instagram messages with type detection from body
+      if (body.type && body.type !== 'text') {
+        if (body.type === 'image' || body.type === 'photo') {
+          return { text, type: "image" as const, body: { url: url || "", caption: text } }
+        }
+        if (body.type === 'video') {
+          return { text, type: "video" as const, body: { url: url || "", caption: text } }
+        }
+        if (body.type === 'audio' || body.type === 'voice') {
+          return { text, type: "audio" as const, body: { url: url || "", caption: text } }
+        }
+        if (body.type === 'file' || body.type === 'document') {
+          return { text: text || "Document", type: "file" as const, body: { url: url || "", caption: text, filename: "Document", filesize: "" } }
+        }
       }
-      if ((url && isDocExt) || body.document_url || body.file_url || (body.url && body.type === "document")) {
-        return { text: text || body.filename || "Document", type: "file" as const, body: { url: url || body.document_url || body.file_url || body.url, caption: text, filename: body.filename || "Document", filesize: body.filesize || "" } }
+      
+      // CRITICAL FIX: Handle Instagram messages with attchment_url (typo in backend)
+      if (body.attchment_url && raw?.type && raw.type !== 'text') {
+        const attachmentUrl = body.attchment_url
+        if (raw.type === 'image' || raw.type === 'photo') {
+          return { text, type: "image" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (raw.type === 'video') {
+          return { text, type: "video" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (raw.type === 'audio' || raw.type === 'voice') {
+          return { text, type: "audio" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (raw.type === 'file' || raw.type === 'document') {
+          return { text: text || "Document", type: "file" as const, body: { url: url || attachmentUrl, caption: text, filename: "Document", filesize: "" } }
+        }
       }
+      
+      // CRITICAL FIX: Handle Instagram messages with attachment_url (corrected field)
+      if (body.attachment_url && raw?.type && raw.type !== 'text') {
+        const attachmentUrl = body.attachment_url
+        if (raw.type === 'image' || raw.type === 'photo') {
+          return { text, type: "image" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (raw.type === 'video') {
+          return { text, type: "video" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (raw.type === 'audio' || raw.type === 'voice') {
+          return { text, type: "audio" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (raw.type === 'file' || raw.type === 'document') {
+          return { text: text || "Document", type: "file" as const, body: { url: url || attachmentUrl, caption: text, filename: "Document", filesize: "" } }
+        }
+      }
+      
+      // CRITICAL FIX: Handle Instagram messages with attachment_url when no type specified
+      if (body.attachment_url && !raw?.type) {
+        const attachmentUrl = body.attachment_url
+        // Try to determine type from URL extension
+        const ext = attachmentUrl.split('.').pop()?.toLowerCase()
+        if (['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif'].includes(ext || '')) {
+          return { text, type: "image" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (['mp4', 'webm', 'm4v', 'mov', '3gp', 'mkv'].includes(ext || '')) {
+          return { text, type: "video" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(ext || '')) {
+          return { text, type: "audio" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'csv', 'txt'].includes(ext || '')) {
+          return { text: text || "Document", type: "file" as const, body: { url: attachmentUrl, caption: text, filename: "Document", filesize: "" } }
+        }
+      }
+      
+      // CRITICAL FIX: Handle Instagram messages with attchment_url when no type specified
+      if (body.attchment_url && !raw?.type) {
+        const attachmentUrl = body.attchment_url
+        // Try to determine type from URL extension
+        const ext = attachmentUrl.split('.').pop()?.toLowerCase()
+        if (['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif'].includes(ext || '')) {
+          return { text, type: "image" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (['mp4', 'webm', 'm4v', 'mov', '3gp', 'mkv'].includes(ext || '')) {
+          return { text, type: "video" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(ext || '')) {
+          return { text, type: "audio" as const, body: { url: attachmentUrl, caption: text } }
+        }
+        if (['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'csv', 'txt'].includes(ext || '')) {
+          return { text: text || "Document", type: "file" as const, body: { url: attachmentUrl, caption: text, filename: "Document", filesize: "" } }
+        }
+      }
+      
       if (Array.isArray(body.elements)) {
         return { text, type: "carousel" as const, body: { elements: body.elements, text } }
       }
-      if (isGifExt || body.gif_url || (body.url && body.type === "gif")) {
-        return { text, type: "gif" as const, body: { url: url || body.gif_url || body.url, caption: text } }
-      }
+      
       return { text: text || "", type: (raw?.type || "text") as Message["type"], body }
     }
     
@@ -145,7 +255,7 @@ export default function InboxView() {
     return base
   }, [parseJsonIfNeeded])
 
-  const previewText = React.useCallback((raw: any): string => {
+  const previewText = React.useCallback((raw: any) => {
     const c = deriveContent(raw)
     if (c.text) return c.text
     if (c.type === "image") return "Image"

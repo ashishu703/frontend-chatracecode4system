@@ -6,13 +6,13 @@ import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CheckCircle, Loader2 } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
+// useAuth is no longer needed since users are created during initial registration
 import { toast } from 'sonner'
 
 export default function PaymentSuccessPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { register } = useAuth()
+  // register is no longer needed since users are created during initial registration
   const [loading, setLoading] = useState(true)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,21 +30,11 @@ export default function PaymentSuccessPage() {
         try {
           const registrationData = JSON.parse(pendingRegistration)
           
-          // Register the user
-          await register(
-            registrationData.email,
-            registrationData.name,
-            registrationData.password,
-            registrationData.mobile_with_country_code,
-            registrationData.acceptPolicy,
-            registrationData.plan_id
-          )
-          
           // Clear session storage
           sessionStorage.removeItem('pendingRegistration')
           
-          // Show success message with light green color
-          toast.success('Account registration successful!', {
+          // Show success message since user is already registered
+          toast.success('Payment successful! Your account is now active. Please login to continue.', {
             style: {
               backgroundColor: '#d4edda',
               color: '#155724',
@@ -60,9 +50,9 @@ export default function PaymentSuccessPage() {
           }, 3000)
           
         } catch (error) {
-          console.error('Registration failed after payment:', error)
-          setError('Payment successful but registration failed. Please contact support.')
-          toast.error('Payment successful but registration failed. Please contact support.')
+          console.error('Payment success handling error:', error)
+          setError('Payment successful but there was an issue. Please contact support.')
+          toast.error('Payment successful but there was an issue. Please contact support.')
         }
       } else {
         // Regular payment success (not from registration)

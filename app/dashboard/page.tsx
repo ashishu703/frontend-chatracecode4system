@@ -24,7 +24,7 @@ import { useEffect, useState } from 'react';
 import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import AllFlowsPage from "@/components/dashboard/allflows"
 import AllTemplatesPage from "@/components/flow-integration/alltemplates"
-import AutomationToolsView from "@/components/dashboard/AutomationToolsView"
+import AutomationToolsView from "@/components/dashboard/AutomationTools/AutomationToolsView"
 import SettingsView from "@/components/dashboard/SettingsView"
 import { UserEndpoints } from "@/utils/api/enpointsUtils/Api-endpoints"
 
