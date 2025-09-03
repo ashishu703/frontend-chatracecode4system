@@ -56,7 +56,7 @@ function CheckoutPageContent() {
   const router = useRouter()
   const planId = searchParams.get('plan')
   const fromRegister = searchParams.get('from') === 'register'
-  const { register } = useAuth()
+  // register is no longer needed since users are created during initial registration
   
   const [plan, setPlan] = useState<Plan | null>(null)
   const [loading, setLoading] = useState(true)
@@ -110,36 +110,39 @@ function CheckoutPageContent() {
 
   const fetchGateways = async () => {
     try {
-      const response = await serverHandler.get('/api/user/get_payment_details');
-      setGateways((response as any).data?.data || {});
+      // Try to get payment details with authentication first
+      let response;
+      try {
+        response = await serverHandler.get('/api/user/get_payment_details');
+        setGateways((response as any).data?.data || {});
+      } catch (authError: any) {
+        // If authentication fails (401), use the public endpoint
+        if (authError.response?.status === 401) {
+          console.log('User not authenticated, using public endpoint');
+          const publicResponse = await serverHandler.get('/api/user/get_payment_gateways_public');
+          setGateways((publicResponse as any).data?.data || {});
+        } else {
+          throw authError;
+        }
+      }
     } catch (error) {
       console.error('Error fetching gateways:', error);
       setGateways({})
     }
   }
 
-  // Helper function to handle registration after successful payment
-  const handleRegistrationAfterPayment = async () => {
+  // Helper function to handle post-payment flow
+  const handlePostPaymentFlow = async () => {
     if (!fromRegister || !pendingRegistration) {
       return false;
     }
 
     try {
-      // Register the user
-      await register(
-        pendingRegistration.email,
-        pendingRegistration.name,
-        pendingRegistration.password,
-        pendingRegistration.mobile_with_country_code,
-        pendingRegistration.acceptPolicy,
-        pendingRegistration.plan_id
-      );
-      
       // Clear pending registration data
       localStorage.removeItem('pendingRegistration');
       
-      // Show success message with light green color
-      toast.success('Account registration successful!', {
+      // Show success message
+      toast.success('Payment successful! Your account is now active. Please login to continue.', {
         style: {
           backgroundColor: '#d4edda',
           color: '#155724',
@@ -153,9 +156,9 @@ function CheckoutPageContent() {
       }, 2000);
       
       return true;
-    } catch (error) {
-      console.error('Registration failed after payment:', error);
-      toast.error('Payment successful but registration failed. Please contact support.');
+    } catch (error: any) {
+      console.error('Post-payment flow error:', error);
+      toast.error('Payment successful but there was an issue. Please contact support.');
       router.push('/register');
       return false;
     }
@@ -196,14 +199,26 @@ function CheckoutPageContent() {
 
   const handleStripePayment = async () => {
     try {
-      const response = await userPlansAPI.createStripeSession(plan!.id)
-      if ((response as any).success) {
+      let response;
+      
+      if (fromRegister && pendingRegistration) {
+        // Use public endpoint for new users
+        response = await serverHandler.post('/api/user/create_stripe_session_public', {
+          planId: plan!.id,
+          email: pendingRegistration.email,
+          name: pendingRegistration.name
+        });
         // Store registration data in sessionStorage for Stripe redirect
-        if (fromRegister && pendingRegistration) {
-          sessionStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
-          toast.info('Redirecting to Stripe. After payment, you will be redirected back to complete registration.');
-        }
-        window.location.href = (response as any).session.url
+        sessionStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
+        toast.info('Redirecting to Stripe. After payment, you will be redirected back to complete registration.');
+      } else {
+        // Use authenticated endpoint for existing users
+        response = await userPlansAPI.createStripeSession(plan!.id);
+      }
+      
+      if ((response as any).data?.success || (response as any).success) {
+        const sessionUrl = (response as any).data?.session?.url || (response as any).session?.url;
+        window.location.href = sessionUrl;
       }
     } catch (error) {
       throw error
@@ -224,7 +239,21 @@ function CheckoutPageContent() {
       console.log('Starting Razorpay payment for plan:', plan);
       
       await loadRazorpayScript()
-      const orderRes = await userPlansAPI.createRazorpayOrder(plan.id, plan.price)
+      
+      let orderRes;
+      if (fromRegister && pendingRegistration) {
+        // Use public endpoint for new users
+        const publicResponse = await serverHandler.post('/api/user/create_razorpay_order_public', {
+          planId: plan.id,
+          amount: plan.price,
+          email: pendingRegistration.email,
+          name: pendingRegistration.name
+        });
+        orderRes = publicResponse.data;
+      } else {
+        // Use authenticated endpoint for existing users
+        orderRes = await userPlansAPI.createRazorpayOrder(plan.id, plan.price);
+      }
       
       console.log('Razorpay order response:', orderRes)
       
@@ -262,19 +291,34 @@ function CheckoutPageContent() {
             console.log('Processing payment with backend...');
             
             // Process the payment with backend
-            const backendResponse = await userPlansAPI.payWithRazorpay(
-              response.razorpay_payment_id, 
-              plan!, 
-              (orderRes as any).amount
-            );
+            let backendResponse;
+            
+            if (fromRegister && pendingRegistration) {
+              // Use public endpoint for new users
+              const publicPaymentResponse = await serverHandler.post('/api/user/pay_with_razorpay_public', {
+                rz_payment_id: response.razorpay_payment_id,
+                plan: plan!,
+                amount: (orderRes as any).amount,
+                email: pendingRegistration.email,
+                name: pendingRegistration.name
+              });
+              backendResponse = publicPaymentResponse.data;
+            } else {
+              // Use authenticated endpoint for existing users
+              backendResponse = await userPlansAPI.payWithRazorpay(
+                response.razorpay_payment_id, 
+                plan!, 
+                (orderRes as any).amount
+              );
+            }
             
             console.log('Backend payment response:', backendResponse);
             
             if (backendResponse && (backendResponse as any).success) {
               // If user came from registration, register them first
               if (fromRegister && pendingRegistration) {
-                const registrationSuccess = await handleRegistrationAfterPayment();
-                if (!registrationSuccess) {
+                const postPaymentSuccess = await handlePostPaymentFlow();
+                if (!postPaymentSuccess) {
                   return; // Error handling is done in the helper function
                 }
               } else {
@@ -356,12 +400,12 @@ function CheckoutPageContent() {
 
   const handleOfflinePayment = async () => {
     try {
-      // For offline payment, we need to handle registration immediately
+      // For offline payment, we need to handle post-payment flow immediately
       if (fromRegister && pendingRegistration) {
-        const registrationSuccess = await handleRegistrationAfterPayment();
-        if (registrationSuccess) {
+        const postPaymentSuccess = await handlePostPaymentFlow();
+        if (postPaymentSuccess) {
           toast.success('Offline payment instructions sent to your email');
-          // Registration and redirect will be handled by handleRegistrationAfterPayment
+          // Post-payment flow and redirect will be handled by handlePostPaymentFlow
         }
       } else {
         toast.success('Offline payment instructions sent to your email');

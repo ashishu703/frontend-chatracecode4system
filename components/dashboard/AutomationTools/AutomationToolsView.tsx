@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
+import CommentManager from "./FacebookCommentReply"
+import InstagramCommentManager from "./InstagramCommentReply"
 import {
   Card,
   CardContent,
@@ -33,6 +35,8 @@ import {
   Mails,
   CalendarPlus,
   Rocket,
+  ArrowLeft,
+  QrCode,
 } from "lucide-react"
 
 // Define the structure for each tool
@@ -53,21 +57,21 @@ const automationTools: AutomationTool[] = [
   },
   {
     id: "facebook",
-    title: "Facebook Automation",
+    title: "Facebook comments Automation",
     description: "Automate responses to comments on your Facebook posts.",
     icon: Facebook,
   },
   {
     id: "instagram",
-    title: "Instagram Automation",
+    title: "Instagram comments Automation",
     description: "Automatically reply to comments and mentions on Instagram.",
     icon: Instagram,
   },
   {
-    id: "scheduling",
-    title: "Appointment Scheduling",
-    description: "Let your contacts easily book an appointment with you.",
-    icon: CalendarDays,
+    id: "qr_generator",
+    title: "QR Generator",
+    description: "Generate QR codes for your business and marketing needs.",
+    icon: QrCode,
   },
   {
     id: "drip_campaigns",
@@ -80,60 +84,68 @@ const automationTools: AutomationTool[] = [
 // Main component
 export default function AutomationGrid() {
   const [selectedTool, setSelectedTool] = useState<AutomationTool | null>(null)
+  const [showToolContent, setShowToolContent] = useState(false)
+  const [currentTool, setCurrentTool] = useState<'facebook' | 'instagram' | null>(null)
 
   const handleCardClick = (tool: AutomationTool) => {
-    setSelectedTool(tool)
+    if (tool.id === "facebook") {
+      setShowToolContent(true)
+      setCurrentTool('facebook')
+    } else if (tool.id === "instagram") {
+      setShowToolContent(true)
+      setCurrentTool('instagram')
+    } else {
+      setSelectedTool(tool)
+    }
   }
 
   const handleCloseModal = () => {
     setSelectedTool(null)
   }
 
-  const renderModalContent = () => {
+  const handleBackToTools = () => {
+    setShowToolContent(false)
+    setCurrentTool(null)
+  }
+
+  // If showing tool content, render the appropriate component
+  if (showToolContent) {
+    return (
+      <div className="bg-gray-50 min-h-screen">
+        <div className="max-w-7xl mx-auto">
+          {currentTool === 'facebook' && (
+            <CommentManager onBack={handleBackToTools} />
+          )}
+          {currentTool === 'instagram' && (
+            <InstagramCommentManager onBack={handleBackToTools} />
+          )}
+        </div>
+      </div>
+    )
+  }
+
+    const renderModalContent = () => {
     if (!selectedTool) return null
 
-    // Specific UI for Appointment Scheduling
-    if (selectedTool.id === "scheduling") {
+    // Coming Soon messages for specific tools
+    if (selectedTool.id === "triggers" || selectedTool.id === "drip_campaigns" || selectedTool.id === "qr_generator") {
       return (
         <>
           <DialogHeader>
-            <DialogTitle>Configure Appointment Scheduling</DialogTitle>
+            <DialogTitle>{selectedTool.title}</DialogTitle>
             <DialogDescription>
-              Link this service to an existing automation flow or connect a new
-              calendar.
+              This feature is coming soon! Stay tuned for updates.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="flow-select" className="text-sm font-medium">
-                Select an Existing Flow
-              </label>
-              <Select>
-                <SelectTrigger id="flow-select">
-                  <SelectValue placeholder="Choose a flow..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="flow-1">New Client Onboarding Flow</SelectItem>
-                  <SelectItem value="flow-2">Follow-up Reminder Flow</SelectItem>
-                  <SelectItem value="flow-3">Post-Appointment Survey Flow</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Calendar Integration
-              </label>
-              <Button variant="outline" className="w-full justify-start">
-                <CalendarPlus className="mr-2 h-4 w-4" />
-                Add a Calendar
-              </Button>
-            </div>
+          <div className="py-8 text-center">
+            <div className="text-6xl mb-4">🚀</div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Coming Soon!</h3>
+            <p className="text-gray-600">We're working hard to bring you this amazing feature. Stay tuned! 😊</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseModal}>
-              Cancel
+            <Button onClick={handleCloseModal}>
+              Got it!
             </Button>
-            <Button>Save Configuration</Button>
           </DialogFooter>
         </>
       )
@@ -143,22 +155,19 @@ export default function AutomationGrid() {
     return (
       <>
         <DialogHeader>
-          <DialogTitle>Configure {selectedTool.title}</DialogTitle>
+          <DialogTitle>{selectedTool.title}</DialogTitle>
           <DialogDescription>
-            You are setting up the {selectedTool.title} tool. Further
-            configuration will be available here.
+            This feature is coming soon! Stay tuned for updates.
           </DialogDescription>
         </DialogHeader>
-        <div className="py-6 text-center">
-            <p>Placeholder content for {selectedTool.title}.</p>
+        <div className="py-8 text-center">
+          <div className="text-6xl mb-4">🚀</div>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">Coming Soon!</h3>
+          <p className="text-gray-600">We're working hard to bring you this amazing feature. Stay tuned! 😊</p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={handleCloseModal}>
-            Close
-          </Button>
-          <Button>
-            <Rocket className="mr-2 h-4 w-4" />
-            Proceed
+          <Button onClick={handleCloseModal}>
+            Got it!
           </Button>
         </DialogFooter>
       </>

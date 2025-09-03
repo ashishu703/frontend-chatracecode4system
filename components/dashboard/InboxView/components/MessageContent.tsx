@@ -61,65 +61,110 @@ function renderStructuredText(text: string | any) {
 }
 
 export function MessageContent({ msg }: { msg: Message }) {
-  if (msg.type === "image" && msg.body && typeof msg.body === "object" && (msg.body as any).url) {
+  // CRITICAL FIX: Handle Instagram messages with proper URL validation
+  if (msg.type === "image" && msg.body && typeof msg.body === "object") {
     const body: any = msg.body
-    return (
-      <div className="max-w-[600px]">
-        <img
-          src={body.url || "/placeholder.svg"}
-          alt="Image"
-          className="block w-full max-w-[600px] max-h-[250px] object-contain cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
-          onClick={() => window.open(body.url, "_blank")}
-          onError={(e) => {
-            ;(e.currentTarget as HTMLImageElement).src = "/placeholder.svg"
-          }}
-        />
-        {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
-      </div>
-    )
-  } else if (msg.type === "video" && msg.body && typeof msg.body === "object" && (msg.body as any).url) {
-    const body: any = msg.body
-    return (
-      <div className="max-w-[380px]">
-        <video src={body.url} controls className="w-full max-w-[380px] max-h-[400px] rounded-lg object-contain" />
-        {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
-      </div>
-    )
-  } else if (msg.type === "audio" && msg.body && typeof msg.body === "object" && (msg.body as any).url) {
-    const body: any = msg.body
-    return (
-      <div className="flex items-center gap-2 p-2 rounded-lg w-fit">
-        <Mic className="h-4 w-4 flex-shrink-0" />
-        <audio src={body.url} controls className="w-auto min-w-[200px]" />
-      </div>
-    )
-  } else if (msg.type === "file" && msg.body && typeof msg.body === "object" && (msg.body as any).url) {
-    const body: any = msg.body
-    const fileName = body.filename || body.caption || "Document"
-    const fileSize = body.filesize || ""
-    return (
-      <div
-        className="flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer w-fit"
-        onClick={() => window.open(body.url, "_blank")}
-      >
-        <div className="flex-shrink-0">
-          {fileName.toLowerCase().includes(".pdf") ? (
-            <FileText className="h-6 w-6 text-red-600" />
-          ) : fileName.toLowerCase().includes(".doc") || fileName.toLowerCase().includes(".docx") ? (
-            <FileText className="h-6 w-6 text-blue-600" />
-          ) : fileName.toLowerCase().includes(".xlsx") || fileName.toLowerCase().includes(".csv") ? (
-            <FileText className="h-6 w-6 text-green-600" />
-          ) : (
-            <File className="h-6 w-6 text-gray-600" />
-          )}
+    const imageUrl = body.url || body.attchment_url || body.attachment_url || ""
+    
+    if (imageUrl) {
+      return (
+        <div className="max-w-[600px]">
+          <img
+            src={imageUrl}
+            alt="Image"
+            className="block w-full max-w-[600px] max-h-[250px] object-contain cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
+            onClick={() => window.open(imageUrl, "_blank")}
+            onError={(e) => {
+              ;(e.currentTarget as HTMLImageElement).src = "/placeholder.svg"
+            }}
+          />
+          {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{fileName}</p>
-          {fileSize && <p className="text-xs text-gray-500">{fileSize}</p>}
+      )
+    } else {
+      // Handle case where image type is set but no URL (fallback to text)
+      return (
+        <div className="text-sm text-gray-500 italic">
+          [Image] {body.caption || "No image available"}
         </div>
-        <Download className="h-4 w-4 text-gray-400" />
-      </div>
-    )
+      )
+    }
+  } else if (msg.type === "video" && msg.body && typeof msg.body === "object") {
+    const body: any = msg.body
+    const videoUrl = body.url || body.attchment_url || body.attachment_url || ""
+    
+    if (videoUrl) {
+      return (
+        <div className="max-w-[380px]">
+          <video src={videoUrl} controls className="w-full max-w-[380px] max-h-[400px] rounded-lg object-contain" />
+          {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
+        </div>
+      )
+    } else {
+      // Handle case where video type is set but no URL (fallback to text)
+      return (
+        <div className="text-sm text-gray-500 italic">
+          [Video] {body.caption || "No video available"}
+        </div>
+      )
+    }
+  } else if (msg.type === "audio" && msg.body && typeof msg.body === "object") {
+    const body: any = msg.body
+    const audioUrl = body.url || body.attchment_url || body.attachment_url || ""
+    
+    if (audioUrl) {
+      return (
+        <div className="flex items-center gap-2 p-2 rounded-lg w-fit">
+          <Mic className="h-4 w-4 flex-shrink-0" />
+          <audio src={audioUrl} controls className="w-auto min-w-[200px]" />
+        </div>
+      )
+    } else {
+      // Handle case where audio type is set but no URL (fallback to text)
+      return (
+        <div className="text-sm text-gray-500 italic">
+          [Audio] {body.caption || "No audio available"}
+        </div>
+      )
+    }
+  } else if (msg.type === "file" && msg.body && typeof msg.body === "object") {
+    const body: any = msg.body
+    const fileUrl = body.url || body.attchment_url || body.attachment_url || ""
+    
+    if (fileUrl) {
+      const fileName = body.filename || body.caption || "Document"
+      const fileSize = body.filesize || ""
+      return (
+        <div
+          className="flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer w-fit"
+          onClick={() => window.open(fileUrl, "_blank")}
+        >
+          <div className="flex-shrink-0">
+            {fileName.toLowerCase().includes(".pdf") ? (
+              <FileText className="h-6 w-6 text-red-600" />
+            ) : fileName.toLowerCase().includes(".doc") || fileName.toLowerCase().includes(".docx") ? (
+              <FileText className="h-6 w-6 text-blue-600" />
+            ) : fileName.toLowerCase().includes(".xlsx") || fileName.toLowerCase().includes(".csv") ? (
+              <FileText className="h-6 w-6 text-green-600" />
+            ) : (
+              <File className="h-6 w-6 text-gray-600" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{fileName}</p>
+            {fileSize && <p className="text-xs text-gray-500">{fileSize}</p>}
+          </div>
+          <Download className="h-4 w-4 text-gray-400" />
+        </div>
+      )
+    } else {
+      // Handle case where file type is set but no URL (fallback to text)
+      return (
+        <div className="text-sm text-gray-500 italic">
+          [Document] {body.caption || "No document available"}
+        </div>
+      )
+    }
   } else if (msg.type === "carousel" && (msg.body as any)?.elements) {
     const body: any = msg.body
     return (

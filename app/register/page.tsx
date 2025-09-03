@@ -62,20 +62,47 @@ export default function RegisterPage() {
       return;
     }
 
-    // Store registration data in localStorage for later use
-    const registrationData = {
-      email: formData.email,
-      name: formData.name,
-      password: formData.password,
-      mobile_with_country_code: formData.mobile_with_country_code,
-      acceptPolicy: formData.acceptPolicy,
-      plan_id: formData.plan_id
-    };
-    
-    localStorage.setItem('pendingRegistration', JSON.stringify(registrationData));
-    
-    // Redirect to checkout page with plan_id
-    router.push(`/checkout?plan=${formData.plan_id}&from=register`);
+    try {
+      // Create the user account first
+      const registrationData = {
+        email: formData.email,
+        name: formData.name,
+        password: formData.password,
+        mobile_with_country_code: formData.mobile_with_country_code,
+        acceptPolicy: formData.acceptPolicy,
+        plan_id: formData.plan_id
+      };
+      
+      // Register the user immediately
+      await register(
+        formData.email,
+        formData.name,
+        formData.password,
+        formData.mobile_with_country_code,
+        formData.acceptPolicy,
+        formData.plan_id
+      );
+      
+      // Store registration data in localStorage for payment flow
+      localStorage.setItem('pendingRegistration', JSON.stringify(registrationData));
+      
+      // Show success message
+      toast.success('Account created successfully! Please complete payment to activate your plan.');
+      
+      // Redirect to checkout page with plan_id
+      router.push(`/checkout?plan=${formData.plan_id}&from=register`);
+      
+    } catch (error: any) {
+      console.error('Registration failed:', error);
+      
+      // Check if the error is due to email already being in use (409 conflict)
+      if (error.response?.status === 409) {
+        toast.error('An account with this email already exists. Please login instead.');
+        router.push('/login');
+      } else {
+        toast.error(error.response?.data?.message || 'Registration failed. Please try again.');
+      }
+    }
   };
 
   const handleOAuthLogin = (provider: string) => {
