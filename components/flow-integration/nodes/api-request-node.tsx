@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { X, Plus } from "lucide-react"
 import { useState } from "react"
-import type { NodeData } from "@/types/flow"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { useNodeContext } from "../node-context"
+import { NodeData } from "@/types/flow-integration/flow"
 
 export function ApiRequestNode({ data, selected, id }: NodeProps<NodeData>) {
   const [selectedMethod, setSelectedMethod] = useState("GET")

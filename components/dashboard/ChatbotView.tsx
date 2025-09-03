@@ -1,12 +1,34 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Edit, Trash2, Plus, Search, Filter, Bot, ToggleLeft, ToggleRight } from "lucide-react"
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Edit,
+  Trash2,
+  Plus,
+  Search,
+  Filter,
+  Bot,
+  ToggleLeft,
+  ToggleRight,
+} from "lucide-react";
 import {
   Pagination,
   PaginationContent,
@@ -15,386 +37,400 @@ import {
   PaginationPrevious,
   PaginationNext,
   PaginationEllipsis,
-} from '@/components/ui/pagination'
+} from "@/components/ui/pagination";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import serverHandler from '@/utils/api/enpointsUtils/serverHandler'
-import { useToast } from '@/hooks/use-toast'
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
+import { useToast } from "@/hooks/use-toast";
 
 interface Flow {
-  id: number
-  uid: string
-  flow_id: string
-  title: string
-  createdAt: string
-  isActive: boolean
+  id: number;
+  uid: string;
+  flow_id: string;
+  title: string;
+  createdAt: string;
+  isActive: boolean;
 }
 
 interface Chatbot {
-  id: number
-  title: string
-  status: boolean
-  flow_id: number
-  flow_title: string
-  for_all: boolean
-  chats: string[]
-  createdAt: string
-  updatedAt: string
-  active: boolean 
+  id: number;
+  title: string;
+  status: boolean;
+  flow_id: number;
+  flow_title: string;
+  for_all: boolean;
+  chats: string[];
+  createdAt: string;
+  updatedAt: string;
+  active: boolean;
 }
 
 interface Pagination {
-  totalItems: number
-  totalPages: number
-  currentPage: number
-  pageSize: number
+  totalItems: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
 }
 
 // Page size options for selector
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 const CHANNEL_OPTIONS = [
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'messenger', label: 'Messenger' },
-  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: "instagram", label: "Instagram" },
+  { value: "messenger", label: "Messenger" },
+  { value: "whatsapp", label: "WhatsApp" },
   // Add more channels as needed
-]
+];
 
 export default function ChatbotView() {
-  const [chatbots, setChatbots] = useState<Chatbot[]>([])
-  const [flows, setFlows] = useState<Flow[]>([])
+  const [chatbots, setChatbots] = useState<Chatbot[]>([]);
+  const [flows, setFlows] = useState<Flow[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     totalItems: 0,
     totalPages: 1,
     currentPage: 1,
-    pageSize: 10
-  })
-  const [loading, setLoading] = useState(false)
-  const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState('createdAt')
-  const [sortOrder, setSortOrder] = useState('desc')
-  const [addModalOpen, setAddModalOpen] = useState(false)
-  const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editingChatbot, setEditingChatbot] = useState<Chatbot | null>(null)
+    pageSize: 10,
+  });
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingChatbot, setEditingChatbot] = useState<Chatbot | null>(null);
   const [formData, setFormData] = useState({
-    title: '',
-    flow_id: '',
+    title: "",
+    flow_id: "",
     for_all: false,
-    chats: [] as string[]
-  })
-  const [saving, setSaving] = useState(false)
-  const { toast } = useToast()
-  const [allChatbots, setAllChatbots] = useState<Chatbot[]>([])
-  const [selectedChatbotId, setSelectedChatbotId] = useState<string>("")
-  const [channel, setChannel] = useState('')
-  const [allFlows, setAllFlows] = useState<{ id: string, title: string }[]>([])
+    chats: [] as string[],
+  });
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+  const [allChatbots, setAllChatbots] = useState<Chatbot[]>([]);
+  const [selectedChatbotId, setSelectedChatbotId] = useState<string>("");
+  const [channel, setChannel] = useState("");
+  const [allFlows, setAllFlows] = useState<{ id: string; title: string }[]>([]);
 
-  
   const fetchAllFlows = async () => {
     try {
-      const response = await serverHandler.get(`/api/chat_flow/get_mine`)
-      const data = response.data as any
+      const response = await serverHandler.get(`/api/chat_flow/get_mine`);
+      const data = response.data as any;
       if (data.success) {
-        const flows = (data.data || []).map((flow: any) => ({ id: flow.id?.toString(), title: flow.title }))
-        setAllFlows(flows)
+        const flows = (data.data || []).map((flow: any) => ({
+          id: flow.id?.toString(),
+          title: flow.title,
+        }));
+        setAllFlows(flows);
       } else {
-        setAllFlows([])
+        setAllFlows([]);
       }
     } catch (error) {
-      setAllFlows([])
+      setAllFlows([]);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchAllFlows()
-  }, [])
+    fetchAllFlows();
+  }, []);
 
   const fetchChatbots = async () => {
-    setLoading(true)
+    setLoading(true);
     try {
       const params = new URLSearchParams({
         page: pagination.currentPage.toString(),
         size: pagination.pageSize.toString(),
         search: search,
         sort: sortBy,
-        order: sortOrder
-      })
-      
-      const response = await serverHandler.get(`/api/chatbot/get_chatbot?${params}`)
-      const data = response.data as any
-      
+        order: sortOrder,
+      });
+
+      const response = await serverHandler.get(
+        `/api/chatbot/get_chatbot?${params}`
+      );
+      const data = response.data as any;
+
       if (data.success) {
-        setChatbots(data.data || [])
-        setPagination(data.pagination || {
-          totalItems: 0,
-          totalPages: 1,
-          currentPage: 1,
-          pageSize: pagination.pageSize
-        })
-        console.log('Fetched chatbots:', data.data)
+        setChatbots(data.data || []);
+        setPagination(
+          data.pagination || {
+            totalItems: 0,
+            totalPages: 1,
+            currentPage: 1,
+            pageSize: pagination.pageSize,
+          }
+        );
+        console.log("Fetched chatbots:", data.data);
       } else {
-        console.error('Failed to fetch chatbots:', data)
-        setChatbots([])
+        console.error("Failed to fetch chatbots:", data);
+        setChatbots([]);
       }
     } catch (error: any) {
-      console.error('Error fetching chatbots:', error)
-      setChatbots([])
-      setPagination((prev) => ({ ...prev, totalItems: 0, totalPages: 1 }))
+      console.error("Error fetching chatbots:", error);
+      setChatbots([]);
+      setPagination((prev) => ({ ...prev, totalItems: 0, totalPages: 1 }));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const fetchFlows = async () => {
     try {
-      const response = await serverHandler.get('/api/chat_flow/get_mine')
-      const data = response.data as any
-      
+      const response = await serverHandler.get("/api/chat_flow/get_mine");
+      const data = response.data as any;
+
       if (data.success) {
-       
-        const activeFlows = (data.data || []).filter((flow: Flow) => flow.isActive)
-        setFlows(activeFlows)
+        const activeFlows = (data.data || []).filter(
+          (flow: Flow) => flow.isActive
+        );
+        setFlows(activeFlows);
       } else {
-        setFlows([])
+        setFlows([]);
       }
     } catch (error: any) {
-      console.error('Error fetching flows:', error)
-      setFlows([])
+      console.error("Error fetching flows:", error);
+      setFlows([]);
     }
-  }
+  };
 
-  
   const fetchAllChatbots = async () => {
     try {
-      const response = await serverHandler.get(`/api/chatbot/get_chatbot`)
-      const data = response.data as any
+      const response = await serverHandler.get(`/api/chatbot/get_chatbot`);
+      const data = response.data as any;
       if (data.success) {
-        setAllChatbots(data.data || [])
+        setAllChatbots(data.data || []);
       } else {
-        setAllChatbots([])
+        setAllChatbots([]);
       }
     } catch (error) {
-      setAllChatbots([])
+      setAllChatbots([]);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchChatbots()
-  }, [pagination.currentPage, pagination.pageSize, search, sortBy, sortOrder])
+    fetchChatbots();
+  }, [pagination.currentPage, pagination.pageSize, search, sortBy, sortOrder]);
 
   useEffect(() => {
-    fetchFlows()
-  }, [])
+    fetchFlows();
+  }, []);
 
   const handlePageChange = (page: number) => {
-    setPagination(prev => ({ ...prev, currentPage: page }))
-  }
+    setPagination((prev) => ({ ...prev, currentPage: page }));
+  };
 
   const handlePageSizeChange = (size: number) => {
-    setPagination(prev => ({ ...prev, pageSize: size, currentPage: 1 }))
-  }
+    setPagination((prev) => ({ ...prev, pageSize: size, currentPage: 1 }));
+  };
 
   const handleSearch = (value: string) => {
-    setSearch(value)
-    setPagination(prev => ({ ...prev, currentPage: 1 }))
-  }
+    setSearch(value);
+    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+  };
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
-      setSortBy(field)
-      setSortOrder('desc')
+      setSortBy(field);
+      setSortOrder("desc");
     }
-    setPagination(prev => ({ ...prev, currentPage: 1 }))
-  }
+    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+  };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   const openAddModal = () => {
     setFormData({
-      title: '',
-      flow_id: '',
-      for_all: true, 
-      chats: []
-    })
-    setChannel('')
-    setAddModalOpen(true)
-  }
+      title: "",
+      flow_id: "",
+      for_all: true,
+      chats: [],
+    });
+    setChannel("");
+    setAddModalOpen(true);
+  };
 
   const openEditModal = (chatbot: Chatbot) => {
-    setEditingChatbot(chatbot)
+    setEditingChatbot(chatbot);
     setFormData({
       title: chatbot.title,
       flow_id: chatbot.flow_id.toString(),
       for_all: chatbot.for_all,
-      chats: chatbot.chats || []
-    })
-    setEditModalOpen(true)
-  }
+      chats: chatbot.chats || [],
+    });
+    setEditModalOpen(true);
+  };
 
   const closeModals = () => {
-    setAddModalOpen(false)
-    setEditModalOpen(false)
-    setEditingChatbot(null)
+    setAddModalOpen(false);
+    setEditModalOpen(false);
+    setEditingChatbot(null);
     setFormData({
-      title: '',
-      flow_id: '',
+      title: "",
+      flow_id: "",
       for_all: false,
-      chats: []
-    })
-  }
+      chats: [],
+    });
+  };
 
   const saveChatbot = async () => {
     if (!formData.title || !formData.flow_id) {
       toast({
         title: "Error",
         description: "Please fill all required fields",
-        variant: "destructive"
-      })
-      return
+        variant: "destructive",
+      });
+      return;
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
       const payload = {
         title: formData.title,
         flow_id: parseInt(formData.flow_id),
         for_all: formData.for_all,
         chats: formData.chats,
-        status: 1 // Always create as active
-      }
+        status: 1, // Always create as active
+      };
 
-      let response
+      let response;
       if (editingChatbot) {
-        response = await serverHandler.post('/api/chatbot/update_chatbot', {
+        response = await serverHandler.post("/api/chatbot/update_chatbot", {
           id: editingChatbot.id,
-          ...payload
-        })
-        } else {
-        response = await serverHandler.post('/api/chatbot/add_chatbot', payload)
+          ...payload,
+        });
+      } else {
+        response = await serverHandler.post(
+          "/api/chatbot/add_chatbot",
+          payload
+        );
       }
 
       if ((response.data as any).success) {
         toast({
           title: "Success",
-          description: editingChatbot ? "Chatbot updated successfully" : "Chatbot created successfully",
-          variant: "default"
-        })
-        closeModals()
-        fetchChatbots()
+          description: editingChatbot
+            ? "Chatbot updated successfully"
+            : "Chatbot created successfully",
+          variant: "default",
+        });
+        closeModals();
+        fetchChatbots();
       } else {
-        console.error('Failed to save chatbot:', response.data)
+        console.error("Failed to save chatbot:", response.data);
         toast({
           title: "Error",
           description: (response.data as any).msg || "Failed to save chatbot",
-          variant: "destructive"
-        })
+          variant: "destructive",
+        });
       }
     } catch (error: any) {
-      console.error('Error saving chatbot:', error)
+      console.error("Error saving chatbot:", error);
       toast({
         title: "Error",
         description: "Failed to save chatbot",
-        variant: "destructive"
-      })
+        variant: "destructive",
+      });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const deleteChatbot = async (id: number) => {
     const isConfirmed = window.confirm(
-      'Are you sure you want to delete this chatbot?'
-    )
-    
+      "Are you sure you want to delete this chatbot?"
+    );
+
     if (isConfirmed) {
       try {
-        const response = await serverHandler.post('/api/chatbot/del_chatbot', {
-          id: id.toString()
-        })
-        
+        const response = await serverHandler.post("/api/chatbot/del_chatbot", {
+          id: id.toString(),
+        });
+
         if ((response.data as any).success) {
           toast({
             title: "Success",
             description: "Chatbot deleted successfully",
-            variant: "default"
-          })
-          fetchChatbots()
-      } else {
-          console.error('Failed to delete chatbot:', response.data)
+            variant: "default",
+          });
+          fetchChatbots();
+        } else {
+          console.error("Failed to delete chatbot:", response.data);
           toast({
             title: "Error",
             description: "Failed to delete chatbot",
-            variant: "destructive"
-          })
+            variant: "destructive",
+          });
         }
       } catch (error: any) {
-        console.error('Error deleting chatbot:', error)
+        console.error("Error deleting chatbot:", error);
         toast({
           title: "Error",
           description: "Failed to delete chatbot",
-          variant: "destructive"
-        })
+          variant: "destructive",
+        });
       }
     }
-  }
+  };
 
   const toggleChatbotStatus = async (chatbot: Chatbot) => {
     try {
-      const response = await serverHandler.post('/api/chatbot/change_bot_status', {
-        id: chatbot.id.toString(),
-        status: chatbot.active ? 0 : 1 
-      })
-      console.log('Status change response:', response.data)
+      const response = await serverHandler.post(
+        "/api/chatbot/change_bot_status",
+        {
+          id: chatbot.id.toString(),
+          status: chatbot.active ? 0 : 1,
+        }
+      );
+      console.log("Status change response:", response.data);
 
       if ((response.data as any).success) {
         toast({
           title: "Success",
           description: "Chatbot status updated successfully",
-          variant: "default"
-        })
-        fetchChatbots()
+          variant: "default",
+        });
+        fetchChatbots();
       } else {
-        console.error('Failed to update chatbot status:', response.data)
+        console.error("Failed to update chatbot status:", response.data);
         toast({
           title: "Error",
           description: "Failed to update chatbot status",
-          variant: "destructive"
-        })
+          variant: "destructive",
+        });
       }
     } catch (error: any) {
-      console.error('Error updating chatbot status:', error)
+      console.error("Error updating chatbot status:", error);
       toast({
         title: "Error",
         description: "Failed to update chatbot status",
-        variant: "destructive"
-      })
+        variant: "destructive",
+      });
     }
-  }
+  };
 
   const getStatusBadge = (chatbot: Chatbot) => {
     return (
       <Badge variant={chatbot.active ? "default" : "secondary"}>
         {chatbot.active ? "Active" : "Inactive"}
       </Badge>
-    )
-  }
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 transition-all duration-300">
@@ -410,9 +446,12 @@ export default function ChatbotView() {
                 Chatbot Management
               </h1>
             </div>
-      </div>
+          </div>
           <div className="flex items-center space-x-3">
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={openAddModal}>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={openAddModal}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add New Chatbot
             </Button>
@@ -427,8 +466,12 @@ export default function ChatbotView() {
           <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200/60">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800">Chatbot Management</h2>
-                <p className="text-sm text-slate-600 mt-1">Manage and monitor your chatbots</p>
+                <h2 className="text-lg font-semibold text-slate-800">
+                  Chatbot Management
+                </h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  Manage and monitor your chatbots
+                </p>
               </div>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
@@ -464,28 +507,32 @@ export default function ChatbotView() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-20">ID</TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer hover:bg-slate-50"
-                    onClick={() => handleSort('title')}
+                    onClick={() => handleSort("title")}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Title</span>
-                      {sortBy === 'title' && (
-                        <span className="text-xs">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      {sortBy === "title" && (
+                        <span className="text-xs">
+                          {sortOrder === "asc" ? "↑" : "↓"}
+                        </span>
                       )}
                     </div>
                   </TableHead>
                   <TableHead>Flow</TableHead>
                   <TableHead>Scope</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer hover:bg-slate-50"
-                    onClick={() => handleSort('createdAt')}
+                    onClick={() => handleSort("createdAt")}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Created</span>
-                      {sortBy === 'createdAt' && (
-                        <span className="text-xs">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      {sortBy === "createdAt" && (
+                        <span className="text-xs">
+                          {sortOrder === "asc" ? "↑" : "↓"}
+                        </span>
                       )}
                     </div>
                   </TableHead>
@@ -498,7 +545,9 @@ export default function ChatbotView() {
                     <TableCell colSpan={7} className="text-center py-16">
                       <div className="flex flex-col items-center justify-center space-y-4">
                         <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                        <p className="text-slate-500 font-medium">Loading chatbots...</p>
+                        <p className="text-slate-500 font-medium">
+                          Loading chatbots...
+                        </p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -510,9 +559,13 @@ export default function ChatbotView() {
                           <Bot className="w-8 h-8 text-slate-400" />
                         </div>
                         <div>
-                          <p className="text-slate-600 font-medium text-lg">No chatbots found</p>
+                          <p className="text-slate-600 font-medium text-lg">
+                            No chatbots found
+                          </p>
                           <p className="text-slate-500 text-sm mt-1">
-                            {search ? 'Try adjusting your search criteria' : 'Create your first chatbot to get started'}
+                            {search
+                              ? "Try adjusting your search criteria"
+                              : "Create your first chatbot to get started"}
                           </p>
                         </div>
                       </div>
@@ -525,7 +578,12 @@ export default function ChatbotView() {
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg flex items-center justify-center">
                             <span className="text-sm font-bold text-slate-700">
-                              {String((pagination.currentPage - 1) * pagination.pageSize + index + 1).padStart(2, "0")}
+                              {String(
+                                (pagination.currentPage - 1) *
+                                  pagination.pageSize +
+                                  index +
+                                  1
+                              ).padStart(2, "0")}
                             </span>
                           </div>
                         </div>
@@ -540,13 +598,16 @@ export default function ChatbotView() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
-                          {chatbot.flow_title || 'No Flow'}
+                          {chatbot.flow_title || "No Flow"}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
                           {chatbot.for_all ? (
-                            <Badge variant="default" className="bg-green-100 text-green-800">
+                            <Badge
+                              variant="default"
+                              className="bg-green-100 text-green-800"
+                            >
                               All Chats
                             </Badge>
                           ) : (
@@ -600,53 +661,68 @@ export default function ChatbotView() {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="text-sm text-slate-600">
-                  Showing {(pagination.currentPage - 1) * pagination.pageSize + 1} to{" "}
-                  {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} of{" "}
-                  {pagination.totalItems} results
+                  Showing{" "}
+                  {(pagination.currentPage - 1) * pagination.pageSize + 1} to{" "}
+                  {Math.min(
+                    pagination.currentPage * pagination.pageSize,
+                    pagination.totalItems
+                  )}{" "}
+                  of {pagination.totalItems} results
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-slate-600">Rows per page:</span>
-                  <Select 
-                    value={String(pagination.pageSize)} 
+                  <Select
+                    value={String(pagination.pageSize)}
                     onValueChange={(val) => handlePageSizeChange(Number(val))}
                   >
-                        <SelectTrigger className="w-20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PAGE_SIZE_OPTIONS.map(opt => (
-                            <SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt} value={String(opt)}>
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              
               <Pagination>
                 <PaginationContent>
                   <PaginationItem>
-                    <PaginationPrevious 
-                      onClick={() => handlePageChange(Math.max(1, pagination.currentPage - 1))}
-                      className={pagination.currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    <PaginationPrevious
+                      onClick={() =>
+                        handlePageChange(
+                          Math.max(1, pagination.currentPage - 1)
+                        )
+                      }
+                      className={
+                        pagination.currentPage === 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
                     />
                   </PaginationItem>
-                  
+
                   {/* Page numbers */}
-                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                    const pageNum = i + 1
-                    return (
-                    <PaginationItem key={pageNum}>
-                      <PaginationLink
-                          isActive={pagination.currentPage === pageNum}
-                          onClick={() => handlePageChange(pageNum)}
-                          className="cursor-pointer"
-                        >
-                          {pageNum}
-                        </PaginationLink>
-                      </PaginationItem>
-                    )
-                  })}
-                  
+                  {Array.from(
+                    { length: Math.min(5, pagination.totalPages) },
+                    (_, i) => {
+                      const pageNum = i + 1;
+                      return (
+                        <PaginationItem key={pageNum}>
+                          <PaginationLink
+                            isActive={pagination.currentPage === pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            className="cursor-pointer"
+                          >
+                            {pageNum}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    }
+                  )}
                   {pagination.totalPages > 5 && (
                     <>
                       <PaginationItem>
@@ -654,20 +730,35 @@ export default function ChatbotView() {
                       </PaginationItem>
                       <PaginationItem>
                         <PaginationLink
-                          isActive={pagination.currentPage === pagination.totalPages}
-                          onClick={() => handlePageChange(pagination.totalPages)}
+                          isActive={
+                            pagination.currentPage === pagination.totalPages
+                          }
+                          onClick={() =>
+                            handlePageChange(pagination.totalPages)
+                          }
                           className="cursor-pointer"
                         >
                           {pagination.totalPages}
-                      </PaginationLink>
-                    </PaginationItem>
+                        </PaginationLink>
+                      </PaginationItem>
                     </>
                   )}
-                  
+
                   <PaginationItem>
-                    <PaginationNext 
-                      onClick={() => handlePageChange(Math.min(pagination.totalPages, pagination.currentPage + 1))}
-                      className={pagination.currentPage === pagination.totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    <PaginationNext
+                      onClick={() =>
+                        handlePageChange(
+                          Math.min(
+                            pagination.totalPages,
+                            pagination.currentPage + 1
+                          )
+                        )
+                      }
+                      className={
+                        pagination.currentPage === pagination.totalPages
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
                     />
                   </PaginationItem>
                 </PaginationContent>
@@ -686,7 +777,7 @@ export default function ChatbotView() {
               <span>{editingChatbot ? "Edit Chatbot" : "Add New Chatbot"}</span>
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             {/* Select Channel */}
             <div className="space-y-2">
@@ -694,42 +785,52 @@ export default function ChatbotView() {
               <Select
                 value={channel}
                 onValueChange={(value) => {
-                  setChannel(value)
-                  setFormData(prev => ({ ...prev, for_all: true })) // Always for all chats when channel is selected
+                  setChannel(value);
+                  setFormData((prev) => ({ ...prev, for_all: true })); // Always for all chats when channel is selected
                 }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a channel" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CHANNEL_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  {CHANNEL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-slate-500">All incoming chats for the selected channel will be included.</p>
+              <p className="text-xs text-slate-500">
+                All incoming chats for the selected channel will be included.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="title">Chatbot Title *</Label>
               <Input
                 id="title"
                 value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, title: e.target.value }))
+                }
                 placeholder="Enter chatbot title"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="flow">Select Flow *</Label>
-              <Select 
-                value={formData.flow_id} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, flow_id: value }))}
+              <Select
+                value={formData.flow_id}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, flow_id: value }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a flow" />
                 </SelectTrigger>
                 <SelectContent>
                   {allFlows.map((flow) => (
-                    <SelectItem key={flow.id} value={flow.id}>{flow.title}</SelectItem>
+                    <SelectItem key={flow.id} value={flow.id}>
+                      {flow.title}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -747,35 +848,36 @@ export default function ChatbotView() {
                 <Label htmlFor="for_all">Turn on for all chats</Label>
               </div>
               <p className="text-xs text-slate-500">
-                When enabled, this chatbot will be triggered for all incoming chats of the selected channel
+                When enabled, this chatbot will be triggered for all incoming
+                chats of the selected channel
               </p>
             </div>
           </div>
-          
+
           <DialogFooter>
+            <Button variant="outline" onClick={closeModals} disabled={saving}>
+              Cancel
+            </Button>
             <Button
-              variant="outline"
-              onClick={closeModals}
-              disabled={saving}
-            >
-                Cancel
-              </Button>
-              <Button
-                onClick={saveChatbot}
-              disabled={saving || !formData.title || !formData.flow_id || !channel}
+              onClick={saveChatbot}
+              disabled={
+                saving || !formData.title || !formData.flow_id || !channel
+              }
             >
               {saving ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                   {editingChatbot ? "Updating..." : "Creating..."}
                 </>
+              ) : editingChatbot ? (
+                "Update Chatbot"
               ) : (
-                editingChatbot ? "Update Chatbot" : "Create Chatbot"
+                "Create Chatbot"
               )}
-              </Button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

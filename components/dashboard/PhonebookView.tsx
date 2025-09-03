@@ -256,31 +256,31 @@ export default function PhonebookView() {
   // Filter contacts with useMemo for performance
   const filteredContacts = useMemo(() => {
     return contacts.filter((contact: any) => {
-      if (
-        selectedPhonebook !== "all" &&
-        contact.phonebook_id?.toString() !== selectedPhonebook
-      )
-        return false;
+    if (
+      selectedPhonebook !== "all" &&
+      contact.phonebook_id?.toString() !== selectedPhonebook
+    )
+      return false;
       if (!debouncedSearchTerm) return true;
 
       const searchLower = debouncedSearchTerm.toLowerCase();
-      return (
-        contact.name?.toLowerCase().includes(searchLower) ||
+    return (
+      contact.name?.toLowerCase().includes(searchLower) ||
         contact.phone?.includes(debouncedSearchTerm) ||
         contact.mobile?.includes(debouncedSearchTerm) ||
-        contact.email?.toLowerCase().includes(searchLower) ||
-        contact.first_name?.toLowerCase().includes(searchLower) ||
-        contact.last_name?.toLowerCase().includes(searchLower)
-      );
-    });
+      contact.email?.toLowerCase().includes(searchLower) ||
+      contact.first_name?.toLowerCase().includes(searchLower) ||
+      contact.last_name?.toLowerCase().includes(searchLower)
+    );
+  });
   }, [contacts, selectedPhonebook, debouncedSearchTerm]);
 
   // Pagination with useMemo for performance
   const paginationData = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedContacts = filteredContacts.slice(startIndex, endIndex);
-    const totalPages = Math.ceil(filteredContacts.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedContacts = filteredContacts.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(filteredContacts.length / pageSize);
     
     return {
       startIndex,
@@ -362,7 +362,7 @@ export default function PhonebookView() {
   
   const filteredTags = useMemo(() => 
     displayPhonebooks.filter((phonebook: any) =>
-      phonebook.name.toLowerCase().includes(tagSearchTerm.toLowerCase())
+    phonebook.name.toLowerCase().includes(tagSearchTerm.toLowerCase())
     ), 
     [displayPhonebooks, tagSearchTerm]
   );
@@ -780,31 +780,31 @@ export default function PhonebookView() {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-4 py-3 text-left">
-                    <input
-                      type="checkbox"
-                      checked={
-                        paginatedContacts.length > 0 &&
-                        selectedContacts.length === paginatedContacts.length
-                      }
-                      onChange={(e) =>
-                        setSelectedContacts(
-                          e.target.checked
-                            ? paginatedContacts.map((c: any) => c.id)
-                            : []
-                        )
-                      }
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
+                  <input
+                    type="checkbox"
+                    checked={
+                      paginatedContacts.length > 0 &&
+                      selectedContacts.length === paginatedContacts.length
+                    }
+                    onChange={(e) =>
+                      setSelectedContacts(
+                        e.target.checked
+                          ? paginatedContacts.map((c: any) => c.id)
+                          : []
+                      )
+                    }
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
                   </th>
                   <th className="px-4 py-3 text-left">
-                    <span className="text-xs font-medium text-gray-700">
-                      Contact Info
-                    </span>
+                  <span className="text-xs font-medium text-gray-700">
+                    Contact Info
+                  </span>
                   </th>
                   <th className="px-4 py-3 text-left">
-                    <span className="text-xs font-medium text-gray-700">
-                      Phone
-                    </span>
+                  <span className="text-xs font-medium text-gray-700">
+                    Phone
+                  </span>
                   </th>
                   <th className="px-4 py-3 text-left">
                     <span className="text-xs font-medium text-gray-700">
@@ -817,20 +817,20 @@ export default function PhonebookView() {
                     </span>
                   </th>
                   <th className="px-4 py-3 text-left">
-                    <span className="text-xs font-medium text-gray-700">
-                      Assigned To
-                    </span>
+                  <span className="text-xs font-medium text-gray-700">
+                    Assigned To
+                  </span>
                   </th>
                   <th className="px-4 py-3 text-left">
-                    <span className="text-xs font-medium text-gray-700">
-                      Actions
-                    </span>
+                  <span className="text-xs font-medium text-gray-700">
+                    Actions
+                  </span>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {contactsLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
+              {contactsLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="w-4 h-4 bg-gray-200 rounded animate-pulse" />
@@ -854,22 +854,22 @@ export default function PhonebookView() {
                         <div className="w-8 h-4 bg-gray-200 rounded animate-pulse" />
                       </td>
                     </tr>
-                  ))
-                ) : paginatedContacts.length === 0 ? (
+                ))
+              ) : paginatedContacts.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-center text-gray-500 py-12">
-                      <div className="text-gray-600 font-medium mb-1">
-                        No contacts found
-                      </div>
-                      <div className="text-gray-500 text-sm">
-                        Try adjusting your search criteria
-                      </div>
+                  <div className="text-gray-600 font-medium mb-1">
+                    No contacts found
+                  </div>
+                  <div className="text-gray-500 text-sm">
+                    Try adjusting your search criteria
+                  </div>
                     </td>
                   </tr>
-                                 ) : (
-                                       paginatedContacts.map((contact: any) => (
+              ) : (
+                paginatedContacts.map((contact: any) => (
                       <ContactRow
-                        key={contact.id}
+                    key={contact.id}
                         contact={contact}
                         selectedContacts={selectedContacts}
                         setSelectedContacts={setSelectedContacts}
@@ -940,10 +940,10 @@ export default function PhonebookView() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
           >
-                         <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3">
                <h2 className="text-lg font-semibold text-gray-900">
-                 Add New Contact
-               </h2>
+                Add New Contact
+              </h2>
               <button
                 onClick={() => {
                   setAddContactModal(false);
@@ -959,12 +959,12 @@ export default function PhonebookView() {
             <form onSubmit={handleAddContact} className="space-y-3">
               {/* First Name */}
               <div>
-                                 <label
-                   htmlFor="firstName"
+                <label
+                  htmlFor="firstName"
                    className="block text-xs font-medium text-gray-700 mb-1"
-                 >
-                   First Name <span className="text-red-500">*</span>
-                 </label>
+                >
+                  First Name <span className="text-red-500">*</span>
+                </label>
                 <Input
                   id="firstName"
                   placeholder="Enter first name"
@@ -982,12 +982,12 @@ export default function PhonebookView() {
 
               {/* Last Name */}
               <div>
-                                 <label
-                   htmlFor="lastName"
+                <label
+                  htmlFor="lastName"
                    className="block text-xs font-medium text-gray-700 mb-1"
-                 >
-                   Last Name
-                 </label>
+                >
+                  Last Name
+                </label>
                 <Input
                   id="lastName"
                   placeholder="Enter last name (optional)"
@@ -1005,12 +1005,12 @@ export default function PhonebookView() {
               {/* Phone Number */}
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                                     <label
-                     htmlFor="phone"
+                  <label
+                    htmlFor="phone"
                      className="block text-xs font-medium text-gray-700"
-                   >
-                     Phone Number <span className="text-red-500">*</span>
-                   </label>
+                  >
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative group">
                     <Info className="h-4 w-4 text-gray-400 cursor-help" />
                     <div className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 shadow-lg text-black text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 w-64 pointer-events-none">
@@ -1043,12 +1043,12 @@ export default function PhonebookView() {
 
               {/* Email */}
               <div>
-                                 <label
-                   htmlFor="email"
+                <label
+                  htmlFor="email"
                    className="block text-xs font-medium text-gray-700 mb-1"
-                 >
-                   Email Address
-                 </label>
+                >
+                  Email Address
+                </label>
                 <Input
                   id="email"
                   placeholder="Enter email address (optional)"
@@ -1066,12 +1066,12 @@ export default function PhonebookView() {
 
               {/* Gender */}
               <div>
-                                 <label
-                   htmlFor="gender"
+                <label
+                  htmlFor="gender"
                    className="block text-xs font-medium text-gray-700 mb-1"
-                 >
+                >
                    Gender
-                 </label>
+                </label>
                 <Select
                   value={contactForm.gender}
                   onValueChange={(value) =>
@@ -1079,8 +1079,8 @@ export default function PhonebookView() {
                   }
                 >
                                      <SelectTrigger className="w-full h-9 text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                     <SelectValue placeholder="Select gender" />
-                   </SelectTrigger>
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
                   <SelectContent className="z-[10000] bg-white border border-gray-200 shadow-lg">
                     <SelectItem value="male">Male</SelectItem>
                     <SelectItem value="female">Female</SelectItem>
@@ -1091,19 +1091,19 @@ export default function PhonebookView() {
 
               {/* Tag Selection */}
               <div>
-                                 <label
-                   htmlFor="tag"
+                <label
+                  htmlFor="tag"
                    className="block text-xs font-medium text-gray-700 mb-1"
-                 >
-                   Assign to Tag <span className="text-red-500">*</span>
-                 </label>
+                >
+                  Assign to Tag <span className="text-red-500">*</span>
+                </label>
 
                 {/* Custom Searchable Dropdown */}
                 <div className="relative tag-dropdown-container">
-                                     <div
-                     onClick={() => setShowTagDropdown(!showTagDropdown)}
+                  <div
+                    onClick={() => setShowTagDropdown(!showTagDropdown)}
                      className="w-full h-9 px-3 py-2 border border-gray-300 rounded-md bg-white cursor-pointer hover:border-blue-500 focus:border-blue-500 focus:ring-blue-500 flex items-center justify-between"
-                   >
+                  >
                     <span
                       className={
                         selectedPhonebook !== "all"
@@ -1243,10 +1243,10 @@ export default function PhonebookView() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
           >
-                         <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6">
                <h2 className="text-lg font-semibold text-gray-900">
-                 Create New Tag
-               </h2>
+                Create New Tag
+              </h2>
               <button
                 onClick={() => setAddPhonebookModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -1257,12 +1257,12 @@ export default function PhonebookView() {
 
             <form onSubmit={handleAddPhonebook} className="space-y-6">
               <div>
-                                 <label
-                   htmlFor="tagName"
+                <label
+                  htmlFor="tagName"
                    className="block text-xs font-medium text-gray-700 mb-2"
-                 >
-                   Tag Name
-                 </label>
+                >
+                  Tag Name
+                </label>
                 <Input
                   id="tagName"
                   placeholder="Enter a descriptive name for your tag"
@@ -1367,10 +1367,10 @@ export default function PhonebookView() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
           >
-                         <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6">
                <h2 className="text-lg font-semibold text-gray-900">
-                 Reassign Contacts to Tag
-               </h2>
+                Reassign Contacts to Tag
+              </h2>
               <button
                 onClick={() => {
                   setReassignModal(false);
@@ -1400,8 +1400,8 @@ export default function PhonebookView() {
               {/* Target Tag Selection */}
               <div>
                                  <label className="block text-xs font-medium text-gray-700 mb-2">
-                   Select Target Tag <span className="text-red-500">*</span>
-                 </label>
+                  Select Target Tag <span className="text-red-500">*</span>
+                </label>
                 <Select
                   value={targetPhonebookForReassign}
                   onValueChange={(value) =>
@@ -1409,8 +1409,8 @@ export default function PhonebookView() {
                   }
                 >
                                      <SelectTrigger className="w-full h-10 text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                     <SelectValue placeholder="Choose a tag to reassign contacts to..." />
-                   </SelectTrigger>
+                    <SelectValue placeholder="Choose a tag to reassign contacts to..." />
+                  </SelectTrigger>
                   <SelectContent className="z-[10000] bg-white border border-gray-200 shadow-lg">
                     {displayPhonebooks.map((phonebook: any) => (
                       <SelectItem

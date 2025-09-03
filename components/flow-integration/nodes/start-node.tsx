@@ -1,7 +1,5 @@
 "use client"
-import { Handle, Position, type NodeProps } from "@xyflow/react"
-import { Card } from "@/components/ui/card"
-import type { NodeData } from "@/types/flow-integration/flow"
+import { type NodeProps } from "@xyflow/react"
 import { ExternalLink } from "lucide-react";
 
 export function StartNode({ selected }: NodeProps<any>) {

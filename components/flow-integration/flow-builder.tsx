@@ -133,8 +133,18 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null)
-  const [isPreviewMode, setIsPreviewMode] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [uiState, setUiState] = useState({
+    isPreviewMode: false,
+    sidebarOpen: false,
+    hasShownNoFlowsToast: false,
+    showSaveDialog: false,
+    pendingSave: false,
+    addPopoverOpen: false
+  });
+
+  const updateUiState = (updates: Partial<typeof uiState>) => {
+    setUiState(prev => ({ ...prev, ...updates }));
+  };
   const reactFlowInstance = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [flowTitle, setFlowTitle] = useState("");
@@ -209,9 +219,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   }, [initialFlowData, flowId, toast]);
   const queryClient = useQueryClient();
   const [selectedFlow, setSelectedFlow] = useState<any>(null);
-  const [hasShownNoFlowsToast, setHasShownNoFlowsToast] = useState(false);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [pendingSave, setPendingSave] = useState(false);
+
   const [startNodeId, setStartNodeId] = useState<string | null>(null);
 
 
@@ -229,7 +237,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     { type: "assignAgentNode", label: "Assign Agent", dataType: "assignAgent" },
     { type: "conditionNode", label: "Condition", dataType: "condition" },
   ];
-  const [addPopoverOpen, setAddPopoverOpen] = useState(false);
+  const [pendingConnection, setPendingConnection] = useState<any>(null);
 
   const handleAddNode = (nodeType: string) => {
     const centerX = 400 + Math.random() * 200;
@@ -238,7 +246,6 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     if (!option) return;
     let defaultState = getDefaultConfig(option.dataType as NodeData["type"]);
     
-    // Get the next message number for sequential numbering
     const existingMessageNodes = nodes.filter(node => 
       node.type === 'simpleMessageNode' || 
       node.type === 'imageMessageNode' || 
@@ -263,11 +270,23 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     } as NodeData,
     };
     setNodes((nds) => nds.concat(newNode));
-    setAddPopoverOpen(false);
+    updateUiState({ addPopoverOpen: false });
+    
+    if (pendingConnection) {
+      const newEdge: Edge = {
+        id: `e${pendingConnection.source}-${newNode.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        source: pendingConnection.source,
+        target: newNode.id,
+        sourceHandle: pendingConnection.sourceHandle,
+        type: 'smoothstep',
+      };
+      setEdges((eds) => eds.concat(newEdge));
+      setPendingConnection(null);
+      console.log('Node created and connected from pending connection');
+    }
   };
 
-  // Add flow
-  const addFlowMutation = useMutation({
+      const addFlowMutation = useMutation({
     mutationFn: async (payload: any) => {
       try {
         console.log('Sending payload to /api/chat_flow/add_new:', JSON.stringify(payload, null, 2));
@@ -325,8 +344,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     },
   });
 
-  // Update flow
-  const updateFlowMutation = useMutation({
+      const updateFlowMutation = useMutation({
     mutationFn: async (payload: any) => {
       try {
         console.log('Sending payload to /api/chat_flow/update:', JSON.stringify(payload, null, 2));
@@ -369,8 +387,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     },
   });
 
-  // Delete flow
-  const deleteFlowMutation = useMutation({
+      const deleteFlowMutation = useMutation({
     mutationFn: async ({ id, flowId }: { id: string, flowId: string }) => {
       const res = await serverHandler.post('/api/chat_flow/del_flow', { id, flowId });
       return res.data as any;
@@ -388,8 +405,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     },
   });
 
-  // Media upload
-  const uploadMedia = async (file: File) => {
+      const uploadMedia = async (file: File) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -404,9 +420,42 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     }
   };
 
+  const onConnectStart = useCallback(
+    (event: any, params: any) => {
+      console.log('Connection start:', params);
+      // Store the connection start data for potential new node creation
+      setPendingConnection({
+        source: params.nodeId,
+        sourceHandle: params.handleId,
+        target: '',
+        targetHandle: null
+      });
+    },
+    []
+  );
+
+  const onConnectEnd = useCallback(
+    (event: any) => {
+      console.log('Connection end:', event);
+      // Always check if we have a pending connection and show popup
+      setPendingConnection((prev: any) => {
+        if (prev && !prev.target) {
+          console.log('Connection ended without target, opening popup');
+          updateUiState({ addPopoverOpen: true });
+        }
+        return prev; // Keep the connection data for now
+      });
+    },
+    []
+  );
+
   const onConnect = useCallback(
     (params: Connection) => {
       console.log('Connection attempt:', params);
+      
+      // Reset pending connection since we have a complete connection
+      setPendingConnection(null);
+      updateUiState({ addPopoverOpen: false }); // Also close popup if it was open
       
       // Validation - allow connections between different nodes and prevent multiple connections from same source
       if (params.source && params.target && params.source !== params.target) {
@@ -804,8 +853,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
 
   const handleSaveClick = () => {
     if (!(flowTitle || '').trim()) {
-      setShowSaveDialog(true);
-      setPendingSave(true);
+      updateUiState({ showSaveDialog: true, pendingSave: true });
       return;
     }
     saveFlow();
@@ -816,8 +864,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
       toast({ title: 'Error', description: 'Please enter a flow title', variant: 'destructive' });
       return;
     }
-    setShowSaveDialog(false);
-    setPendingSave(false);
+    updateUiState({ showSaveDialog: false, pendingSave: false });
     saveFlow();
   };
 
@@ -827,7 +874,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   return (
     <div>
       {/* Save Dialog for Title Only */}
-      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+      <Dialog open={uiState.showSaveDialog} onOpenChange={(open) => updateUiState({ showSaveDialog: open })}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Enter Flow Title</DialogTitle>
@@ -876,13 +923,15 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                onConnectStart={onConnectStart}
+                onConnectEnd={onConnectEnd}
                 onNodeClick={onNodeClick}
                 onPaneClick={onPaneClick}
                 onDrop={onDrop}
                 onDragOver={onDragOver}
                 nodeTypes={nodeTypes as any}
                 fitView
-                className={isPreviewMode ? "pointer-events-none" : ""}
+                className={uiState.isPreviewMode ? "pointer-events-none" : ""}
               >
                 <Background />
                 <Controls />
@@ -904,9 +953,8 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
                 />
               </ReactFlow>
               {/* Floating toolbar centered at bottom */}
-              <FlowToolbar onAddNode={handleAddNode} addPopoverOpen={addPopoverOpen} setAddPopoverOpen={setAddPopoverOpen} toolbarNodeOptions={toolbarNodeOptions} onSave={handleSaveClick} />
+              <FlowToolbar onAddNode={handleAddNode} addPopoverOpen={uiState.addPopoverOpen} setAddPopoverOpen={(open) => updateUiState({ addPopoverOpen: open })} toolbarNodeOptions={toolbarNodeOptions} onSave={handleSaveClick} />
             </div>
-            {/* NodeConfigPanel sidebar removed as requested */}
           </div>
         </div>
       </NodeContextProvider>

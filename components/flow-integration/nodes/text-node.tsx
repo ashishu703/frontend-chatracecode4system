@@ -1,6 +1,6 @@
 "use client"
 
-import { Handle, Position, type NodeProps } from "@xyflow/react"
+import { Handle, Position, type NodeProps, useEdges } from "@xyflow/react"
 import { Card } from "@/components/ui/card"
 import { Save, X, Plus, Trash2, Edit, Star } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
@@ -10,7 +10,7 @@ import { useNodeContext } from "../node-context"
 import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
 
 // HELPER: This function ensures every option has a unique/stable ID. This is crucial for fixing the connection bug.
-const initializeOptions = (optionsData) => {
+const initializeOptions = (optionsData: any) => {
   if (!optionsData || !Array.isArray(optionsData) || optionsData.length === 0) {
     return [{ id: `opt-${Date.now()}`, value: "" }];
   }
@@ -39,6 +39,12 @@ export function TextNode({ data, selected, id }: NodeProps<any>) {
 
   // FIX: 'options' is now an array of objects ({id, value}) to ensure stable keys and handle IDs.
   const [options, setOptions] = useState(() => initializeOptions(data?.options));
+
+  // Check if continue handle is connected
+  const edges = useEdges();
+  const isContinueConnected = edges.some(
+    edge => edge.source === id && edge.sourceHandle === "continue"
+  );
 
   const isStartNode = startNodeId === id;
   
@@ -118,7 +124,7 @@ export function TextNode({ data, selected, id }: NodeProps<any>) {
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className="w-3 h-3 !bg-gray-800 !border-0" />
-      <Card className={`w-[280px] ${selected ? "ring-2 ring-blue-500" : ""}`}>
+      <Card className={`w-[350px] ${selected ? "ring-2 ring-blue-500" : ""}`}>
         <div className="bg-red-400 text-white px-3 py-2 flex items-center justify-between rounded-t-lg">
           <div className="flex items-center gap-2">
             {isEditingTitle ? (
@@ -143,9 +149,9 @@ export function TextNode({ data, selected, id }: NodeProps<any>) {
             </Dialog>
           </div>
         </div>
-
         <div className="p-3 space-y-2 bg-white rounded-b-lg">
           <textarea
+            id="text-message"
             value={message}
             onChange={(e) => {
               const newMessage = e.target.value;
@@ -180,6 +186,20 @@ export function TextNode({ data, selected, id }: NodeProps<any>) {
               </div>
             ))}
           </div>
+            {/* Continue Option */}
+            <div className="flex items-center justify-end pt-2 relative pr-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 font-medium">Continue</span>
+                
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="continue"
+                  className={`!w-3 !h-3 ${isContinueConnected ? '!bg-blue-600' : '!bg-gray-300'}`}
+                  style={{ right: -7, top: '66%', transform: 'translateY(-50%)' }}
+                />
+              </div>
+            </div>
         </div>
       </Card>
     </div>
