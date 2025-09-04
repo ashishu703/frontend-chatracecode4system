@@ -26,8 +26,7 @@ import {
   Search,
   Filter,
   Bot,
-  ToggleLeft,
-  ToggleRight,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   Pagination,
@@ -38,61 +37,37 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { formatDateToIST } from "@/utils/api/utility/date.utils";
+import { PaginationInfo } from "@/types/api/common";
+import {
+  CHANNEL_OPTIONS,
+  Chatbot,
+  PAGE_SIZE_OPTIONS,
+} from "@/types/chatbot/chatBotModel";
+import { useFlows } from "@/hooks/useFlows";
+import { ChatbotService } from "@/utils/api/chatbot/chatbot";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
-import { useToast } from "@/hooks/use-toast";
-
-interface Flow {
-  id: number;
-  uid: string;
-  flow_id: string;
-  title: string;
-  createdAt: string;
-  isActive: boolean;
-}
-
-interface Chatbot {
-  id: number;
-  title: string;
-  status: boolean;
-  flow_id: number;
-  flow_title: string;
-  for_all: boolean;
-  chats: string[];
-  createdAt: string;
-  updatedAt: string;
-  active: boolean;
-}
-
-interface Pagination {
-  totalItems: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-}
-
-// Page size options for selector
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
-
-const CHANNEL_OPTIONS = [
-  { value: "instagram", label: "Instagram" },
-  { value: "messenger", label: "Messenger" },
-  { value: "whatsapp", label: "WhatsApp" },
-  // Add more channels as needed
-];
+} from "../ui/dialog";
 
 export default function ChatbotView() {
   const [chatbots, setChatbots] = useState<Chatbot[]>([]);
-  const [flows, setFlows] = useState<Flow[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
+  const [pagination, setPagination] = useState<PaginationInfo>({
     totalItems: 0,
     totalPages: 1,
     currentPage: 1,
@@ -104,7 +79,9 @@ export default function ChatbotView() {
   const [sortOrder, setSortOrder] = useState("desc");
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [editingChatbot, setEditingChatbot] = useState<Chatbot | null>(null);
+  const [deletingChatbot, setDeletingChatbot] = useState<Chatbot | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     flow_id: "",
@@ -113,48 +90,21 @@ export default function ChatbotView() {
   });
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
-  const [allChatbots, setAllChatbots] = useState<Chatbot[]>([]);
-  const [selectedChatbotId, setSelectedChatbotId] = useState<string>("");
   const [channel, setChannel] = useState("");
-  const [allFlows, setAllFlows] = useState<{ id: string; title: string }[]>([]);
 
-  const fetchAllFlows = async () => {
-    try {
-      const response = await serverHandler.get(`/api/chat_flow/get_mine`);
-      const data = response.data as any;
-      if (data.success) {
-        const flows = (data.data || []).map((flow: any) => ({
-          id: flow.id?.toString(),
-          title: flow.title,
-        }));
-        setAllFlows(flows);
-      } else {
-        setAllFlows([]);
-      }
-    } catch (error) {
-      setAllFlows([]);
-    }
-  };
-
-  useEffect(() => {
-    fetchAllFlows();
-  }, []);
+  // Use the existing useFlows hook
+  const { flows, loading: flowsLoading } = useFlows();
 
   const fetchChatbots = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: pagination.currentPage.toString(),
-        size: pagination.pageSize.toString(),
+      const data = await ChatbotService.GET_CHATBOTS({
+        page: pagination.currentPage,
+        size: pagination.pageSize,
         search: search,
         sort: sortBy,
         order: sortOrder,
       });
-
-      const response = await serverHandler.get(
-        `/api/chatbot/get_chatbot?${params}`
-      );
-      const data = response.data as any;
 
       if (data.success) {
         setChatbots(data.data || []);
@@ -180,46 +130,9 @@ export default function ChatbotView() {
     }
   };
 
-  const fetchFlows = async () => {
-    try {
-      const response = await serverHandler.get("/api/chat_flow/get_mine");
-      const data = response.data as any;
-
-      if (data.success) {
-        const activeFlows = (data.data || []).filter(
-          (flow: Flow) => flow.isActive
-        );
-        setFlows(activeFlows);
-      } else {
-        setFlows([]);
-      }
-    } catch (error: any) {
-      console.error("Error fetching flows:", error);
-      setFlows([]);
-    }
-  };
-
-  const fetchAllChatbots = async () => {
-    try {
-      const response = await serverHandler.get(`/api/chatbot/get_chatbot`);
-      const data = response.data as any;
-      if (data.success) {
-        setAllChatbots(data.data || []);
-      } else {
-        setAllChatbots([]);
-      }
-    } catch (error) {
-      setAllChatbots([]);
-    }
-  };
-
   useEffect(() => {
     fetchChatbots();
   }, [pagination.currentPage, pagination.pageSize, search, sortBy, sortOrder]);
-
-  useEffect(() => {
-    fetchFlows();
-  }, []);
 
   const handlePageChange = (page: number) => {
     setPagination((prev) => ({ ...prev, currentPage: page }));
@@ -244,16 +157,6 @@ export default function ChatbotView() {
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const openAddModal = () => {
     setFormData({
       title: "",
@@ -271,7 +174,7 @@ export default function ChatbotView() {
       title: chatbot.title,
       flow_id: chatbot.flow_id.toString(),
       for_all: chatbot.for_all,
-      chats: chatbot.chats || [],
+      chats: chatbot.chatbotChats || [],
     });
     setEditModalOpen(true);
   };
@@ -279,7 +182,9 @@ export default function ChatbotView() {
   const closeModals = () => {
     setAddModalOpen(false);
     setEditModalOpen(false);
+    setDeleteModalOpen(false);
     setEditingChatbot(null);
+    setDeletingChatbot(null);
     setFormData({
       title: "",
       flow_id: "",
@@ -305,37 +210,33 @@ export default function ChatbotView() {
         flow_id: parseInt(formData.flow_id),
         for_all: formData.for_all,
         chats: formData.chats,
-        status: 1, // Always create as active
+        status: 1,
       };
-
       let response;
       if (editingChatbot) {
-        response = await serverHandler.post("/api/chatbot/update_chatbot", {
+        response = await ChatbotService.UPDATE_CHATBOT({
           id: editingChatbot.id,
           ...payload,
         });
       } else {
-        response = await serverHandler.post(
-          "/api/chatbot/add_chatbot",
-          payload
-        );
+        response = await ChatbotService.ADD_CHATBOT(payload);
       }
 
-      if ((response.data as any).success) {
+      if (response.success) {
         toast({
           title: "Success",
           description: editingChatbot
             ? "Chatbot updated successfully"
             : "Chatbot created successfully",
-          variant: "default",
+          variant: "success",
         });
         closeModals();
         fetchChatbots();
       } else {
-        console.error("Failed to save chatbot:", response.data);
+        console.error("Failed to save chatbot:", response);
         toast({
           title: "Error",
-          description: (response.data as any).msg || "Failed to save chatbot",
+          description: response.msg || "Failed to save chatbot",
           variant: "destructive",
         });
       }
@@ -351,62 +252,60 @@ export default function ChatbotView() {
     }
   };
 
-  const deleteChatbot = async (id: number) => {
-    const isConfirmed = window.confirm(
-      "Are you sure you want to delete this chatbot?"
-    );
+  const deleteChatbot = async () => {
+    if (!deletingChatbot) return;
+    try {
+      const response = await ChatbotService.DELETE_CHATBOT(deletingChatbot.id);
 
-    if (isConfirmed) {
-      try {
-        const response = await serverHandler.post("/api/chatbot/del_chatbot", {
-          id: id.toString(),
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Chatbot deleted successfully",
+          variant: "success",
         });
-
-        if ((response.data as any).success) {
-          toast({
-            title: "Success",
-            description: "Chatbot deleted successfully",
-            variant: "default",
-          });
-          fetchChatbots();
-        } else {
-          console.error("Failed to delete chatbot:", response.data);
-          toast({
-            title: "Error",
-            description: "Failed to delete chatbot",
-            variant: "destructive",
-          });
-        }
-      } catch (error: any) {
-        console.error("Error deleting chatbot:", error);
+        closeModals();
+        fetchChatbots();
+      } else {
+        console.error("Failed to delete chatbot:", response);
         toast({
           title: "Error",
           description: "Failed to delete chatbot",
           variant: "destructive",
         });
       }
+    } catch (error: any) {
+      console.error("Error deleting chatbot:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete chatbot",
+        variant: "destructive",
+      });
     }
   };
 
   const toggleChatbotStatus = async (chatbot: Chatbot) => {
     try {
-      const response = await serverHandler.post(
-        "/api/chatbot/change_bot_status",
-        {
-          id: chatbot.id.toString(),
-          status: chatbot.active ? 0 : 1,
-        }
+      setChatbots((prevChatbots) =>
+        prevChatbots.map((cb) =>
+          cb.id === chatbot.id ? { ...cb, active: !cb.active } : cb
+        )
       );
-      console.log("Status change response:", response.data);
-
-      if ((response.data as any).success) {
+      const response = await ChatbotService.CHANGE_BOT_STATUS({
+        id: chatbot.id.toString(),
+        status: chatbot.active ? 0 : 1,
+      });
+      if (response.success) {
         toast({
           title: "Success",
           description: "Chatbot status updated successfully",
-          variant: "default",
+          variant: "success",
         });
-        fetchChatbots();
       } else {
+        setChatbots((prevChatbots) =>
+          prevChatbots.map((cb) =>
+            cb.id === chatbot.id ? { ...cb, active: chatbot.active } : cb
+          )
+        );
         console.error("Failed to update chatbot status:", response.data);
         toast({
           title: "Error",
@@ -415,6 +314,11 @@ export default function ChatbotView() {
         });
       }
     } catch (error: any) {
+      setChatbots((prevChatbots) =>
+        prevChatbots.map((cb) =>
+          cb.id === chatbot.id ? { ...cb, active: chatbot.active } : cb
+        )
+      );
       console.error("Error updating chatbot status:", error);
       toast({
         title: "Error",
@@ -433,20 +337,10 @@ export default function ChatbotView() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 transition-all duration-300">
+    <div className="min-h-screen  transition-all duration-300">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-slate-200/60 px-8 py-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                Chatbot Management
-              </h1>
-            </div>
-          </div>
+      <header className=" border-b border-slate-200/60 px-6 py-4">
+        <div className="flex items-center justify-end">
           <div className="flex items-center space-x-3">
             <Button
               className="bg-blue-600 hover:bg-blue-700"
@@ -460,10 +354,10 @@ export default function ChatbotView() {
       </header>
 
       {/* Main Content */}
-      <main className="p-8">
+      <main className="p-4">
         <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
           {/* Table Header */}
-          <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200/60">
+          <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200/60 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-slate-800">
@@ -502,55 +396,93 @@ export default function ChatbotView() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="max-h-[600px] overflow-y-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-20">ID</TableHead>
+                <TableRow className="bg-slate-100/80 border-b-2 border-slate-200">
+                  <TableHead className="w-20 py-4 font-semibold text-slate-700 text-sm">
+                    <div className="flex items-center justify-center">ID</div>
+                  </TableHead>
                   <TableHead
-                    className="cursor-pointer hover:bg-slate-50"
+                    className="cursor-pointer hover:bg-slate-200/60 transition-colors py-4 font-semibold text-slate-700 text-sm"
                     onClick={() => handleSort("title")}
                   >
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-2">
                       <span>Title</span>
                       {sortBy === "title" && (
-                        <span className="text-xs">
+                        <span className="text-slate-500">
                           {sortOrder === "asc" ? "↑" : "↓"}
                         </span>
                       )}
                     </div>
                   </TableHead>
-                  <TableHead>Flow</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="py-4 font-semibold text-slate-700 text-sm">
+                    <div className="flex items-center">Flow</div>
+                  </TableHead>
+                  <TableHead className="py-4 font-semibold text-slate-700 text-sm">
+                    <div className="flex items-center">Scope</div>
+                  </TableHead>
+                  <TableHead className="py-4 font-semibold text-slate-700 text-sm">
+                    <div className="flex items-center">Status</div>
+                  </TableHead>
                   <TableHead
-                    className="cursor-pointer hover:bg-slate-50"
+                    className="cursor-pointer hover:bg-slate-200/60 transition-colors py-4 font-semibold text-slate-700 text-sm"
                     onClick={() => handleSort("createdAt")}
                   >
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-2">
                       <span>Created</span>
                       {sortBy === "createdAt" && (
-                        <span className="text-xs">
+                        <span className="text-slate-500">
                           {sortOrder === "asc" ? "↑" : "↓"}
                         </span>
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="py-4 font-semibold text-slate-700 text-sm">
+                    <div className="flex items-center justify-center">
+                      Actions
+                    </div>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-16">
-                      <div className="flex flex-col items-center justify-center space-y-4">
-                        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                        <p className="text-slate-500 font-medium">
-                          Loading chatbots...
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  // Skeleton loading rows
+                  Array.from({ length: pagination.pageSize }, (_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      <TableCell>
+                        <div className="flex items-center space-x-3">
+                          <Skeleton className="w-10 h-10 rounded-lg" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-16" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-6 w-20 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-6 w-24 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Skeleton className="h-5 w-10 rounded" />
+                          <Skeleton className="h-6 w-16 rounded-full" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-center">
+                          <Skeleton className="h-8 w-8 rounded" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 ) : chatbots.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-16">
@@ -598,7 +530,7 @@ export default function ChatbotView() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
-                          {chatbot.flow_title || "No Flow"}
+                          {chatbot.flow.title || "No Flow"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -612,7 +544,7 @@ export default function ChatbotView() {
                             </Badge>
                           ) : (
                             <Badge variant="secondary">
-                              {chatbot.chats?.length || 0} Specific Chats
+                              {chatbot.chatbotChats?.length || 0} Specific Chats
                             </Badge>
                           )}
                         </div>
@@ -628,25 +560,37 @@ export default function ChatbotView() {
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-slate-600">
-                          {formatDate(chatbot.createdAt)}
+                          {formatDateToIST(chatbot.createdAt)}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditModal(chatbot)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteChatbot(chatbot.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                      <TableCell>
+                        <div className="flex items-center justify-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="center">
+                              <DropdownMenuItem
+                                onClick={() => openEditModal(chatbot)}
+                                className="cursor-pointer"
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setDeletingChatbot(chatbot);
+                                  setDeleteModalOpen(true);
+                                }}
+                                className="cursor-pointer text-red-600 focus:text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -827,8 +771,8 @@ export default function ChatbotView() {
                   <SelectValue placeholder="Select a flow" />
                 </SelectTrigger>
                 <SelectContent>
-                  {allFlows.map((flow) => (
-                    <SelectItem key={flow.id} value={flow.id}>
+                  {flows.map((flow) => (
+                    <SelectItem key={flow.id} value={flow.id.toString()}>
                       {flow.title}
                     </SelectItem>
                   ))}
@@ -878,6 +822,18 @@ export default function ChatbotView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationDialog
+        open={deleteModalOpen}
+        onOpenChange={closeModals}
+        onConfirm={deleteChatbot}
+        title="Delete Chatbot"
+        description="Are you sure you want to delete this chatbot? This action cannot be undone."
+        itemName={deletingChatbot?.title}
+        itemDate={deletingChatbot?.createdAt}
+        isLoading={saving}
+      />
     </div>
   );
 }

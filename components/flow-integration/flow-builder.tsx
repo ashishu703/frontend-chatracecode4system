@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import React, { useCallback, useState, useRef, useEffect } from "react"
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -14,29 +14,59 @@ import {
   type Node,
   ReactFlowProvider,
   useReactFlow,
-} from "@xyflow/react"
-import "@xyflow/react/dist/style.css"
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 
 // import { NodeSidebar } from "./node-sidebar"
-import { NodeConfigPanel } from "./node-config-panel"
+import { NodeConfigPanel } from "./node-config-panel";
 // FlowHeader is not used here
-import { NodeContextProvider } from "./node-context"
-import { nodeTypes } from "./nodes"
-import { validateConnection } from "@/lib/flow-integration/flow-validation"
-import type { FlowData, NodeData, FlowTemplate } from "@/types/flow-integration/flow"
-import { ChevronRight, ChevronLeft, Eye, Plus, ZoomIn, ZoomOut, Layout, Save } from "lucide-react"
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/use-toast';
-import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
+import { NodeContextProvider } from "./node-context";
+import { nodeTypes } from "./nodes";
+import { validateConnection } from "@/lib/flow-integration/flow-validation";
+import type {
+  FlowData,
+  NodeData,
+  FlowTemplate,
+} from "@/types/flow-integration/flow";
+import {
+  ChevronRight,
+  ChevronLeft,
+  Eye,
+  Plus,
+  ZoomIn,
+  ZoomOut,
+  Layout,
+  Save,
+} from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
 import { Button } from "./ui/button";
-import type { Node as XYNode } from '@xyflow/react';
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
+import type { Node as XYNode } from "@xyflow/react";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 const initialNodes: Node<NodeData>[] = [
   {
-    id: `simpleMessage-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    id: `simpleMessage-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 5)}`,
     type: "simpleMessageNode",
     position: { x: 250, y: 100 },
     data: {
@@ -54,7 +84,7 @@ const initialNodes: Node<NodeData>[] = [
   },
 ];
 
-const initialEdges: Edge[] = []
+const initialEdges: Edge[] = [];
 
 interface ToolbarNodeOption {
   type: string;
@@ -67,13 +97,24 @@ interface FlowToolbarProps {
   toolbarNodeOptions: ToolbarNodeOption[];
   onSave: () => void;
 }
-function FlowToolbar({ onAddNode, addPopoverOpen, setAddPopoverOpen, toolbarNodeOptions, onSave }: FlowToolbarProps) {
+function FlowToolbar({
+  onAddNode,
+  addPopoverOpen,
+  setAddPopoverOpen,
+  toolbarNodeOptions,
+  onSave,
+}: FlowToolbarProps) {
   return (
     <TooltipProvider>
-      <div className="fixed left-1/2 bottom-8 z-50 -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl shadow-lg" style={{boxShadow: '0 2px 16px rgba(0,0,0,0.08)'}}>
+      <div
+        className="fixed left-1/2 bottom-8 z-50 -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl shadow-lg"
+        style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.08)" }}
+      >
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon"><Eye className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="icon">
+              <Eye className="h-5 w-5" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Preview</TooltipContent>
         </Tooltip>
@@ -81,12 +122,20 @@ function FlowToolbar({ onAddNode, addPopoverOpen, setAddPopoverOpen, toolbarNode
           <TooltipTrigger asChild>
             <Popover open={addPopoverOpen} onOpenChange={setAddPopoverOpen}>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon"><Plus className="h-5 w-5" /></Button>
+                <Button variant="ghost" size="icon">
+                  <Plus className="h-5 w-5" />
+                </Button>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-48 p-2 z-50">
                 <div className="flex flex-col gap-2">
                   {toolbarNodeOptions.map((opt: ToolbarNodeOption) => (
-                    <Button key={opt.type} variant="outline" size="sm" className="w-full justify-start" onClick={() => onAddNode(opt.type)}>
+                    <Button
+                      key={opt.type}
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => onAddNode(opt.type)}
+                    >
                       {opt.label}
                     </Button>
                   ))}
@@ -98,25 +147,33 @@ function FlowToolbar({ onAddNode, addPopoverOpen, setAddPopoverOpen, toolbarNode
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button onClick={onSave} variant="default" size="icon"><Save className="h-5 w-5" /></Button>
+            <Button onClick={onSave} variant="default" size="icon">
+              <Save className="h-5 w-5" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Save Flow</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon"><ZoomIn className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="icon">
+              <ZoomIn className="h-5 w-5" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Zoom In</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon"><ZoomOut className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="icon">
+              <ZoomOut className="h-5 w-5" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Zoom Out</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon"><Layout className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="icon">
+              <Layout className="h-5 w-5" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Auto Organize</TooltipContent>
         </Tooltip>
@@ -130,32 +187,37 @@ interface FlowBuilderContentProps {
 }
 
 function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
-  const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null)
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null);
   const [uiState, setUiState] = useState({
     isPreviewMode: false,
     sidebarOpen: false,
     hasShownNoFlowsToast: false,
     showSaveDialog: false,
     pendingSave: false,
-    addPopoverOpen: false
+    addPopoverOpen: false,
   });
 
   const updateUiState = (updates: Partial<typeof uiState>) => {
-    setUiState(prev => ({ ...prev, ...updates }));
+    setUiState((prev) => ({ ...prev, ...updates }));
   };
-  const reactFlowInstance = useReactFlow()
-  const reactFlowWrapper = useRef<HTMLDivElement>(null)
+  const reactFlowInstance = useReactFlow();
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [flowTitle, setFlowTitle] = useState("");
   const [flowId, setFlowId] = useState("");
-  
+
   const { toast } = useToast();
-  
+
   // Auto-generate flow ID when creating a new flow only
   useEffect(() => {
-    if (!flowId && !(initialFlowData && (initialFlowData.flowId || initialFlowData.flow_id))) {
-      const generatedId = `flow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    if (
+      !flowId &&
+      !(initialFlowData && (initialFlowData.flowId || initialFlowData.flow_id))
+    ) {
+      const generatedId = `flow_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
       setFlowId(generatedId);
     }
   }, [flowId, initialFlowData]);
@@ -165,31 +227,46 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     if (initialFlowData) {
       const mapBusinessToUiType = (businessType: string) => {
         switch (businessType) {
-          case 'simpleMessage': return 'simpleMessageNode';
-          case 'imageMessage': return 'imageMessageNode';
-          case 'audioMessage': return 'audioMessageNode';
-          case 'videoMessage': return 'videoMessageNode';
-          case 'documentMessage': return 'documentMessageNode';
-          case 'buttonMessage': return 'buttonMessageNode';
-          case 'listMessage': return 'listMessageNode';
-          case 'assignAgent': return 'assignAgentNode';
-          case 'disableChatTill': return 'disableChatTillNode';
-          case 'requestAPI': return 'requestAPINode';
-          case 'mailMessage': return 'sendEmailNode';
-          case 'condition': return 'conditionNode';
-          case 'start': return 'startNode';
-          default: return 'genericNode';
+          case "simpleMessage":
+            return "simpleMessageNode";
+          case "imageMessage":
+            return "imageMessageNode";
+          case "audioMessage":
+            return "audioMessageNode";
+          case "videoMessage":
+            return "videoMessageNode";
+          case "documentMessage":
+            return "documentMessageNode";
+          case "buttonMessage":
+            return "buttonMessageNode";
+          case "listMessage":
+            return "listMessageNode";
+          case "assignAgent":
+            return "assignAgentNode";
+          case "disableChatTill":
+            return "disableChatTillNode";
+          case "requestAPI":
+            return "requestAPINode";
+          case "mailMessage":
+            return "sendEmailNode";
+          case "condition":
+            return "conditionNode";
+          case "start":
+            return "startNode";
+          default:
+            return "genericNode";
         }
       };
 
       const transformNodes = (nodesToTransform: any[]) => {
         return Array.isArray(nodesToTransform)
           ? nodesToTransform.map((node: any) => {
-              const businessType = node.nodeType || node.type || node?.data?.type;
+              const businessType =
+                node.nodeType || node.type || node?.data?.type;
               const uiType = mapBusinessToUiType(businessType);
               return {
                 ...node,
-                
+
                 id: node.id,
                 type: uiType,
                 data: {
@@ -203,36 +280,69 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
       };
 
       const transformedNodes = transformNodes(initialFlowData.nodes);
-      const transformedEdges = Array.isArray(initialFlowData.edges) ? initialFlowData.edges : [];
+      const transformedEdges = Array.isArray(initialFlowData.edges)
+        ? initialFlowData.edges
+        : [];
 
       setNodes(transformedNodes);
       setEdges(transformedEdges);
       // After nodes/edges mount, adjust viewport so connections render without refresh
       requestAnimationFrame(() => {
-        try { reactFlowInstance.fitView(); } catch {}
+        try {
+          reactFlowInstance.fitView();
+        } catch {}
       });
-      setFlowTitle(initialFlowData.title || '');
+      setFlowTitle(initialFlowData.title || "");
       // Handle both flowId and flow_id from API response
       setFlowId(initialFlowData.flowId || initialFlowData.flow_id || flowId);
-      toast({ title: 'Success', description: 'Flow loaded for editing', variant: 'default' });
+      toast({
+        title: "Success",
+        description: "Flow loaded for editing",
+        variant: "default",
+      });
     }
   }, [initialFlowData, flowId, toast]);
   const queryClient = useQueryClient();
-  const [selectedFlow, setSelectedFlow] = useState<any>(null);
-
   const [startNodeId, setStartNodeId] = useState<string | null>(null);
 
-
   const toolbarNodeOptions = [
-    { type: "simpleMessageNode", label: "Text Message", dataType: "simpleMessage" },
-    { type: "videoMessageNode", label: "Video Message", dataType: "videoMessage" },
-    { type: "imageMessageNode", label: "Image Message", dataType: "imageMessage" },
-    { type: "audioMessageNode", label: "Audio Message", dataType: "audioMessage" },
-    { type: "documentMessageNode", label: "Document Message", dataType: "documentMessage" },
-    { type: "buttonMessageNode", label: "Button Message", dataType: "buttonMessage" },
+    {
+      type: "simpleMessageNode",
+      label: "Text Message",
+      dataType: "simpleMessage",
+    },
+    {
+      type: "videoMessageNode",
+      label: "Video Message",
+      dataType: "videoMessage",
+    },
+    {
+      type: "imageMessageNode",
+      label: "Image Message",
+      dataType: "imageMessage",
+    },
+    {
+      type: "audioMessageNode",
+      label: "Audio Message",
+      dataType: "audioMessage",
+    },
+    {
+      type: "documentMessageNode",
+      label: "Document Message",
+      dataType: "documentMessage",
+    },
+    {
+      type: "buttonMessageNode",
+      label: "Button Message",
+      dataType: "buttonMessage",
+    },
     { type: "listMessageNode", label: "List Message", dataType: "listMessage" },
     { type: "sendEmailNode", label: "Mail Node", dataType: "mailMessage" },
-    { type: "disableChatTillNode", label: "Disable Chat", dataType: "disableChatTill" },
+    {
+      type: "disableChatTillNode",
+      label: "Disable Chat",
+      dataType: "disableChatTill",
+    },
     { type: "requestAPINode", label: "API Request", dataType: "requestAPI" },
     { type: "assignAgentNode", label: "Assign Agent", dataType: "assignAgent" },
     { type: "conditionNode", label: "Condition", dataType: "condition" },
@@ -242,80 +352,90 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   const handleAddNode = (nodeType: string) => {
     const centerX = 400 + Math.random() * 200;
     const centerY = 200 + Math.random() * 200;
-    const option = toolbarNodeOptions.find(opt => opt.type === nodeType);
+    const option = toolbarNodeOptions.find((opt) => opt.type === nodeType);
     if (!option) return;
     let defaultState = getDefaultConfig(option.dataType as NodeData["type"]);
-    
-    const existingMessageNodes = nodes.filter(node => 
-      node.type === 'simpleMessageNode' || 
-      node.type === 'imageMessageNode' || 
-      node.type === 'videoMessageNode' || 
-      node.type === 'audioMessageNode' || 
-      node.type === 'documentMessageNode' || 
-      node.type === 'buttonMessageNode' || 
-      node.type === 'listMessageNode' ||
-      node.type === 'sendEmailNode'
+
+    const existingMessageNodes = nodes.filter(
+      (node) =>
+        node.type === "simpleMessageNode" ||
+        node.type === "imageMessageNode" ||
+        node.type === "videoMessageNode" ||
+        node.type === "audioMessageNode" ||
+        node.type === "documentMessageNode" ||
+        node.type === "buttonMessageNode" ||
+        node.type === "listMessageNode" ||
+        node.type === "sendEmailNode"
     );
     const nextMessageNumber = existingMessageNodes.length + 1;
-    
+
     const newNode: Node<NodeData> = {
       id: `${nodeType}-${Date.now()}`,
       type: nodeType,
       position: { x: centerX, y: centerY },
-          data: {
-      type: option.dataType as NodeData["type"],
-      data: { state: defaultState },
-      title: option.label,
-      messageNumber: nextMessageNumber,
-    } as NodeData,
+      data: {
+        type: option.dataType as NodeData["type"],
+        data: { state: defaultState },
+        title: option.label,
+        messageNumber: nextMessageNumber,
+      } as NodeData,
     };
     setNodes((nds) => nds.concat(newNode));
     updateUiState({ addPopoverOpen: false });
-    
+
     if (pendingConnection) {
       const newEdge: Edge = {
-        id: `e${pendingConnection.source}-${newNode.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: `e${pendingConnection.source}-${
+          newNode.id
+        }-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         source: pendingConnection.source,
         target: newNode.id,
         sourceHandle: pendingConnection.sourceHandle,
-        type: 'smoothstep',
+        type: "smoothstep",
       };
       setEdges((eds) => eds.concat(newEdge));
       setPendingConnection(null);
-      console.log('Node created and connected from pending connection');
+      console.log("Node created and connected from pending connection");
     }
   };
 
-      const addFlowMutation = useMutation({
+  const addFlowMutation = useMutation({
     mutationFn: async (payload: any) => {
       try {
-        console.log('Sending payload to /api/chat_flow/add_new:', JSON.stringify(payload, null, 2));
-        const res = await serverHandler.post('/api/chat_flow/add_new', payload);
-        console.log('API response:', res.data);
+        console.log(
+          "Sending payload to /api/chat_flow/add_new:",
+          JSON.stringify(payload, null, 2)
+        );
+        const res = await serverHandler.post("/api/chat_flow/add_new", payload);
+        console.log("API response:", res.data);
         return res.data as any;
       } catch (error: any) {
-        console.error('API error details:', {
+        console.error("API error details:", {
           message: error.message,
           status: error.response?.status,
           statusText: error.response?.statusText,
           data: error.response?.data,
-          config: error.config
+          config: error.config,
         });
         throw error;
       }
     },
     onSuccess: (data: any) => {
-      console.log('Flow save response:', data);
+      console.log("Flow save response:", data);
       if (data.success) {
         // The backend returns a simple success response, so we need to extract info from the request
         const savedFlowId = data.id || data.flowId || flowId;
         const savedTitle = data.title || flowTitle;
-        
-        toast({ title: 'Success', description: `Flow saved successfully`, variant: 'default' });
-        queryClient.invalidateQueries({ queryKey: ['chat-flows'] });
-        
+
+        toast({
+          title: "Success",
+          description: `Flow saved successfully`,
+          variant: "default",
+        });
+        queryClient.invalidateQueries({ queryKey: ["chat-flows"] });
+
         // Log the saved flow details for debugging
-        console.log('Flow saved successfully:', {
+        console.log("Flow saved successfully:", {
           databaseFlowId: savedFlowId,
           flowIdString: flowId,
           title: savedTitle,
@@ -323,203 +443,261 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
           edgesCount: edges.length,
           edges: edges,
           fullResponse: data,
-          message: data.msg
+          message: data.msg,
         });
-        
+
         // The backend doesn't return the database ID, so we keep the frontend flowId
         // The backend logs show it's using the correct flow ID internally
       } else {
-        toast({ title: 'Error', description: data.msg || 'Please subscribe a plan to proceed', variant: 'destructive' });
-        console.error('Save failed:', data);
+        toast({
+          title: "Error",
+          description: data.msg || "Please subscribe a plan to proceed",
+          variant: "destructive",
+        });
+        console.error("Save failed:", data);
       }
     },
     onError: (err: any) => {
-      console.error('Mutation error details:', {
+      console.error("Mutation error details:", {
         message: err.message,
         response: err.response?.data,
-        status: err.response?.status
+        status: err.response?.status,
       });
-      toast({ title: 'Error', description: `API error: ${err?.message || err}`, variant: 'destructive' });
-      console.error('Mutation error:', err);
+      toast({
+        title: "Error",
+        description: `API error: ${err?.message || err}`,
+        variant: "destructive",
+      });
+      console.error("Mutation error:", err);
     },
   });
 
-      const updateFlowMutation = useMutation({
+  const updateFlowMutation = useMutation({
     mutationFn: async (payload: any) => {
       try {
-        console.log('Sending payload to /api/chat_flow/update:', JSON.stringify(payload, null, 2));
-        const res = await serverHandler.post('/api/chat_flow/update', payload);
-        console.log('API response:', res.data);
+        console.log(
+          "Sending payload to /api/chat_flow/update:",
+          JSON.stringify(payload, null, 2)
+        );
+        const res = await serverHandler.post("/api/chat_flow/update", payload);
+        console.log("API response:", res.data);
         return res.data as any;
       } catch (error: any) {
-        console.error('API error details:', {
+        console.error("API error details:", {
           message: error.message,
           status: error.response?.status,
           statusText: error.response?.statusText,
           data: error.response?.data,
-          config: error.config
+          config: error.config,
         });
         throw error;
       }
     },
     onSuccess: (data: any) => {
       if (data.success) {
-        toast({ title: 'Success', description: 'Flow updated successfully', variant: 'default' });
-        queryClient.invalidateQueries({ queryKey: ['chat-flows'] });
-        
-        console.log('Flow updated successfully:', {
+        toast({
+          title: "Success",
+          description: "Flow updated successfully",
+          variant: "default",
+        });
+        queryClient.invalidateQueries({ queryKey: ["chat-flows"] });
+
+        console.log("Flow updated successfully:", {
           message: data.msg,
-          fullResponse: data
+          fullResponse: data,
         });
       } else {
-        toast({ title: 'Error', description: data.msg || 'Failed to update flow', variant: 'destructive' });
-        console.error('Update failed:', data);
+        toast({
+          title: "Error",
+          description: data.msg || "Failed to update flow",
+          variant: "destructive",
+        });
+        console.error("Update failed:", data);
       }
     },
     onError: (err: any) => {
-      console.error('Mutation error details:', {
+      console.error("Mutation error details:", {
         message: err.message,
         response: err.response?.data,
-        status: err.response?.status
+        status: err.response?.status,
       });
-      toast({ title: 'Error', description: `API error: ${err?.message || err}`, variant: 'destructive' });
-      console.error('Mutation error:', err);
+      toast({
+        title: "Error",
+        description: `API error: ${err?.message || err}`,
+        variant: "destructive",
+      });
+      console.error("Mutation error:", err);
     },
   });
 
-      const deleteFlowMutation = useMutation({
-    mutationFn: async ({ id, flowId }: { id: string, flowId: string }) => {
-      const res = await serverHandler.post('/api/chat_flow/del_flow', { id, flowId });
+  const deleteFlowMutation = useMutation({
+    mutationFn: async ({ id, flowId }: { id: string; flowId: string }) => {
+      const res = await serverHandler.post("/api/chat_flow/del_flow", {
+        id,
+        flowId,
+      });
       return res.data as any;
     },
     onSuccess: (data: any) => {
       if (data.success) {
-        toast({ title: 'Success', description: 'Flow deleted', variant: 'default' });
-        queryClient.invalidateQueries({ queryKey: ['chat-flows'] });
+        toast({
+          title: "Success",
+          description: "Flow deleted",
+          variant: "default",
+        });
+        queryClient.invalidateQueries({ queryKey: ["chat-flows"] });
       } else {
-        toast({ title: 'Error', description: data.msg, variant: 'destructive' });
+        toast({
+          title: "Error",
+          description: data.msg,
+          variant: "destructive",
+        });
       }
     },
     onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
-      const uploadMedia = async (file: File) => {
+  const uploadMedia = async (file: File) => {
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      const res = await serverHandler.post('/api/user/return_media_url', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      formData.append("file", file);
+      const res = await serverHandler.post(
+        "/api/user/return_media_url",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
       if ((res.data as any).success) {
         return (res.data as any).url;
       }
       return false;
     } catch (err) {
-      toast({ title: 'Error', description: 'Media upload failed', variant: 'destructive' });
+      toast({
+        title: "Error",
+        description: "Media upload failed",
+        variant: "destructive",
+      });
       return false;
     }
   };
 
-  const onConnectStart = useCallback(
-    (event: any, params: any) => {
-      console.log('Connection start:', params);
-      // Store the connection start data for potential new node creation
-      setPendingConnection({
-        source: params.nodeId,
-        sourceHandle: params.handleId,
-        target: '',
-        targetHandle: null
-      });
-    },
-    []
-  );
+  const onConnectStart = useCallback((event: any, params: any) => {
+    console.log("Connection start:", params);
+    // Store the connection start data for potential new node creation
+    setPendingConnection({
+      source: params.nodeId,
+      sourceHandle: params.handleId,
+      target: "",
+      targetHandle: null,
+    });
+  }, []);
 
-  const onConnectEnd = useCallback(
-    (event: any) => {
-      console.log('Connection end:', event);
-      // Always check if we have a pending connection and show popup
-      setPendingConnection((prev: any) => {
-        if (prev && !prev.target) {
-          console.log('Connection ended without target, opening popup');
-          updateUiState({ addPopoverOpen: true });
-        }
-        return prev; // Keep the connection data for now
-      });
-    },
-    []
-  );
+  const onConnectEnd = useCallback((event: any) => {
+    console.log("Connection end:", event);
+    // Always check if we have a pending connection and show popup
+    setPendingConnection((prev: any) => {
+      if (prev && !prev.target) {
+        console.log("Connection ended without target, opening popup");
+        updateUiState({ addPopoverOpen: true });
+      }
+      return prev; // Keep the connection data for now
+    });
+  }, []);
 
   const onConnect = useCallback(
     (params: Connection) => {
-      console.log('Connection attempt:', params);
-      
+      console.log("Connection attempt:", params);
+
       // Reset pending connection since we have a complete connection
       setPendingConnection(null);
       updateUiState({ addPopoverOpen: false }); // Also close popup if it was open
-      
+
       // Validation - allow connections between different nodes and prevent multiple connections from same source
       if (params.source && params.target && params.source !== params.target) {
         // Check if there's already a connection from this source handle
-        const existingConnection = edges.find(edge => 
-          edge.source === params.source && 
-          edge.sourceHandle === params.sourceHandle
+        const existingConnection = edges.find(
+          (edge) =>
+            edge.source === params.source &&
+            edge.sourceHandle === params.sourceHandle
         );
-        
+
         if (existingConnection) {
-          console.log('Connection already exists from this source handle, removing old connection');
+          console.log(
+            "Connection already exists from this source handle, removing old connection"
+          );
           // Remove the existing connection
-          setEdges((eds) => eds.filter(edge => 
-            !(edge.source === params.source && edge.sourceHandle === params.sourceHandle)
-          ));
-          toast({ 
-            title: 'Connection Updated', 
-            description: 'Previous connection removed and new connection created.', 
-            variant: 'default' 
+          setEdges((eds) =>
+            eds.filter(
+              (edge) =>
+                !(
+                  edge.source === params.source &&
+                  edge.sourceHandle === params.sourceHandle
+                )
+            )
+          );
+          toast({
+            title: "Connection Updated",
+            description:
+              "Previous connection removed and new connection created.",
+            variant: "default",
           });
         }
-        
-        console.log('Connection validated, creating edge');
+
+        console.log("Connection validated, creating edge");
         const newEdge: Edge = {
-          id: `e${params.source}-${params.target}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          id: `e${params.source}-${params.target}-${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 5)}`,
           source: params.source,
           target: params.target,
           sourceHandle: params.sourceHandle,
-          type: 'smoothstep',
+          type: "smoothstep",
         };
         setEdges((eds) => eds.concat(newEdge));
       } else {
-        console.log('Connection validation failed:', { source: params.source, target: params.target });
+        console.log("Connection validation failed:", {
+          source: params.source,
+          target: params.target,
+        });
       }
     },
-    [setEdges, edges, toast],
-  )
+    [setEdges, edges, toast]
+  );
 
-  const onNodeClick = useCallback((_: React.MouseEvent, node: Node<NodeData>) => {
-    setSelectedNode(node)
-  }, [])
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node<NodeData>) => {
+      setSelectedNode(node);
+    },
+    []
+  );
 
   const onPaneClick = useCallback(() => {
-    setSelectedNode(null)
-  }, [])
+    setSelectedNode(null);
+  }, []);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = "move"
-  }, [])
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
-      event.preventDefault()
+      event.preventDefault();
 
-      const type = event.dataTransfer.getData("application/reactflow")
+      const type = event.dataTransfer.getData("application/reactflow");
       if (typeof type === "undefined" || !type) {
-        return
+        return;
       }
 
       const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
-      })
+      });
 
       const newNode: Node<NodeData> = {
         id: `${type}-${Date.now()}`,
@@ -529,12 +707,12 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
           type: type as NodeData["type"],
           data: { state: getDefaultConfig(type as NodeData["type"]) },
         } as NodeData,
-      }
+      };
 
-      setNodes((nds) => nds.concat(newNode))
+      setNodes((nds) => nds.concat(newNode));
     },
-    [reactFlowInstance, setNodes],
-  )
+    [reactFlowInstance, setNodes]
+  );
 
   const getDefaultConfig = (type: NodeData["type"]) => {
     // Only return the structure required for each node type as per backend contract
@@ -543,42 +721,42 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
         return {
           state: {
             msgContent: {
-              text: { body: "" }
+              text: { body: "" },
             },
-            keyword: []
-          }
+            keyword: [],
+          },
         };
       case "imageMessage":
         return {
           state: {
             msgContent: {
-              image: { link: "", caption: "" }
-            }
-          }
+              image: { link: "", caption: "" },
+            },
+          },
         };
       case "audioMessage":
         return {
           state: {
             msgContent: {
-              audio: { link: "" }
-            }
-          }
+              audio: { link: "" },
+            },
+          },
         };
       case "videoMessage":
         return {
           state: {
             msgContent: {
-              video: { link: "", caption: "" }
-            }
-          }
+              video: { link: "", caption: "" },
+            },
+          },
         };
       case "documentMessage":
         return {
           state: {
             msgContent: {
-              document: { link: "", caption: "" }
-            }
-          }
+              document: { link: "", caption: "" },
+            },
+          },
         };
       case "buttonMessage":
         return {
@@ -587,10 +765,10 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
               interactive: {
                 type: "button",
                 body: "",
-                action: { buttons: [] }
-              }
-            }
-          }
+                action: { buttons: [] },
+              },
+            },
+          },
         };
       case "listMessage":
         return {
@@ -601,10 +779,10 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
                 header: "",
                 body: "",
                 footer: "",
-                action: { button: "", sections: [] }
-              }
-            }
-          }
+                action: { button: "", sections: [] },
+              },
+            },
+          },
         };
       case "mailMessage":
         return {
@@ -617,23 +795,23 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
             headline: "",
             text: "",
             image: "",
-            button: ""
-          }
+            button: "",
+          },
         };
       case "assignAgent":
         return {
           state: {
             agentId: "",
             assignmentType: "specific",
-            fallbackAction: "continue"
-          }
+            fallbackAction: "continue",
+          },
         };
       case "disableChatTill":
         return {
           state: {
             duration: 3600,
-            message: ""
-          }
+            message: "",
+          },
         };
       case "requestAPI":
         return {
@@ -642,8 +820,8 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
             url: "",
             headers: {},
             body: {},
-            responseMapping: {}
-          }
+            responseMapping: {},
+          },
         };
       case "condition":
         return {
@@ -651,8 +829,8 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
             conditions: [],
             onTrueGoTo: "",
             onFalseGoTo: "",
-            delayInSeconds: 0
-          }
+            delayInSeconds: 0,
+          },
         };
       default:
         return { state: {} };
@@ -661,119 +839,143 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
 
   // Save flow handler
   const saveFlow = async () => {
-    if (!(flowTitle || '').trim() || !Array.isArray(nodes) || nodes.length === 0 || !Array.isArray(edges)) {
-      toast({ title: 'Error', description: 'Please fill the title and ensure you have at least one node in your flow.', variant: 'destructive' });
-      console.error('Validation failed:', { flowTitle, flowId, nodes, edges });
+    if (
+      !(flowTitle || "").trim() ||
+      !Array.isArray(nodes) ||
+      nodes.length === 0 ||
+      !Array.isArray(edges)
+    ) {
+      toast({
+        title: "Error",
+        description:
+          "Please fill the title and ensure you have at least one node in your flow.",
+        variant: "destructive",
+      });
+      console.error("Validation failed:", { flowTitle, flowId, nodes, edges });
       return;
     }
-    
-    console.log('Original nodes before cleaning:', nodes);
-    
-    const cleanedNodes = nodes.map((node) => {
-      // Ensure we have the node type - try multiple sources
-      let nodeType = node.data?.type;
-      
-      // Fallback: if data.type is not available, try to extract from node.type
-      if (!nodeType && node.type) {
-        // Remove "Node" suffix from node.type to get the business type
-        const extractedType = node.type.replace('Node', '');
-        // Convert camelCase to the expected format
-        if (extractedType === 'simpleMessage') nodeType = 'simpleMessage';
-        else if (extractedType === 'imageMessage') nodeType = 'imageMessage';
-        else if (extractedType === 'videoMessage') nodeType = 'videoMessage';
-        else if (extractedType === 'audioMessage') nodeType = 'audioMessage';
-        else if (extractedType === 'documentMessage') nodeType = 'documentMessage';
-        else if (extractedType === 'buttonMessage') nodeType = 'buttonMessage';
-        else if (extractedType === 'listMessage') nodeType = 'listMessage';
-        else if (extractedType === 'disableChatTill') nodeType = 'disableChatTill';
-        else if (extractedType === 'requestAPI') nodeType = 'requestAPI';
-        else if (extractedType === 'assignAgent') nodeType = 'assignAgent';
-        else if (extractedType === 'condition') nodeType = 'condition';
-      }
-      
-      if (!nodeType) {
-        console.error('Node missing type information:', node);
-        toast({ title: 'Error', description: `Node ${node.id} is missing type information`, variant: 'destructive' });
-        return null;
-      }
-      
-      const cleanedNode = {
-        id: node.id,
-        type: node.type,
-        nodeType: nodeType,
-        position: node.position,
-        data: node.data,
-      };
-      
-      console.log(`Cleaned node ${node.id}:`, cleanedNode);
-      return cleanedNode;
-    }).filter(Boolean) as any[]; // Remove any null nodes
-    
+
+    console.log("Original nodes before cleaning:", nodes);
+
+    const cleanedNodes = nodes
+      .map((node) => {
+        // Ensure we have the node type - try multiple sources
+        let nodeType = node.data?.type;
+
+        // Fallback: if data.type is not available, try to extract from node.type
+        if (!nodeType && node.type) {
+          // Remove "Node" suffix from node.type to get the business type
+          const extractedType = node.type.replace("Node", "");
+          // Convert camelCase to the expected format
+          if (extractedType === "simpleMessage") nodeType = "simpleMessage";
+          else if (extractedType === "imageMessage") nodeType = "imageMessage";
+          else if (extractedType === "videoMessage") nodeType = "videoMessage";
+          else if (extractedType === "audioMessage") nodeType = "audioMessage";
+          else if (extractedType === "documentMessage")
+            nodeType = "documentMessage";
+          else if (extractedType === "buttonMessage")
+            nodeType = "buttonMessage";
+          else if (extractedType === "listMessage") nodeType = "listMessage";
+          else if (extractedType === "disableChatTill")
+            nodeType = "disableChatTill";
+          else if (extractedType === "requestAPI") nodeType = "requestAPI";
+          else if (extractedType === "assignAgent") nodeType = "assignAgent";
+          else if (extractedType === "condition") nodeType = "condition";
+        }
+
+        if (!nodeType) {
+          console.error("Node missing type information:", node);
+          toast({
+            title: "Error",
+            description: `Node ${node.id} is missing type information`,
+            variant: "destructive",
+          });
+          return null;
+        }
+
+        const cleanedNode = {
+          id: node.id,
+          type: node.type,
+          nodeType: nodeType,
+          position: node.position,
+          data: node.data,
+        };
+
+        console.log(`Cleaned node ${node.id}:`, cleanedNode);
+        return cleanedNode;
+      })
+      .filter(Boolean) as any[]; // Remove any null nodes
+
     if (cleanedNodes.length === 0) {
-      toast({ title: 'Error', description: 'No valid nodes to save', variant: 'destructive' });
+      toast({
+        title: "Error",
+        description: "No valid nodes to save",
+        variant: "destructive",
+      });
       return;
     }
-    
+
     // Edges: persist exactly what the user created
     let cleanedEdges: Edge[] = [] as any;
-    
+
     if (edges.length === 0) {
       // do nothing
     } else {
-        // Process manual edges; keep the handle IDs and include type
-        cleanedEdges = edges.map((edge) => ({
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle,
-          type: edge.type || 'smoothstep',
-        }));
+      // Process manual edges; keep the handle IDs and include type
+      cleanedEdges = edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        type: edge.type || "smoothstep",
+      }));
     }
 
     const payload = {
-      title: (flowTitle || '').trim(),
-      flowId: (flowId || '').trim(),
+      title: (flowTitle || "").trim(),
+      flowId: (flowId || "").trim(),
       nodes: cleanedNodes,
       edges: cleanedEdges,
       // Add a flag to indicate this is a new flow creation
       isNewFlow: !initialFlowData || !initialFlowData.flowId,
     };
-    
-    console.log('Saving flow with payload:', JSON.stringify(payload, null, 2));
-    
+
+    console.log("Saving flow with payload:", JSON.stringify(payload, null, 2));
+
     // Test payload structure
-    console.log('Testing payload structure:');
+    console.log("Testing payload structure:");
     payload.nodes.forEach((node, index) => {
       if (node) {
         console.log(`Node ${index}:`, {
           id: node.id,
           type: node.type,
           nodeType: node.nodeType,
-          has_nodeType: 'nodeType' in node,
-          nodeType_value: node.nodeType
+          has_nodeType: "nodeType" in node,
+          nodeType_value: node.nodeType,
         });
       }
     });
-    
+
     // Debug edges structure
-    console.log('Testing edges structure:');
+    console.log("Testing edges structure:");
     payload.edges.forEach((edge, index) => {
       console.log(`Edge ${index}:`, {
         id: edge.id,
         source: edge.source,
         target: edge.target,
         sourceHandle: edge.sourceHandle,
-        has_sourceHandle: 'sourceHandle' in edge,
-        sourceHandle_value: edge.sourceHandle
+        has_sourceHandle: "sourceHandle" in edge,
+        sourceHandle_value: edge.sourceHandle,
       });
     });
-    
+
     // Determine if this is a new flow or updating existing flow
-    if (initialFlowData && (initialFlowData.flowId || initialFlowData.flow_id)) {
-      // Update existing flow
-      updateFlowMutation.mutate(payload);
+    if (
+      initialFlowData &&
+      (initialFlowData.flowId || initialFlowData.flow_id)
+    ) {
+      addFlowMutation.mutate(payload);
     } else {
-      // Create new flow
       addFlowMutation.mutate(payload);
     }
   };
@@ -781,7 +983,9 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   // Load flow by ID
   const loadFlow = async (id: string) => {
     try {
-      const res = await serverHandler.post('/api/chat_flow/get_by_flow_id', { flowId: id });
+      const res = await serverHandler.post("/api/chat_flow/get_by_flow_id", {
+        flowId: id,
+      });
       const api = res.data as any;
       if (api && api.success) {
         // Backend returns flattened shape: { success: true, nodes, edges, ... }
@@ -789,26 +993,41 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
 
         const mapBusinessToUiType = (businessType: string) => {
           switch (businessType) {
-            case 'simpleMessage': return 'simpleMessageNode';
-            case 'imageMessage': return 'imageMessageNode';
-            case 'audioMessage': return 'audioMessageNode';
-            case 'videoMessage': return 'videoMessageNode';
-            case 'documentMessage': return 'documentMessageNode';
-            case 'buttonMessage': return 'buttonMessageNode';
-            case 'listMessage': return 'listMessageNode';
-            case 'assignAgent': return 'assignAgentNode';
-            case 'disableChatTill': return 'disableChatTillNode';
-            case 'requestAPI': return 'requestAPINode';
-            case 'mailMessage': return 'sendEmailNode';
-            case 'condition': return 'conditionNode';
-            case 'start': return 'startNode';
-            default: return 'genericNode';
+            case "simpleMessage":
+              return "simpleMessageNode";
+            case "imageMessage":
+              return "imageMessageNode";
+            case "audioMessage":
+              return "audioMessageNode";
+            case "videoMessage":
+              return "videoMessageNode";
+            case "documentMessage":
+              return "documentMessageNode";
+            case "buttonMessage":
+              return "buttonMessageNode";
+            case "listMessage":
+              return "listMessageNode";
+            case "assignAgent":
+              return "assignAgentNode";
+            case "disableChatTill":
+              return "disableChatTillNode";
+            case "requestAPI":
+              return "requestAPINode";
+            case "mailMessage":
+              return "sendEmailNode";
+            case "condition":
+              return "conditionNode";
+            case "start":
+              return "startNode";
+            default:
+              return "genericNode";
           }
         };
 
         const transformedNodes = Array.isArray(flowData.nodes)
           ? flowData.nodes.map((node: any) => {
-              const businessType = node.nodeType || node.type || node?.data?.type;
+              const businessType =
+                node.nodeType || node.type || node?.data?.type;
               return {
                 ...node,
                 id: node.id,
@@ -818,21 +1037,37 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
             })
           : [];
 
-        const incomingEdges = Array.isArray(flowData.edges) ? flowData.edges : [];
+        const incomingEdges = Array.isArray(flowData.edges)
+          ? flowData.edges
+          : [];
 
         // Do not inject placeholder handles; render exactly what backend sent
- 
+
         setNodes(transformedNodes);
         setEdges(incomingEdges);
-        try { requestAnimationFrame(() => reactFlowInstance.fitView()); } catch {}
-        setFlowTitle(flowData.title || '');
+        try {
+          requestAnimationFrame(() => reactFlowInstance.fitView());
+        } catch {}
+        setFlowTitle(flowData.title || "");
         setFlowId(flowData.flowId || flowData.flow_id || id);
-        toast({ title: 'Success', description: 'Flow loaded', variant: 'default' });
+        toast({
+          title: "Success",
+          description: "Flow loaded",
+          variant: "default",
+        });
       } else {
-        toast({ title: 'Error', description: (api as any)?.msg || 'Failed to load flow', variant: 'destructive' });
+        toast({
+          title: "Error",
+          description: (api as any)?.msg || "Failed to load flow",
+          variant: "destructive",
+        });
       }
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message || 'Failed to load flow', variant: 'destructive' });
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load flow",
+        variant: "destructive",
+      });
     }
   };
 
@@ -852,7 +1087,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   }, []);
 
   const handleSaveClick = () => {
-    if (!(flowTitle || '').trim()) {
+    if (!(flowTitle || "").trim()) {
       updateUiState({ showSaveDialog: true, pendingSave: true });
       return;
     }
@@ -860,21 +1095,26 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   };
 
   const handleDialogSave = () => {
-    if (!(flowTitle || '').trim()) {
-      toast({ title: 'Error', description: 'Please enter a flow title', variant: 'destructive' });
+    if (!(flowTitle || "").trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a flow title",
+        variant: "destructive",
+      });
       return;
     }
     updateUiState({ showSaveDialog: false, pendingSave: false });
     saveFlow();
   };
 
-
-
   // Flows list UI
   return (
     <div>
       {/* Save Dialog for Title Only */}
-      <Dialog open={uiState.showSaveDialog} onOpenChange={(open) => updateUiState({ showSaveDialog: open })}>
+      <Dialog
+        open={uiState.showSaveDialog}
+        onOpenChange={(open) => updateUiState({ showSaveDialog: open })}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Enter Flow Title</DialogTitle>
@@ -882,28 +1122,34 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Flow Title</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Flow Title
+              </label>
               <input
                 className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter flow title"
                 value={flowTitle}
-                onChange={e => setFlowTitle(e.target.value)}
+                onChange={(e) => setFlowTitle(e.target.value)}
                 autoFocus
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Flow ID (Auto-generated)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Flow ID (Auto-generated)
+              </label>
               <input
                 className="w-full border rounded px-3 py-2 bg-gray-50 text-gray-600"
                 value={flowId}
                 readOnly
               />
-              <p className="text-xs text-gray-500 mt-1">This ID is automatically generated and cannot be changed</p>
+              <p className="text-xs text-gray-500 mt-1">
+                This ID is automatically generated and cannot be changed
+              </p>
             </div>
             <button
               className="bg-blue-500 text-white rounded px-4 py-2 mt-2 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleDialogSave}
-              disabled={!(flowTitle || '').trim()}
+              disabled={!(flowTitle || "").trim()}
             >
               Save Flow
             </button>
@@ -911,12 +1157,21 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
         </DialogContent>
       </Dialog>
 
-
-      <NodeContextProvider nodes={nodes} setNodes={setNodes} edges={edges} setEdges={setEdges} startNodeId={startNodeId} setStartNodeId={setStartNodeId}>
+      <NodeContextProvider
+        nodes={nodes}
+        setNodes={setNodes}
+        edges={edges}
+        setEdges={setEdges}
+        startNodeId={startNodeId}
+        setStartNodeId={setStartNodeId}
+      >
         <div className="h-full flex flex-col bg-gray-50">
           <div className="flex-1 flex relative">
             {/* Canvas */}
-            <div className="flex-1 relative w-full h-[calc(100vh-64px)] min-h-[400px]" ref={reactFlowWrapper}>
+            <div
+              className="flex-1 relative w-full h-[calc(100vh-64px)] min-h-[400px]"
+              ref={reactFlowWrapper}
+            >
               <ReactFlow
                 nodes={nodes as any}
                 edges={edges as any}
@@ -939,27 +1194,35 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
                   nodeColor={(node) => {
                     switch (node.data?.type) {
                       case "start":
-                        return "#10b981"
+                        return "#10b981";
                       case "text":
-                        return "#3b82f6"
+                        return "#3b82f6";
                       case "image":
-                        return "#8b5cf6"
+                        return "#8b5cf6";
                       case "apiRequest":
-                        return "#f59e0b"
+                        return "#f59e0b";
                       default:
-                        return "#6b7280"
+                        return "#6b7280";
                     }
                   }}
                 />
               </ReactFlow>
               {/* Floating toolbar centered at bottom */}
-              <FlowToolbar onAddNode={handleAddNode} addPopoverOpen={uiState.addPopoverOpen} setAddPopoverOpen={(open) => updateUiState({ addPopoverOpen: open })} toolbarNodeOptions={toolbarNodeOptions} onSave={handleSaveClick} />
+              <FlowToolbar
+                onAddNode={handleAddNode}
+                addPopoverOpen={uiState.addPopoverOpen}
+                setAddPopoverOpen={(open) =>
+                  updateUiState({ addPopoverOpen: open })
+                }
+                toolbarNodeOptions={toolbarNodeOptions}
+                onSave={handleSaveClick}
+              />
             </div>
           </div>
         </div>
       </NodeContextProvider>
     </div>
-  )
+  );
 }
 
 interface FlowBuilderProps {
@@ -971,5 +1234,5 @@ export function FlowBuilder({ initialFlowData }: FlowBuilderProps) {
     <ReactFlowProvider>
       <FlowBuilderContent initialFlowData={initialFlowData} />
     </ReactFlowProvider>
-  )
+  );
 }

@@ -20,7 +20,7 @@ export class UserEndpoints {
   static readonly DELETE_TEMPLATE = '/api/user/delete_template';
   
   // Dashboard
-  static readonly DASHBOARD = '/api/user/dashboard';
+  static readonly USER_DASHBOARD = '/api/user/get_dashboard';
   static readonly GET_STATS = '/api/user/stats';
   
   // Settings
@@ -240,7 +240,7 @@ export class TemplateEndpoints {
 export class ChatFlowEndpoints {
   // Flow Management
   static readonly GET_BY_FLOW_ID = '/api/chat_flow/get_by_flow_id';
-  static readonly GET_MINE = '/api/chat_flow/get_mine';
+  static readonly GET_MINE_FLOWS = '/api/chat_flow/get_mine';
   static readonly DELETE_FLOW = '/api/chat_flow/del_flow';
   static readonly UPDATE_FLOW = '/api/chat_flow/update';
   static readonly CREATE_FLOW = '/api/chat_flow/create';
@@ -301,6 +301,16 @@ export class InstagramCommentEndpoints {
   static readonly GET_REPLY_STATS = '/api/instagram/comment/reply_stats';
 }
 
+export class ChatbotEndpoints {
+  // Chatbot Management
+  static readonly GET_CHATBOTS = '/api/chatbot/get_chatbot';
+  static readonly ADD_CHATBOT = '/api/chatbot/add_chatbot';
+  static readonly UPDATE_CHATBOT = '/api/chatbot/update_chatbot';
+  static readonly DELETE_CHATBOT = '/api/chatbot/del_chatbot';
+  static readonly CHANGE_BOT_STATUS = '/api/chatbot/change_bot_status';
+
+}
+
 // Helper functions
 export class EndpointHelpers {
   /**
@@ -357,5 +367,6 @@ export const API_ENDPOINTS = {
   Broadcast: BroadcastEndpoints,
   FacebookComment: FacebookCommentEndpoints,
   InstagramComment: InstagramCommentEndpoints,
+  Chatbot: ChatbotEndpoints,
   Helpers: EndpointHelpers,
 } as const;

@@ -40,7 +40,6 @@ export interface NodeData extends Record<string, unknown> {
       timeDelayType?: string
       timeDelayValue?: number
       timeDelayUnit?: string
-      // add other fields as needed
     }
   }
   title?: string

@@ -3,21 +3,16 @@
 import { Card, CardContent } from "@/components/ui/card";
 import React from "react";
 import { useQuery } from '@tanstack/react-query';
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
+import { UserEndpoints } from "@/utils/api/enpointsUtils/Api-endpoints";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardView() {
   const { data: dashboardData, isLoading, error } = useQuery<any, Error>({
     queryKey: ['dashboard'],
     queryFn: async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_BASE_URL;
-      const token = typeof window !== 'undefined' ? localStorage.getItem('serviceToken') : null;
-      const res = await fetch(`${apiUrl}/api/user/get_dashboard`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-      });
-      const data = await res.json();
+      const response = await serverHandler.get(UserEndpoints.USER_DASHBOARD);
+      const data = response.data;
       if (!data.success) throw new Error(data.msg || 'Failed to fetch dashboard');
       return data;
     },
@@ -118,7 +113,49 @@ export default function DashboardView() {
   return (
     <div className="space-y-8">
       {isLoading ? (
-        <div>Loading dashboard...</div>
+        <>
+          {/* Skeleton loading for stat cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {Array.from({ length: 12 }, (_, index) => (
+              <Card key={`skeleton-${index}`} className="p-2 border-0 shadow-sm">
+                <CardContent className="flex items-center gap-3 p-3">
+                  <Skeleton className="w-9 h-9 rounded-full" />
+                  <div className="flex flex-col space-y-2">
+                    <Skeleton className="h-5 w-12" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Skeleton loading for chart */}
+          <div className="mt-8 p-6 bg-gradient-to-br from-gray-50 to-white rounded-xl shadow-sm border border-gray-100">
+            <Skeleton className="h-6 w-48 mb-6" />
+            <div className="space-y-4">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={`chart-skeleton-${index}`} className="flex items-center gap-4">
+                  <div className="w-20 flex items-center gap-2">
+                    <Skeleton className="w-3 h-3 rounded-full" />
+                    <Skeleton className="h-3 w-12" />
+                  </div>
+                  <div className="flex-1 relative h-7 flex items-center">
+                    <Skeleton className="h-5 rounded-lg" style={{ width: `${Math.random() * 60 + 20}%` }} />
+                    <Skeleton className="absolute right-0 h-3 w-6" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end mt-4 gap-4">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={`legend-skeleton-${index}`} className="flex items-center gap-2">
+                  <Skeleton className="w-3 h-3 rounded-full" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       ) : error ? (
         <div className="text-red-500">{error.message}</div>
       ) : (
