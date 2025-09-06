@@ -14,7 +14,6 @@ import { ArrowLeft, CreditCard, Banknote, Check } from "lucide-react"
 import { FaPaypal } from "react-icons/fa"
 import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import { useAuth } from '@/hooks/useAuth';
-// Razorpay script loader
 const loadRazorpayScript = () => {
   return new Promise((resolve, reject) => {
     try {
@@ -28,10 +27,9 @@ const loadRazorpayScript = () => {
     script.id = 'razorpay-sdk';
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       
-      // Add timeout to prevent hanging
       const timeout = setTimeout(() => {
         reject(new Error('Razorpay script loading timeout'));
-      }, 10000); // 10 second timeout
+      }, 10000); 
       
       script.onload = () => {
         clearTimeout(timeout);
@@ -56,7 +54,6 @@ function CheckoutPageContent() {
   const router = useRouter()
   const planId = searchParams.get('plan')
   const fromRegister = searchParams.get('from') === 'register'
-  // register is no longer needed since users are created during initial registration
   
   const [plan, setPlan] = useState<Plan | null>(null)
   const [loading, setLoading] = useState(true)
@@ -76,7 +73,6 @@ function CheckoutPageContent() {
       fetchPlanDetails()
       fetchGateways()
       
-      // If coming from registration, get the pending registration data
       if (fromRegister) {
         const storedData = localStorage.getItem('pendingRegistration')
         if (storedData) {
@@ -110,13 +106,11 @@ function CheckoutPageContent() {
 
   const fetchGateways = async () => {
     try {
-      // Try to get payment details with authentication first
       let response;
       try {
         response = await serverHandler.get('/api/user/get_payment_details');
         setGateways((response as any).data?.data || {});
       } catch (authError: any) {
-        // If authentication fails (401), use the public endpoint
         if (authError.response?.status === 401) {
           console.log('User not authenticated, using public endpoint');
           const publicResponse = await serverHandler.get('/api/user/get_payment_gateways_public');
@@ -131,17 +125,14 @@ function CheckoutPageContent() {
     }
   }
 
-  // Helper function to handle post-payment flow
   const handlePostPaymentFlow = async () => {
     if (!fromRegister || !pendingRegistration) {
       return false;
     }
 
     try {
-      // Clear pending registration data
       localStorage.removeItem('pendingRegistration');
       
-      // Show success message
       toast.success('Payment successful! Your account is now active. Please login to continue.', {
         style: {
           backgroundColor: '#d4edda',
@@ -150,7 +141,6 @@ function CheckoutPageContent() {
         }
       });
       
-      // Redirect to login page after 2 seconds
       setTimeout(() => {
         router.push('/login');
       }, 2000);
@@ -202,17 +192,14 @@ function CheckoutPageContent() {
       let response;
       
       if (fromRegister && pendingRegistration) {
-        // Use public endpoint for new users
         response = await serverHandler.post('/api/user/create_stripe_session_public', {
           planId: plan!.id,
           email: pendingRegistration.email,
           name: pendingRegistration.name
         });
-        // Store registration data in sessionStorage for Stripe redirect
         sessionStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
         toast.info('Redirecting to Stripe. After payment, you will be redirected back to complete registration.');
       } else {
-        // Use authenticated endpoint for existing users
         response = await userPlansAPI.createStripeSession(plan!.id);
       }
       
@@ -227,7 +214,6 @@ function CheckoutPageContent() {
 
   const handleRazorpayPayment = async () => {
     try {
-      // Validate plan and payment method
       if (!plan || !plan.id || !plan.price) {
         throw new Error('Invalid plan data');
       }
@@ -242,7 +228,6 @@ function CheckoutPageContent() {
       
       let orderRes;
       if (fromRegister && pendingRegistration) {
-        // Use public endpoint for new users
         const publicResponse = await serverHandler.post('/api/user/create_razorpay_order_public', {
           planId: plan.id,
           amount: plan.price,
@@ -251,7 +236,6 @@ function CheckoutPageContent() {
         });
         orderRes = publicResponse.data;
       } else {
-        // Use authenticated endpoint for existing users
         orderRes = await userPlansAPI.createRazorpayOrder(plan.id, plan.price);
       }
       
@@ -271,8 +255,7 @@ function CheckoutPageContent() {
         description: (orderRes as any).description || plan!.title,
         notes: (orderRes as any).notes || {},
         theme: { color: '#3399cc' },
-        // Remove order_id as it's not needed for standard checkout
-        // Add required parameters for better integration
+          
         modal: {
           ondismiss: function() {
             console.log('Razorpay modal dismissed')
@@ -290,21 +273,18 @@ function CheckoutPageContent() {
             
             console.log('Processing payment with backend...');
             
-            // Process the payment with backend
             let backendResponse;
             
             if (fromRegister && pendingRegistration) {
-              // Use public endpoint for new users
               const publicPaymentResponse = await serverHandler.post('/api/user/pay_with_razorpay_public', {
                 rz_payment_id: response.razorpay_payment_id,
                 plan: plan!,
-                amount: (orderRes as any).amount,
+                amount: plan!.price,
                 email: pendingRegistration.email,
                 name: pendingRegistration.name
               });
               backendResponse = publicPaymentResponse.data;
             } else {
-              // Use authenticated endpoint for existing users
               backendResponse = await userPlansAPI.payWithRazorpay(
                 response.razorpay_payment_id, 
                 plan!, 
@@ -315,14 +295,12 @@ function CheckoutPageContent() {
             console.log('Backend payment response:', backendResponse);
             
             if (backendResponse && (backendResponse as any).success) {
-              // If user came from registration, register them first
               if (fromRegister && pendingRegistration) {
                 const postPaymentSuccess = await handlePostPaymentFlow();
                 if (!postPaymentSuccess) {
-                  return; // Error handling is done in the helper function
+                  return; 
                 }
               } else {
-                // Normal payment success flow
                 toast.success('Payment successful!');
                 router.push('/dashboard');
               }
@@ -333,17 +311,16 @@ function CheckoutPageContent() {
             console.error('Error processing Razorpay payment:', error)
             toast.error('Payment processing failed: ' + (error as any).message || 'Unknown error')
             
-            // Don't redirect on error, let user try again
+            
             setProcessing(false);
           }
         },
-        // Add error handler
+        
         prefill: {
-          name: '', // Will be filled if user is logged in
-          email: '', // Will be filled if user is logged in
-          contact: '' // Will be filled if user is logged in
+          name: '', 
+          email: '', 
+          contact: '' 
         },
-        // Add additional options for better UX
         retry: {
           enabled: true,
           max_count: 3
@@ -353,12 +330,12 @@ function CheckoutPageContent() {
       
       console.log('Razorpay options:', options)
       
-      // Validate Razorpay options
+      
       if (!options.key || !options.amount || !options.currency) {
         throw new Error('Missing required Razorpay parameters');
       }
       
-      // Check if Razorpay is available
+      
       if (typeof window !== 'undefined' && !(window as any).Razorpay) {
         throw new Error('Razorpay SDK not loaded properly');
       }
@@ -366,7 +343,6 @@ function CheckoutPageContent() {
       // @ts-ignore
       const rzp = new window.Razorpay(options)
       
-      // Add error handling for Razorpay instance
       rzp.on('payment.failed', function (response: any) {
         console.error('Razorpay payment failed:', response.error);
         toast.error('Payment failed: ' + (response.error.description || 'Unknown error'));
@@ -386,7 +362,6 @@ function CheckoutPageContent() {
 
   const handlePayPalPayment = async () => {
     try {
-      // For PayPal, we'll handle registration immediately since it's not fully integrated
       if (fromRegister && pendingRegistration) {
         toast.info('PayPal integration coming soon. For now, please use another payment method.');
       } else {
@@ -400,12 +375,10 @@ function CheckoutPageContent() {
 
   const handleOfflinePayment = async () => {
     try {
-      // For offline payment, we need to handle post-payment flow immediately
       if (fromRegister && pendingRegistration) {
         const postPaymentSuccess = await handlePostPaymentFlow();
         if (postPaymentSuccess) {
           toast.success('Offline payment instructions sent to your email');
-          // Post-payment flow and redirect will be handled by handlePostPaymentFlow
         }
       } else {
         toast.success('Offline payment instructions sent to your email');

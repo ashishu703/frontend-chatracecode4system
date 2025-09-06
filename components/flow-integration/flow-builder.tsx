@@ -423,18 +423,16 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     onSuccess: (data: any) => {
       console.log("Flow save response:", data);
       if (data.success) {
-        // The backend returns a simple success response, so we need to extract info from the request
         const savedFlowId = data.id || data.flowId || flowId;
         const savedTitle = data.title || flowTitle;
 
         toast({
           title: "Success",
           description: `Flow saved successfully`,
-          variant: "default",
+          variant: "success",
         });
         queryClient.invalidateQueries({ queryKey: ["chat-flows"] });
 
-        // Log the saved flow details for debugging
         console.log("Flow saved successfully:", {
           databaseFlowId: savedFlowId,
           flowIdString: flowId,
@@ -446,8 +444,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
           message: data.msg,
         });
 
-        // The backend doesn't return the database ID, so we keep the frontend flowId
-        // The backend logs show it's using the correct flow ID internally
+        
       } else {
         toast({
           title: "Error",
@@ -463,9 +460,22 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
         response: err.response?.data,
         status: err.response?.status,
       });
+      
+      // Check for specific error messages
+      const errorData = err.response?.data;
+      let errorMessage = "An error occurred while saving the flow";
+      
+      if (errorData?.message === "User plan expired") {
+        errorMessage = "Your subscription plan has expired. Please renew your plan to continue using this feature.";
+      } else if (errorData?.message) {
+        errorMessage = errorData.message;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
       toast({
         title: "Error",
-        description: `API error: ${err?.message || err}`,
+        description: errorMessage,
         variant: "destructive",
       });
       console.error("Mutation error:", err);
@@ -588,7 +598,6 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
 
   const onConnectStart = useCallback((event: any, params: any) => {
     console.log("Connection start:", params);
-    // Store the connection start data for potential new node creation
     setPendingConnection({
       source: params.nodeId,
       sourceHandle: params.handleId,
@@ -599,13 +608,13 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
 
   const onConnectEnd = useCallback((event: any) => {
     console.log("Connection end:", event);
-    // Always check if we have a pending connection and show popup
+    
     setPendingConnection((prev: any) => {
       if (prev && !prev.target) {
         console.log("Connection ended without target, opening popup");
         updateUiState({ addPopoverOpen: true });
       }
-      return prev; // Keep the connection data for now
+      return prev; 
     });
   }, []);
 
@@ -613,13 +622,10 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     (params: Connection) => {
       console.log("Connection attempt:", params);
 
-      // Reset pending connection since we have a complete connection
       setPendingConnection(null);
-      updateUiState({ addPopoverOpen: false }); // Also close popup if it was open
+      updateUiState({ addPopoverOpen: false }); 
 
-      // Validation - allow connections between different nodes and prevent multiple connections from same source
       if (params.source && params.target && params.source !== params.target) {
-        // Check if there's already a connection from this source handle
         const existingConnection = edges.find(
           (edge) =>
             edge.source === params.source &&
@@ -630,7 +636,6 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
           console.log(
             "Connection already exists from this source handle, removing old connection"
           );
-          // Remove the existing connection
           setEdges((eds) =>
             eds.filter(
               (edge) =>
@@ -715,7 +720,6 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
   );
 
   const getDefaultConfig = (type: NodeData["type"]) => {
-    // Only return the structure required for each node type as per backend contract
     switch (type) {
       case "simpleMessage":
         return {

@@ -4,6 +4,8 @@ import { useState } from "react"
 import { motion } from "framer-motion"
 import CommentManager from "./FacebookCommentReply"
 import InstagramCommentManager from "./InstagramCommentReply"
+import AllDripCampaign from "./AllDripCampaign"
+import DripCampaign from "./DripCampaign"
 import {
   Card,
   CardContent,
@@ -19,27 +21,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import {
   Zap,
   Facebook,
   Instagram,
-  CalendarDays,
   Mails,
-  CalendarPlus,
-  Rocket,
-  ArrowLeft,
   QrCode,
 } from "lucide-react"
 
-// Define the structure for each tool
 interface AutomationTool {
   id: string
   title: string
@@ -47,7 +37,6 @@ interface AutomationTool {
   icon: React.ElementType
 }
 
-// Array of automation tools to be displayed
 const automationTools: AutomationTool[] = [
   {
     id: "triggers",
@@ -85,7 +74,10 @@ const automationTools: AutomationTool[] = [
 export default function AutomationGrid() {
   const [selectedTool, setSelectedTool] = useState<AutomationTool | null>(null)
   const [showToolContent, setShowToolContent] = useState(false)
-  const [currentTool, setCurrentTool] = useState<'facebook' | 'instagram' | null>(null)
+  const [currentTool, setCurrentTool] = useState<'facebook' | 'instagram' | 'drip_campaigns' | null>(null)
+  const [dripCampaignView, setDripCampaignView] = useState<'list' | 'create' | 'edit'>('list')
+  const [editingCampaign, setEditingCampaign] = useState<any>(null)
+  const [campaignTitle, setCampaignTitle] = useState<string>('')
 
   const handleCardClick = (tool: AutomationTool) => {
     if (tool.id === "facebook") {
@@ -94,6 +86,10 @@ export default function AutomationGrid() {
     } else if (tool.id === "instagram") {
       setShowToolContent(true)
       setCurrentTool('instagram')
+    } else if (tool.id === "drip_campaigns") {
+      setShowToolContent(true)
+      setCurrentTool('drip_campaigns')
+      setDripCampaignView('list')
     } else {
       setSelectedTool(tool)
     }
@@ -106,6 +102,25 @@ export default function AutomationGrid() {
   const handleBackToTools = () => {
     setShowToolContent(false)
     setCurrentTool(null)
+    setDripCampaignView('list')
+    setEditingCampaign(null)
+  }
+
+  const handleCreateCampaign = (title: string) => {
+    setCampaignTitle(title)
+    setDripCampaignView('create')
+    setEditingCampaign(null)
+  }
+
+  const handleEditCampaign = (campaign: any) => {
+    setEditingCampaign(campaign)
+    setDripCampaignView('edit')
+  }
+
+  const handleBackToList = () => {
+    setDripCampaignView('list')
+    setEditingCampaign(null)
+    setCampaignTitle('')
   }
 
   // If showing tool content, render the appropriate component
@@ -119,6 +134,24 @@ export default function AutomationGrid() {
           {currentTool === 'instagram' && (
             <InstagramCommentManager onBack={handleBackToTools} />
           )}
+          {currentTool === 'drip_campaigns' && (
+            <>
+              {dripCampaignView === 'list' && (
+                <AllDripCampaign 
+                  onCreateCampaign={handleCreateCampaign}
+                  onEditCampaign={handleEditCampaign}
+                  onBack={handleBackToTools}
+                />
+              )}
+              {(dripCampaignView === 'create' || dripCampaignView === 'edit') && (
+                <DripCampaign 
+                  onBack={handleBackToList}
+                  editingCampaign={editingCampaign}
+                  campaignTitle={campaignTitle}
+                />
+              )}
+            </>
+          )}
         </div>
       </div>
     )
@@ -128,7 +161,7 @@ export default function AutomationGrid() {
     if (!selectedTool) return null
 
     // Coming Soon messages for specific tools
-    if (selectedTool.id === "triggers" || selectedTool.id === "drip_campaigns" || selectedTool.id === "qr_generator") {
+    if (selectedTool.id === "triggers" || selectedTool.id === "qr_generator") {
       return (
         <>
           <DialogHeader>

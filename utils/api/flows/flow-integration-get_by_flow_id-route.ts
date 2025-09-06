@@ -4,8 +4,6 @@ export async function POST(request: NextRequest) {
   try {
     const { flowId } = await request.json()
 
-    // In a real implementation, you would fetch from a database
-    // For now, we'll return mock data
     const mockFlowData = {
       nodes: [
         {

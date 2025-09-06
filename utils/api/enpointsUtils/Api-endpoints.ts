@@ -311,6 +311,17 @@ export class ChatbotEndpoints {
 
 }
 
+export class DripCampaignEndpoints {
+  // Drip Campaign Management
+  static readonly CREATE_CAMPAIGN = '/api/drip-campaign/create';
+  static readonly GET_CAMPAIGNS = '/api/drip-campaign/get_campaigns';
+  static readonly GET_CAMPAIGN = '/api/drip-campaign/get_campaign/:campaign_id';
+  static readonly UPDATE_CAMPAIGN = '/api/drip-campaign/update/:campaign_id';
+  static readonly UPDATE_CAMPAIGN_STATUS = '/api/drip-campaign/update_status/:campaign_id';
+  static readonly DELETE_CAMPAIGN = '/api/drip-campaign/delete/:campaign_id';
+  static readonly PROCESS_PENDING_MESSAGES = '/api/drip-campaign/process_pending';
+}
+
 // Helper functions
 export class EndpointHelpers {
   /**
@@ -368,5 +379,6 @@ export const API_ENDPOINTS = {
   FacebookComment: FacebookCommentEndpoints,
   InstagramComment: InstagramCommentEndpoints,
   Chatbot: ChatbotEndpoints,
+  DripCampaign: DripCampaignEndpoints,
   Helpers: EndpointHelpers,
 } as const;

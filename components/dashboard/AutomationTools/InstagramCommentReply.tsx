@@ -274,7 +274,7 @@ const CommentSettingsUI: React.FC<CommentSettingsUIProps> = ({ onBack }) => {
               <option value="">{flowsLoading ? 'Loading flows...' : 'Select a flow'}</option>
               {flows.map((flow) => (
                 <option key={flow.id} value={flow.id}>
-                  {flow.name}
+                  {flow.title}
                 </option>
               ))}
             </select>
@@ -362,7 +362,7 @@ const CommentSettingsUI: React.FC<CommentSettingsUIProps> = ({ onBack }) => {
               <option value="">{flowsLoading ? 'Loading flows...' : 'Select a flow'}</option>
               {flows.map((flow) => (
                 <option key={flow.id} value={flow.id}>
-                  {flow.name}
+                  {flow.title}
                 </option>
               ))}
             </select>
