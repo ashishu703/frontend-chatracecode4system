@@ -22,13 +22,11 @@ function linkify(text: string) {
 function renderStructuredText(text: string | any) {
   if (typeof text !== 'string') return text
   
-  // Split by newlines to handle line breaks
   const lines = text.split('\n')
   
   return (
     <div className="w-fit">
       {lines.map((line, i) => {
-        // Check if line starts with list markers
         if (line.trim().match(/^[-*•]\s/)) {
           return (
             <div key={i} className="flex items-start gap-2 mb-1">
@@ -38,7 +36,6 @@ function renderStructuredText(text: string | any) {
           )
         }
         
-        // Check if line starts with numbered list
         if (line.trim().match(/^\d+\.\s/)) {
           const number = line.trim().match(/^(\d+)\.\s/)?.[1] || '1'
           return (
@@ -49,7 +46,6 @@ function renderStructuredText(text: string | any) {
           )
         }
         
-        // Regular text line
         return (
           <div key={i} className="break-words mb-1 last:mb-0">
             {line}
@@ -61,7 +57,6 @@ function renderStructuredText(text: string | any) {
 }
 
 export function MessageContent({ msg }: { msg: Message }) {
-  // CRITICAL FIX: Handle Instagram messages with proper URL validation
   if (msg.type === "image" && msg.body && typeof msg.body === "object") {
     const body: any = msg.body
     const imageUrl = body.url || body.attchment_url || body.attachment_url || ""
@@ -82,7 +77,6 @@ export function MessageContent({ msg }: { msg: Message }) {
         </div>
       )
     } else {
-      // Handle case where image type is set but no URL (fallback to text)
       return (
         <div className="text-sm text-gray-500 italic">
           [Image] {body.caption || "No image available"}
@@ -101,7 +95,6 @@ export function MessageContent({ msg }: { msg: Message }) {
         </div>
       )
     } else {
-      // Handle case where video type is set but no URL (fallback to text)
       return (
         <div className="text-sm text-gray-500 italic">
           [Video] {body.caption || "No video available"}
@@ -120,7 +113,6 @@ export function MessageContent({ msg }: { msg: Message }) {
         </div>
       )
     } else {
-      // Handle case where audio type is set but no URL (fallback to text)
       return (
         <div className="text-sm text-gray-500 italic">
           [Audio] {body.caption || "No audio available"}
@@ -158,7 +150,6 @@ export function MessageContent({ msg }: { msg: Message }) {
         </div>
       )
     } else {
-      // Handle case where file type is set but no URL (fallback to text)
       return (
         <div className="text-sm text-gray-500 italic">
           [Document] {body.caption || "No document available"}

@@ -16,20 +16,17 @@ export const ChatTimer: React.FC<ChatTimerProps> = ({
   const [timer, setTimer] = React.useState({ hours: "00", minutes: "00", seconds: "00" })
   const intervalRef = React.useRef<NodeJS.Timeout | null>(null)
 
-  // Calculate platform-specific window time
   const getPlatformWindowMs = React.useCallback((platform: string): number => {
     const p = (platform || "").toLowerCase()
-    if (p.includes("whatsapp")) return 24 * 60 * 60 * 1000 // 24 hours
+    if (p.includes("whatsapp")) return 24 * 60 * 60 * 1000 
     if (p.includes("instagram") || p.includes("messenger") || p === "facebook") return 7 * 24 * 60 * 60 * 1000 // 7 days
-    return 7 * 24 * 60 * 60 * 1000 // Default 7 days
+    return 7 * 24 * 60 * 60 * 1000 
   }, [])
 
-  // Calculate end time based on initial time
   const calculateEndTime = React.useCallback((initialTime: number): number => {
     return initialTime + getPlatformWindowMs(platform)
   }, [platform, getPlatformWindowMs])
 
-  // Clean up interval
   const destroyExistingInterval = React.useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
@@ -37,7 +34,6 @@ export const ChatTimer: React.FC<ChatTimerProps> = ({
     }
   }, [])
 
-  // Update countdown display
   const updateCountDown = React.useCallback((remainingTime: number) => {
     const hours = Math.floor((remainingTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
     const minutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60))
@@ -53,7 +49,6 @@ export const ChatTimer: React.FC<ChatTimerProps> = ({
     setTimer(newTimer)
   }, [])
 
-  // Update timer and check expiration
   const updateTimer = React.useCallback((endTime: number) => {
     const now = Date.now()
     const remainingTime = endTime - now
@@ -71,7 +66,6 @@ export const ChatTimer: React.FC<ChatTimerProps> = ({
     }
   }, [onSessionExpired, onSessionActive, destroyExistingInterval, updateCountDown])
 
-  // Start timer with given initial time
   const startTimer = React.useCallback((initialTime: number) => {
     console.log('ChatTimer: Starting timer with initial time:', initialTime)
     destroyExistingInterval()
@@ -81,7 +75,6 @@ export const ChatTimer: React.FC<ChatTimerProps> = ({
     updateTimer(endTime)
   }, [calculateEndTime, destroyExistingInterval, updateTimer])
 
-  // Initialize timer when component mounts or platform/timestamp changes
   React.useEffect(() => {
     console.log('ChatTimer: Platform:', platform, 'Timestamp:', lastMessageTimestamp)
     
@@ -111,7 +104,6 @@ export const ChatTimer: React.FC<ChatTimerProps> = ({
     return destroyExistingInterval
   }, [platform, lastMessageTimestamp, startTimer, destroyExistingInterval, calculateEndTime])
 
-  // If no timestamp, start with current time for testing
   React.useEffect(() => {
     if (platform && !lastMessageTimestamp) {
       console.log('ChatTimer: No timestamp provided, starting with current time')

@@ -41,7 +41,6 @@ export function Composer({
   const [showStickerPicker, setShowStickerPicker] = React.useState(false)
   const [selectedCategory, setSelectedCategory] = React.useState<'images' | 'videos' | 'documents' | 'audios' | 'stickers'>('images')
 
-  // Paste handler for images/files
   const handlePaste = React.useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
     if (!onPasteFiles) return
     const files = e.clipboardData.files
@@ -130,7 +129,6 @@ export function Composer({
             </div>
             
             <div className="grid grid-cols-6 gap-3 max-h-[400px] overflow-y-auto p-4">
-              {/* Actual sticker library with emojis and symbols */}
               {[
                 '😀', '😍', '😂', '🥰', '😎', '🤔',
                 '👍', '👎', '👏', '🙌', '🤝', '💪',

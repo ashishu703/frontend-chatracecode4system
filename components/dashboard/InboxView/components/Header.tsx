@@ -57,7 +57,6 @@ export function Header({
                 src={selectedConversation.avatar} 
                 alt={selectedConversation.name}
                 onError={(e) => {
-                  // Hide the image element to show fallback
                   e.currentTarget.style.display = 'none'
                 }}
               />

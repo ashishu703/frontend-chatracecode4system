@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { X, Plus, MoreVertical } from 'lucide-react';
 import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import { API_ENDPOINTS } from '@/utils/api/enpointsUtils/Api-endpoints';
+import { useToast } from '@/hooks/use-toast';
 
 const DEFAULT_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -13,22 +14,34 @@ const parseSelectedDays = (selectedDays?: string[]): string[] => {
   return selectedDays && selectedDays.length > 0 ? selectedDays : DEFAULT_DAYS;
 };
 
+const createToastHelpers = (toast: any) => ({
+  success: (title: string, description: string) => 
+    toast({ title, description, variant: "success" }),
+  error: (title: string, description: string) => 
+    toast({ title, description, variant: "destructive" }),
+  validationError: (message: string) => 
+    toast({ title: "Validation Error", description: message, variant: "destructive" })
+});
+
 const buildCampaignData = (formState: any, messageRows: any[]) => ({
   title: formState.campaignTitle,
-  messages: messageRows.map(row => ({
-    flow_id: row.flow_id,
-    flow_title: row.flow_title,
-    delay_value: row.delayValue,
-    time_unit: row.timeUnit,
-    time_interval_enabled: row.time_interval_enabled,
-    start_time: row.start_time,
-    end_time: row.end_time,
-    selected_days: parseSelectedDays(row.selected_days)
-  })),
-  time_interval_enabled: formState.sendTimeIntervalEnabled,
-  start_time: formState.startTime,
-  end_time: formState.endTime,
-  selected_days: parseSelectedDays(formState.selectedDays)
+  messages: messageRows.map(row => {
+    const messageData: any = {
+      flow_id: row.flow_id,
+      flow_title: row.flow_title,
+      delay_value: row.delayValue,
+      time_unit: row.timeUnit,
+      time_interval_enabled: row.time_interval_enabled
+    };
+
+    if (row.time_interval_enabled) {
+      messageData.start_time = row.start_time;
+      messageData.end_time = row.end_time;
+      messageData.selected_days = parseSelectedDays(row.selected_days);
+    }
+
+    return messageData;
+  })
 });
 
 const validateCampaign = (campaignTitle: string, messageRows: any[]): string | null => {
@@ -87,27 +100,15 @@ interface Campaign {
 
 const useCampaignForm = () => {
   const [campaignTitle, setCampaignTitle] = useState('');
-  const [sendTimeIntervalEnabled, setSendTimeIntervalEnabled] = useState(true);
-  const [startTime, setStartTime] = useState('00:00');
-  const [endTime, setEndTime] = useState('23:00');
-  const [selectedDays, setSelectedDays] = useState<string[]>(DEFAULT_DAYS);
   const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
 
   const resetForm = () => {
     setCampaignTitle('');
     setMessageRows([]);
-    setSelectedDays(DEFAULT_DAYS);
-    setStartTime('00:00');
-    setEndTime('23:00');
-    setSendTimeIntervalEnabled(true);
   };
 
   return {
     campaignTitle, setCampaignTitle,
-    sendTimeIntervalEnabled, setSendTimeIntervalEnabled,
-    startTime, setStartTime,
-    endTime, setEndTime,
-    selectedDays, setSelectedDays,
     messageRows, setMessageRows,
     resetForm
   };
@@ -124,7 +125,6 @@ const useCampaignData = () => {
       const response = await serverHandler.get('/api/chat_flow/get_mine?page=1&size=10&search=&sort=createdAt&order=desc');
       setFlows(response?.data?.success ? response.data.data : []);
     } catch (err) {
-      console.error('Failed to fetch flows');
     } finally {
       setLoading(false);
     }
@@ -136,7 +136,6 @@ const useCampaignData = () => {
       const response = await serverHandler.get(API_ENDPOINTS.DripCampaign.GET_CAMPAIGNS);
       setCampaigns(response?.data?.success ? response.data.data : []);
     } catch (err) {
-      console.error('Failed to fetch campaigns');
     } finally {
       setLoading(false);
     }
@@ -147,16 +146,12 @@ const useCampaignData = () => {
 
 const useUIState = () => {
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [showCampaigns, setShowCampaigns] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   return {
     saving, setSaving,
-    error, setError,
-    success, setSuccess,
     showCampaigns, setShowCampaigns,
     editingCampaign, setEditingCampaign,
     openDropdown, setOpenDropdown
@@ -167,6 +162,8 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
   const formState = useCampaignForm();
   const dataState = useCampaignData();
   const uiState = useUIState();
+  const { toast } = useToast();
+  const toastHelpers = createToastHelpers(toast);
 
   const timeUnits = [
     { value: 'immediately', label: 'Immediately' },
@@ -180,27 +177,25 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
   const createCampaign = async () => {
     const validationError = validateCampaign(formState.campaignTitle, formState.messageRows);
     if (validationError) {
-      uiState.setError(validationError);
+      toastHelpers.validationError(validationError);
       return;
     }
 
     uiState.setSaving(true);
-    uiState.setError(null);
-    uiState.setSuccess(null);
 
     try {
       const campaignData = buildCampaignData(formState, formState.messageRows);
       const response = await serverHandler.post(API_ENDPOINTS.DripCampaign.CREATE_CAMPAIGN, campaignData);
       
       if (response?.data?.success) {
-        uiState.setSuccess('Campaign created successfully!');
+        toastHelpers.success("Success!", "Campaign created successfully!");
         formState.resetForm();
         dataState.fetchCampaigns();
       } else {
-        uiState.setError('Failed to create campaign');
+        toastHelpers.error("Error", "Failed to create campaign");
       }
     } catch (err) {
-      uiState.setError('Failed to create campaign');
+      toastHelpers.error("Error", "Failed to create campaign");
     } finally {
       uiState.setSaving(false);
     }
@@ -211,13 +206,13 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
       const endpoint = API_ENDPOINTS.Helpers.buildEndpoint(API_ENDPOINTS.DripCampaign.UPDATE_CAMPAIGN_STATUS, { campaign_id: campaignId });
       const response = await serverHandler.put(endpoint, { status });
       if (response?.data?.success) {
-        uiState.setSuccess(`Campaign ${status} successfully`);
+        toastHelpers.success("Success!", `Campaign ${status} successfully`);
         dataState.fetchCampaigns();
       } else {
-        uiState.setError('Failed to update campaign status');
+        toastHelpers.error("Error", "Failed to update campaign status");
       }
     } catch (err) {
-      uiState.setError('Failed to update campaign status');
+      toastHelpers.error("Error", "Failed to update campaign status");
     }
   };
 
@@ -228,23 +223,19 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
       const endpoint = API_ENDPOINTS.Helpers.buildEndpoint(API_ENDPOINTS.DripCampaign.DELETE_CAMPAIGN, { campaign_id: campaignId });
       const response = await serverHandler.delete(endpoint);
       if (response?.data?.success) {
-        uiState.setSuccess('Campaign deleted successfully');
+        toastHelpers.success("Success!", "Campaign deleted successfully");
         dataState.fetchCampaigns();
       } else {
-        uiState.setError('Failed to delete campaign');
+        toastHelpers.error("Error", "Failed to delete campaign");
       }
     } catch (err) {
-      uiState.setError('Failed to delete campaign');
+      toastHelpers.error("Error", "Failed to delete campaign");
     }
   };
 
   const editCampaign = (campaign: Campaign) => {
     uiState.setEditingCampaign(campaign);
     formState.setCampaignTitle(campaign.title);
-    formState.setSendTimeIntervalEnabled(campaign.time_interval_enabled);
-    formState.setStartTime(campaign.start_time);
-    formState.setEndTime(campaign.end_time);
-    formState.setSelectedDays(parseSelectedDays(campaign.selected_days));
     
     const campaignMessages = campaign.messages?.map((msg: any) => ({
       id: Date.now().toString() + Math.random(),
@@ -253,7 +244,7 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
       timeUnit: msg.time_unit,
       flow_id: msg.flow_id,
       flow_title: msg.flow_title,
-      time_interval_enabled: msg.time_interval_enabled || true,
+      time_interval_enabled: msg.time_interval_enabled || false,
       start_time: msg.start_time || '00:00',
       end_time: msg.end_time || '23:00',
       selected_days: parseSelectedDays(msg.selected_days)
@@ -268,13 +259,11 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
 
     const validationError = validateCampaign(formState.campaignTitle, formState.messageRows);
     if (validationError) {
-      uiState.setError(validationError);
+      toastHelpers.validationError(validationError);
       return;
     }
 
     uiState.setSaving(true);
-    uiState.setError(null);
-    uiState.setSuccess(null);
 
     try {
       const campaignData = buildCampaignData(formState, formState.messageRows);
@@ -282,15 +271,15 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
       const response = await serverHandler.put(endpoint, campaignData);
       
       if (response?.data?.success) {
-        uiState.setSuccess('Campaign updated successfully!');
+        toastHelpers.success("Success!", "Campaign updated successfully!");
         uiState.setEditingCampaign(null);
         formState.resetForm();
         dataState.fetchCampaigns();
       } else {
-        uiState.setError('Failed to update campaign');
+        toastHelpers.error("Error", "Failed to update campaign");
       }
     } catch (err) {
-      uiState.setError('Failed to update campaign');
+      toastHelpers.error("Error", "Failed to update campaign");
     } finally {
       uiState.setSaving(false);
     }
@@ -325,7 +314,7 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
       messageContent: '',
       delayValue: 1,
       timeUnit: 'hours',
-      time_interval_enabled: true,
+      time_interval_enabled: false,
       start_time: '00:00',
       end_time: '23:00',
       selected_days: DEFAULT_DAYS
@@ -337,13 +326,9 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
     formState.setMessageRows(prev => prev.filter(row => row.id !== id));
   };
 
-  const toggleDay = (day: string) => {
-    formState.setSelectedDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
-  };
 
   const getFlowOptions = () => {
     if (dataState.loading) return <SelectItem value="loading" disabled>Loading flows...</SelectItem>;
-    if (uiState.error) return <SelectItem value="error" disabled>Error loading flows</SelectItem>;
     if (dataState.flows.length === 0) return <SelectItem value="no-flows" disabled>No flows available</SelectItem>;
     return dataState.flows.map((flow) => (
       <SelectItem key={flow.id} value={flow.title}>
@@ -352,13 +337,6 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
     ));
   };
 
-  const getDayButtonClass = (day: string) => {
-    const baseClass = "px-3 py-1 rounded-full text-sm border transition-colors";
-    const isSelected = formState.selectedDays.includes(day);
-    return isSelected 
-      ? `${baseClass} bg-blue-100 text-blue-700 border-blue-200`
-      : `${baseClass} bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200`;
-  };
 
   useEffect(() => {
     dataState.fetchFlows();
@@ -377,15 +355,6 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
     }
   }, [campaignTitle]);
 
-  useEffect(() => {
-    if (uiState.success || uiState.error) {
-      const timer = setTimeout(() => {
-        uiState.setSuccess(null);
-        uiState.setError(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [uiState.success, uiState.error]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -442,17 +411,6 @@ const DripCampaign: React.FC<DripCampaignProps> = ({ onBack, editingCampaign, ca
           </div>
         </div>
 
-        {/* Success/Error Messages */}
-        {uiState.success && (
-          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
-            {uiState.success}
-          </div>
-        )}
-        {uiState.error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-            {uiState.error}
-          </div>
-        )}
       </div>
 
       {!uiState.showCampaigns ? (

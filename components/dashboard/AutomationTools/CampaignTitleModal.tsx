@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X } from 'lucide-react';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 
 interface CampaignTitleModalProps {
   isOpen: boolean;
@@ -18,26 +18,23 @@ const CampaignTitleModal: React.FC<CampaignTitleModalProps> = ({
   loading = false 
 }) => {
   const [title, setTitle] = useState('');
+  const { toast } = useToast();
 
   const handleSave = async () => {
     if (title.trim()) {
       try {
         await onSave(title.trim());
-        toast.success('Campaign created successfully!', {
-          style: {
-            backgroundColor: '#d1fae5',
-            color: '#065f46',
-            border: '1px solid #10b981'
-          }
+        toast({
+          title: "Success!",
+          description: "Campaign created successfully!",
+          variant: "success",
         });
         setTitle('');
       } catch (error) {
-        toast.error('Failed to create campaign. Please try again.', {
-          style: {
-            backgroundColor: '#fee2e2',
-            color: '#991b1b',
-            border: '1px solid #ef4444'
-          }
+        toast({
+          title: "Error",
+          description: "Failed to create campaign. Please try again.",
+          variant: "destructive",
         });
       }
     }

@@ -32,8 +32,7 @@ export function Messages({
     return stripped === ""
   }
 
-  // Group messages by date
-  const groupMessagesByDate = (messages: Message[]) => {
+  const groupMessagesByDate = (messages: Message[]): { [key: string]: Message[] } => {
     const groups: { [key: string]: Message[] } = {}
     
     messages.forEach((msg) => {
@@ -48,7 +47,6 @@ export function Messages({
     return groups
   }
 
-  // Helper function to extract date from timestamp
   const extractDateFromTimestamp = (timestamp: string): string => {
     const today = new Date()
     const todayStr = today.toLocaleDateString('en-US', { 
@@ -57,13 +55,11 @@ export function Messages({
       day: 'numeric' 
     })
     
-    // Check if timestamp contains date information
     const dateMatch = timestamp.match(/(\w+ \d{1,2}, \d{4})/)
     if (dateMatch) {
       return dateMatch[1]
     }
     
-    // If no date in timestamp, assume it's today
     return todayStr
   }
 
