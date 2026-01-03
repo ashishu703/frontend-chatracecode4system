@@ -18,10 +18,25 @@ jobs:
 
       - name: Setup SSH
         run: |
+          if [ -z "${{ secrets.SERVER_IP }}" ]; then
+            echo "Error: SERVER_IP secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "Error: SSH_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+          SERVER_IP="${{ secrets.SERVER_IP }}"
+          echo "Adding $SERVER_IP to known_hosts..."
+          ssh-keyscan -t rsa,ecdsa,ed25519 -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>&1
+          if [ $? -ne 0 ]; then
+            echo "Warning: ssh-keyscan failed, but continuing..."
+          fi
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy on VPS
         run: |
