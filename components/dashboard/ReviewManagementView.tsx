@@ -3,12 +3,12 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Star, MessageSquare, AlertCircle, CheckCircle, Clock, ExternalLink } from "lucide-react";
+import { Star, MessageSquare, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGoogle } from "@fortawesome/free-brands-svg-icons";
@@ -16,21 +16,23 @@ import { faGoogle } from "@fortawesome/free-brands-svg-icons";
 export default function ReviewManagementView() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("all");
+  const [connecting, setConnecting] = useState(false);
 
   const { data: reviews, isLoading, error } = useQuery<any[]>({
     queryKey: ['google-reviews', activeTab],
     queryFn: async () => {
       const response = await serverHandler.get(`/api/google/reviews?status=${activeTab !== 'all' ? activeTab : ''}`);
-      return response.data?.data || [];
+      return response.data?.data || response.data || [];
     },
   });
 
-  const { data: connectionStatus } = useQuery({
+  const { data: connectionStatus, isLoading: connectionLoading, error: connectionError, refetch: refetchConnection } = useQuery({
     queryKey: ['google-connection-status'],
     queryFn: async () => {
       const response = await serverHandler.get('/api/google/status');
-      return response.data?.data || { isConnected: false };
+      return response.data?.data || response.data || { isConnected: false };
     },
+    retry: 1,
   });
 
   const updateStatusMutation = useMutation({
@@ -44,12 +46,17 @@ export default function ReviewManagementView() {
 
   const handleConnectGoogle = async () => {
     try {
+      setConnecting(true);
       const response = await serverHandler.get('/api/google/auth');
-      if (response.data?.data?.url) {
-        window.location.href = response.data.data.url;
+      const authUrl = response.data?.data?.url || response.data?.url;
+      if (authUrl) {
+        window.location.href = authUrl;
+        return;
       }
     } catch (err) {
       console.error('Failed to initiate Google auth:', err);
+    } finally {
+      setConnecting(false);
     }
   };
 
@@ -62,6 +69,14 @@ export default function ReviewManagementView() {
     ));
   };
 
+  if (connectionLoading) {
+    return (
+      <div className="p-6">
+        <Skeleton className="h-52 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
   if (!connectionStatus?.isConnected) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6">
@@ -73,12 +88,22 @@ export default function ReviewManagementView() {
           <p className="text-gray-600 mb-8 leading-relaxed">
             Manage your Google Business reviews directly from here. Auto-reply to positive reviews and handle negative ones manually to protect your reputation.
           </p>
+          {connectionError && (
+            <div className="text-sm text-red-600 mb-4 flex items-center justify-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              <span>Connection check failed. Please try again.</span>
+            </div>
+          )}
           <Button 
             onClick={handleConnectGoogle}
+            disabled={connecting}
             className="bg-green-600 hover:bg-green-700 text-white px-10 py-6 rounded-xl text-lg font-bold shadow-lg transition-all transform hover:scale-105"
           >
-            Connect My Business Profile
+            {connecting ? 'Opening Google...' : 'Connect My Business Profile'}
           </Button>
+          <div className="mt-4 text-xs text-gray-500">
+            Make sure callback URL & credentials are set in Admin & Google Cloud.
+          </div>
         </div>
       </div>
     );
@@ -103,6 +128,17 @@ export default function ReviewManagementView() {
             <span className="text-sm font-bold text-green-800 leading-tight">{connectionStatus.profile?.name}</span>
             <span className="text-xs text-green-600">Connected Profile</span>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-2 text-xs text-green-700"
+            onClick={() => {
+              refetchConnection();
+              queryClient.invalidateQueries({ queryKey: ['google-reviews'] });
+            }}
+          >
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -159,6 +195,10 @@ export default function ReviewManagementView() {
                     {[1, 2, 3].map(i => (
                       <Skeleton key={i} className="h-40 w-full rounded-2xl" />
                     ))}
+                  </div>
+                ) : error ? (
+                  <div className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-red-100 text-red-600 font-medium">
+                    Failed to load reviews. Please refresh.
                   </div>
                 ) : reviews?.length === 0 ? (
                   <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-gray-200">

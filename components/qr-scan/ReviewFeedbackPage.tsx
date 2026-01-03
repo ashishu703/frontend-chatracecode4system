@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Star, MessageSquare, Send } from "lucide-react";
+import { Star, MessageSquare, Send, MapPin, Package, Link2 } from "lucide-react";
 import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,12 +22,27 @@ export default function ReviewFeedbackPage({ qrCode, metadata = {} }: ReviewFeed
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
+  const googleReviewUrl = metadata.google_review_url || metadata.googleReviewUrl;
+  const shopName = metadata.shop_name || metadata.shopName;
+  const shopAddress = metadata.shop_address || metadata.shopAddress;
+  const productName = metadata.product_name || metadata.productName;
+  const productSku = metadata.product_sku || metadata.productSku;
+  const thankYouMessage = metadata.thank_you_message;
+
   const handleRating = (value: number) => {
     setRating(value);
   };
 
   const handleSubmit = async () => {
     if (rating >= 4) {
+      if (!googleReviewUrl) {
+        toast({
+          title: "Missing Google review link",
+          description: "Please contact the business – review link is not configured.",
+          variant: "destructive",
+        });
+        return;
+      }
       // For positive reviews, we still might want to track them
       try {
         await serverHandler.post('/api/qr/feedback', {
@@ -39,7 +54,7 @@ export default function ReviewFeedbackPage({ qrCode, metadata = {} }: ReviewFeed
       } catch (err) {}
       
       // Redirect to Google Review
-      window.location.href = metadata.google_review_url || "#";
+      window.location.href = googleReviewUrl;
     } else {
       // Show feedback form if not already showing
       if (comment === "" && !submitted) {
@@ -70,7 +85,9 @@ export default function ReviewFeedbackPage({ qrCode, metadata = {} }: ReviewFeed
         <Card className="max-w-md w-full">
           <CardContent className="p-6 text-center">
             <h2 className="text-2xl font-bold mb-4">Thank you for your feedback!</h2>
-            <p className="text-gray-600">We appreciate your input.</p>
+            <p className="text-gray-600">
+              {thankYouMessage || "We appreciate your input."}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -82,9 +99,40 @@ export default function ReviewFeedbackPage({ qrCode, metadata = {} }: ReviewFeed
       <Card className="max-w-md w-full shadow-xl border-2 border-green-100 rounded-3xl overflow-hidden">
         <div className="bg-green-600 p-6 text-white text-center">
           <h1 className="text-2xl font-bold">{metadata.brand_name || "Rate Us"}</h1>
-          <p className="text-green-100 opacity-90">We value your feedback</p>
+          <p className="text-green-100 opacity-90">
+            {shopName ? `You're rating ${shopName}` : "We value your feedback"}
+          </p>
         </div>
         <CardContent className="p-8 text-center space-y-6">
+          {(shopName || shopAddress || productName || productSku) && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-left space-y-2">
+              {shopName && (
+                <div className="flex items-center gap-2 text-gray-700">
+                  <MapPin className="h-4 w-4 text-green-600" />
+                  <span className="font-semibold">{shopName}</span>
+                </div>
+              )}
+              {shopAddress && (
+                <p className="text-sm text-gray-600 pl-6">{shopAddress}</p>
+              )}
+              {productName && (
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Package className="h-4 w-4 text-green-600" />
+                  <span>{productName}</span>
+                  {productSku && (
+                    <span className="text-xs text-gray-500">({productSku})</span>
+                  )}
+                </div>
+              )}
+              {googleReviewUrl && (
+                <div className="flex items-center gap-2 text-gray-600 text-sm">
+                  <Link2 className="h-4 w-4 text-green-600" />
+                  <span>Positive ratings jump to Google review page.</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <p className="text-gray-600 font-medium text-lg">How would you rate your experience?</p>
           
           <div className="flex justify-center gap-2">

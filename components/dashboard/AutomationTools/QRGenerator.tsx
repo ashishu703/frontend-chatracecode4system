@@ -40,6 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import AppointmentBookingConfig from "./QRConfigForms/AppointmentBookingConfig";
+import ReviewFeedbackConfig from "./QRConfigForms/ReviewFeedbackConfig";
 
 interface QRGeneratorProps {
   onBack?: () => void;
@@ -193,8 +194,11 @@ export default function QRGenerator({ onBack }: QRGeneratorProps) {
           description: "QR codes generated successfully!",
           variant: "default",
         });
-        // Show configuration form for single QR purposes
-        if (selectedPurposeData?.isSingle) {
+        // Show configuration form for single QR purposes we support
+        if (
+          selectedPurposeData?.isSingle &&
+          ["appointment_booking", "review_feedback"].includes(selectedPurpose)
+        ) {
           setShowConfiguration(true);
         }
         // Refresh QR codes list
@@ -606,7 +610,9 @@ export default function QRGenerator({ onBack }: QRGeneratorProps) {
                   >
                     View Analytics
                   </Button>
-                  {selectedPurpose === "appointment_booking" && (
+                  {["appointment_booking", "review_feedback"].includes(
+                    selectedPurpose
+                  ) && (
                     <Button
                       variant="outline"
                       onClick={() => setShowConfiguration(true)}
@@ -667,6 +673,54 @@ export default function QRGenerator({ onBack }: QRGeneratorProps) {
                   toast({
                     title: "Error",
                     description: error.response?.data?.msg || "Failed to save configuration",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setSavingConfig(false);
+                }
+              }}
+              onCancel={() => setShowConfiguration(false)}
+            />
+          </motion.div>
+        )}
+
+        {showConfiguration && generatedQR && selectedPurpose === "review_feedback" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mt-6"
+          >
+            <ReviewFeedbackConfig
+              initialData={generatedQR.qrMaster.metadata || {}}
+              onSave={async (configData) => {
+                try {
+                  setSavingConfig(true);
+                  const response = await serverHandler.put(
+                    `/api/user/qr/configure/${generatedQR.qrMaster.qr_master_id}`,
+                    { configuration: configData }
+                  );
+                  if (response.data?.success) {
+                    toast({
+                      title: "Success",
+                      description: "QR configuration saved successfully!",
+                      variant: "default",
+                    });
+                    setShowConfiguration(false);
+                    setGeneratedQR({
+                      ...generatedQR,
+                      qrMaster: {
+                        ...generatedQR.qrMaster,
+                        metadata: configData,
+                      } as GeneratedQR["qrMaster"],
+                    });
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "Error",
+                    description:
+                      error.response?.data?.msg ||
+                      "Failed to save configuration",
                     variant: "destructive",
                   });
                 } finally {
