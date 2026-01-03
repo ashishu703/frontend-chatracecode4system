@@ -47,6 +47,18 @@ export default function MainPage() {
             <span className="text-gray-800 font-bold text-xl">code4system</span>
           </div>
           <div className="flex items-center gap-4">
+            <a
+              href="https://code4system.anocabapp.com/privacy-policy"
+              className="text-gray-600 hover:text-purple-600 transition-colors duration-200 font-medium text-sm hidden md:inline-block"
+            >
+              Privacy Policy
+            </a>
+            <a
+              href="https://code4system.anocabapp.com/terms-and-condition"
+              className="text-gray-600 hover:text-purple-600 transition-colors duration-200 font-medium text-sm hidden md:inline-block"
+            >
+              Terms
+            </a>
             <Button variant="outline" className="border-gray-300" onClick={handleLoginClick}>
               Login
             </Button>
@@ -711,41 +723,6 @@ export default function MainPage() {
           </Button>
         </motion.div>
       </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <Image
-                src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1763706224/WhatsApp_Image_2025-11-21_at_11.50.23_AM_rvamky.jpg"
-                alt="Code4System Logo"
-                width={40}
-                height={40}
-                className="rounded-lg"
-              />
-              <span className="text-gray-300 font-semibold">code4system</span>
-            </div>
-            <div className="flex items-center gap-6">
-              <button
-                onClick={() => router.push("/terms-and-condition")}
-                className="text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium px-4 py-2 rounded-lg hover:bg-gray-800"
-              >
-                Terms and Conditions
-              </button>
-              <button
-                onClick={() => router.push("/privacy-policy")}
-                className="text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium px-4 py-2 rounded-lg hover:bg-gray-800"
-              >
-                Privacy Policy
-              </button>
-            </div>
-            <p className="text-gray-400 text-sm">
-              &copy; {new Date().getFullYear()} code4system. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }
