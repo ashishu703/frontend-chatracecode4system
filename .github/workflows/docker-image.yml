@@ -18,8 +18,8 @@ jobs:
 
       - name: Setup SSH
         run: |
-          if [ -z "${{ secrets.SERVER_IP }}" ]; then
-            echo "Error: SERVER_IP secret is not set"
+          if [ -z "${{ secrets.HOST }}" ]; then
+            echo "Error: HOST secret is not set"
             exit 1
           fi
           if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
@@ -30,7 +30,7 @@ jobs:
           chmod 700 ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          SERVER_IP="${{ secrets.SERVER_IP }}"
+          SERVER_IP="${{ secrets.HOST }}"
           echo "Adding $SERVER_IP to known_hosts..."
           ssh-keyscan -t rsa,ecdsa,ed25519 -H "$SERVER_IP" >> ~/.ssh/known_hosts 2>&1
           if [ $? -ne 0 ]; then
@@ -40,7 +40,7 @@ jobs:
 
       - name: Deploy on VPS
         run: |
-          ssh root@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh root@${{ secrets.HOST }} << 'EOF'
             set -e
             cd /var/www/frontend-app
 
