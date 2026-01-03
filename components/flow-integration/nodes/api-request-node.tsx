@@ -1,31 +1,60 @@
 "use client"
 
 import { Handle, Position, type NodeProps } from "@xyflow/react"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { X, Plus } from "lucide-react"
-import { useState } from "react"
+import { Textarea } from "@/components/ui/textarea"
+import { X, Plus, Copy, Play, Globe } from "lucide-react"
+import { useState, useCallback, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { useNodeContext } from "../node-context"
 import { NodeData } from "@/types/flow-integration/flow"
 
 export function ApiRequestNode({ data, selected, id }: NodeProps<NodeData>) {
-  const [selectedMethod, setSelectedMethod] = useState("GET")
-  const [url, setUrl] = useState("https://example.com")
-  const [headers, setHeaders] = useState([{ key: "Content-Type", value: "application/json" }])
-  const [isExpanded, setIsExpanded] = useState(true)
-  const [isSaved, setIsSaved] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState(data?.selectedMethod || "GET")
+  const [url, setUrl] = useState(data?.url || "https://example.com/api")
+  const [headers, setHeaders] = useState(data?.headers || [{ key: "Content-Type", value: "application/json" }])
+  const [requestBody, setRequestBody] = useState(data?.requestBody || "")
+  const [title, setTitle] = useState(data?.title || "API Request")
+  const [messageNumber, setMessageNumber] = useState(data?.messageNumber || 1)
+  const [isHovered, setIsHovered] = useState(false)
   const [showDialog, setShowDialog] = useState(false)
   const [templateName, setTemplateName] = useState("")
   const { toast } = useToast()
-  const { deleteNode } = useNodeContext()
+  const { deleteNode, updateNode, startNodeId, setStartNodeId } = useNodeContext()
+  const isStartNode = startNodeId === id
+
+  useEffect(() => {
+    if (data?.selectedMethod) setSelectedMethod(data.selectedMethod)
+    if (data?.url) setUrl(data.url)
+    if (data?.headers) setHeaders(data.headers)
+    if (data?.requestBody) setRequestBody(data.requestBody)
+    if (data?.title) setTitle(data.title)
+    if (data?.messageNumber) setMessageNumber(data.messageNumber)
+  }, [data])
 
   const methods = ["GET", "POST", "PUT", "DELETE"]
 
+  const syncData = useCallback(() => {
+    if (updateNode) {
+      updateNode(id, {
+        ...data,
+        selectedMethod,
+        url,
+        headers,
+        requestBody,
+        title,
+        messageNumber,
+        type: "requestAPI"
+      })
+    }
+  }, [selectedMethod, url, headers, requestBody, title, messageNumber, updateNode, id, data])
+
   const addHeader = () => {
-    setHeaders([...headers, { key: "", value: "" }])
+    const newHeaders = [...headers, { key: "", value: "" }]
+    setHeaders(newHeaders)
+    setTimeout(() => syncData(), 0)
   }
 
   const updateHeader = (index: number, field: "key" | "value", value: string) => {
@@ -35,145 +64,242 @@ export function ApiRequestNode({ data, selected, id }: NodeProps<NodeData>) {
   }
 
   const removeHeader = (index: number) => {
-    setHeaders(headers.filter((_, i) => i !== index))
+    const newHeaders = headers.filter((_, i) => i !== index)
+    setHeaders(newHeaders)
+    setTimeout(() => syncData(), 0)
+  }
+
+  const handleMethodChange = (method: string) => {
+    setSelectedMethod(method)
+    setTimeout(() => syncData(), 0)
+  }
+
+  const handleUrlChange = (value: string) => {
+    setUrl(value)
+  }
+
+  const handleUrlBlur = () => {
+    syncData()
+  }
+
+  const handleRequestBodyChange = (value: string) => {
+    setRequestBody(value)
+  }
+
+  const handleRequestBodyBlur = () => {
+    syncData()
   }
 
   const handleTryApi = () => {
-    console.log("Trying API:", { method: selectedMethod, url, headers })
-    // Add your API call logic here
+    console.log("Trying API:", { method: selectedMethod, url, headers, requestBody })
+    toast({ title: "API request sent", variant: "default" })
   }
+
+  const handleSetStartNode = useCallback(() => {
+    if (setStartNodeId) {
+      if (isStartNode) {
+        setStartNodeId(null)
+        toast({ title: "Start node removed", variant: "default" })
+      } else {
+        setStartNodeId(id)
+        toast({ title: "Start node set!", variant: "default" })
+      }
+    }
+  }, [id, setStartNodeId, toast, isStartNode])
+
+  const { duplicateNode } = useNodeContext()
+  const handleCopy = useCallback(() => {
+    if (duplicateNode) {
+      duplicateNode(id)
+      toast({ title: "Node copied successfully!", variant: "default" })
+    }
+  }, [id, duplicateNode, toast])
 
   const handleSave = () => {
     setShowDialog(true)
   }
+
   const handleDialogSave = () => {
     if (templateName.trim()) {
-      setIsSaved(true)
       setShowDialog(false)
-      toast({ title: "Template saved successfully!", variant: "success" })
-      setTimeout(() => setIsSaved(false), 2000)
+      toast({ title: "Template saved successfully!", variant: "default" })
+      setTemplateName("")
     } else {
       toast({ title: "Template name is required.", variant: "destructive" })
     }
   }
-  const handleClose = () => {
-    deleteNode(id)
-  }
-
-  if (!isExpanded) {
-    return (
-      <Card className={`min-w-[200px] ${selected ? "ring-2 ring-blue-500" : ""}`}>
-        <Handle type="target" position={Position.Left} className="w-3 h-3 bg-blue-500" />
-        <div className="p-4 cursor-pointer" onClick={() => setIsExpanded(true)}>
-          <div className="flex items-center justify-between">
-            <span className="font-medium text-sm">Request API</span>
-            <span className="text-xs text-gray-500">{selectedMethod}</span>
-          </div>
-        </div>
-        <Handle type="source" position={Position.Right} className="w-3 h-3 bg-blue-500" />
-      </Card>
-    )
-  }
 
   return (
-    <Card className={`w-[320px] ${selected ? "ring-2 ring-blue-500" : ""}`}>
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-blue-500" />
+    <div 
+      className="relative group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Handle type="target" position={Position.Left} className="w-3 h-3 !bg-gray-400 !border-2 !border-white" />
 
-      {/* Header */}
-      <div className="bg-teal-500 text-white p-3 rounded-t-lg flex items-center justify-between">
-        <span className="font-medium">Request API</span>
-        <div className="flex items-center gap-1">
-          <button onClick={handleSave} className="p-1" title="Save">
-            <svg className={`w-4 h-4 ${isSaved ? "text-green-200" : "text-white"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" /></svg>
+      {/* Hover Action Buttons */}
+      {isHovered && (
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 z-10">
+          <button 
+            onClick={handleSetStartNode} 
+            className="p-1.5 hover:bg-green-50 rounded transition-colors" 
+            title={isStartNode ? "Remove as start node" : "Set as start node"}
+          >
+            <Play className={`w-4 h-4 ${isStartNode ? "text-green-600 fill-green-600" : "text-green-600"}`} />
           </button>
-          <button onClick={handleClose} className="p-1" title="Close">
-            <X className="w-4 h-4" />
+          <button 
+            onClick={handleCopy} 
+            className="p-1.5 hover:bg-blue-50 rounded transition-colors" 
+            title="Copy"
+          >
+            <Copy className="w-4 h-4 text-blue-600" />
           </button>
+          <button 
+            onClick={() => deleteNode(id)} 
+            className="p-1.5 hover:bg-red-50 rounded transition-colors" 
+            title="Delete"
+          >
+            <X className="w-4 h-4 text-red-600" />
+          </button>
+        </div>
+      )}
+
+      <div className={`w-[320px] bg-white rounded-lg shadow-md ${selected ? "ring-2 ring-blue-500" : "border border-gray-200"}`}>
+        {/* Header */}
+        <div className="px-3 py-2 border-b border-gray-100">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <Globe className="w-4 h-4 text-gray-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm">
+                    {title} #{messageNumber}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">External HTTP Call</p>
+                </div>
+                <Button
+                  size="sm"
+                  className={`h-6 px-3 text-xs rounded-full ${
+                    selectedMethod === "GET" ? "bg-blue-500 hover:bg-blue-600 text-white" : 
+                    selectedMethod === "POST" ? "bg-green-500 hover:bg-green-600 text-white" :
+                    selectedMethod === "PUT" ? "bg-yellow-500 hover:bg-yellow-600 text-white" :
+                    "bg-red-500 hover:bg-red-600 text-white"
+                  }`}
+                >
+                  {selectedMethod}
+                </Button>
+              </div>
+            </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Description */}
-        <p className="text-sm text-gray-600 text-center">
-          You can use the API response in the next target-connected node like {"{{foreach}}"}
-        </p>
-
-        {/* HTTP Methods */}
+        {/* Body */}
+        <div className="px-3 py-2 space-y-3">
+          {/* REQUEST METHOD Section */}
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5 block">REQUEST METHOD</label>
         <div className="flex gap-2">
           {methods.map((method) => (
-            <Button
+                <button
               key={method}
-              variant={selectedMethod === method ? "default" : "outline"}
-              size="sm"
-              className={`text-xs px-3 py-1 ${
-                selectedMethod === method ? "bg-blue-500 hover:bg-blue-600 text-white" : "text-gray-600 border-gray-300"
+                  onClick={() => handleMethodChange(method)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    selectedMethod === method
+                      ? "bg-blue-500 text-white hover:bg-blue-600"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
-              onClick={() => setSelectedMethod(method)}
             >
               {method}
-            </Button>
+                </button>
           ))}
+            </div>
         </div>
 
-        {/* URL Input */}
+          {/* REQUEST URL Section */}
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5 block">REQUEST URL</label>
         <Input
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com"
-          className="text-sm"
-        />
-
-        {/* Headers Section */}
-        <div className="bg-green-50 p-3 rounded-lg space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-green-700">Add header (optional)</span>
+              onChange={(e) => handleUrlChange(e.target.value)}
+              onBlur={handleUrlBlur}
+              placeholder="https://example.com/api"
+              className="p-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
 
+          {/* HEADERS Section */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">HEADERS</label>
+              <span className="text-xs text-gray-500">{headers.length} defined</span>
+            </div>
+            <div className="space-y-2">
           {headers.map((header, index) => (
-            <div key={index} className="flex gap-2 items-center">
+                <div key={index} className="flex gap-2">
               <Input
                 value={header.key}
                 onChange={(e) => updateHeader(index, "key", e.target.value)}
-                placeholder="Header name"
-                className="text-sm bg-white"
+                    onBlur={syncData}
+                    placeholder="Content-Type"
+                    className="flex-1 p-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <Input
                 value={header.value}
                 onChange={(e) => updateHeader(index, "value", e.target.value)}
-                placeholder="Header value"
-                className="text-sm bg-white"
-              />
-              {headers.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                  onClick={() => removeHeader(index)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+                    onBlur={syncData}
+                    placeholder="application/json"
+                    className="flex-1 p-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
             </div>
           ))}
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-blue-500 border-blue-300 hover:bg-blue-50 bg-transparent"
+              <button
             onClick={addHeader}
+                className="w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
           >
-            <Plus className="h-4 w-4 mr-1" />
-            Add
-          </Button>
+                <Plus className="w-4 h-4" />
+                Add Header
+              </button>
+            </div>
+          </div>
+
+          {/* REQUEST BODY Section */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">REQUEST BODY (OPTIONAL)</label>
+              <span className="text-xs text-gray-500">JSON SUPPORTED</span>
+            </div>
+            <Textarea
+              value={requestBody}
+              onChange={(e) => handleRequestBodyChange(e.target.value)}
+              onBlur={handleRequestBodyBlur}
+              placeholder="[ ]"
+              className="p-2 border border-gray-300 rounded-lg text-sm text-gray-700 min-h-[100px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
         </div>
 
-        {/* Try API Button */}
-        <Button className="w-full bg-blue-500 hover:bg-blue-600 text-white" onClick={handleTryApi}>
+          {/* Try This API Button */}
+          <Button 
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-lg py-2 text-sm font-medium"
+            onClick={handleTryApi}
+          >
           Try This API
         </Button>
-      </div>
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-blue-500" />
+          {/* Continue Section */}
+          <div className="flex items-center justify-end pt-2 relative">
+            <span className="text-sm text-gray-700 font-medium mr-2">Continue</span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="continue"
+              className="!w-5 !h-5 !bg-gray-400 !border-2 !border-white !rounded-full absolute right-0 top-1/2 transform -translate-y-1/2"
+              style={{ right: '-10px' }}
+            />
+          </div>
+        </div>
+      </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
@@ -197,7 +323,7 @@ export function ApiRequestNode({ data, selected, id }: NodeProps<NodeData>) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   )
 }
 

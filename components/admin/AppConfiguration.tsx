@@ -43,7 +43,7 @@ export default function AppConfiguration() {
       }
       // Add all other fields from API response
       const fields = [
-        "app_name", "custom_home", "is_custom_home", "meta_description", "currency_code", "currency_symbol", "chatbot_screen_tutorial", "broadcast_screen_tutorial", "home_page_tutorial", "login_header_footer", "exchange_rate", "google_client_id", "google_login_active", "rtl", "fb_login_app_id", "fb_login_app_sec", "fb_login_active", "facebook_client_id", "facebook_client_secret", "facebook_graph_version", "facebook_auth_scopes", "meta_webhook_verification_key", "instagram_client_id", "instagram_client_secret", "instagram_graph_version", "instagram_auth_scopes", "whatsapp_client_id", "whatsapp_client_secret", "whatsapp_graph_version", "whatsapp_config_id"
+        "app_name", "custom_home", "is_custom_home", "meta_description", "currency_code", "currency_symbol", "chatbot_screen_tutorial", "broadcast_screen_tutorial", "home_page_tutorial", "login_header_footer", "exchange_rate", "google_client_id", "google_client_secret", "google_redirect_uri", "google_login_active", "rtl", "fb_login_app_id", "fb_login_app_sec", "fb_login_active", "facebook_client_id", "facebook_client_secret", "facebook_graph_version", "facebook_auth_scopes", "meta_webhook_verification_key", "instagram_client_id", "instagram_client_secret", "instagram_graph_version", "instagram_auth_scopes", "whatsapp_client_id", "whatsapp_client_secret", "whatsapp_graph_version", "whatsapp_config_id"
       ];
       fields.forEach((key) => {
         let val = settings[key];
@@ -253,6 +253,72 @@ export default function AppConfiguration() {
                 }
                 placeholder="Verification token"
               />
+            </div>
+          </div>
+
+          {/* Google Settings */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Google settings</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="googleClientId">Client ID</Label>
+                <Input
+                  id="googleClientId"
+                  value={settings.google_client_id || ""}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      google_client_id: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="googleClientSecret">Client Secret</Label>
+                <Input
+                  id="googleClientSecret"
+                  type="password"
+                  value={settings.google_client_secret || ""}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      google_client_secret: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <Label htmlFor="googleRedirectUri">Redirect URI</Label>
+                <Input
+                  id="googleRedirectUri"
+                  value={settings.google_redirect_uri || ""}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      google_redirect_uri: e.target.value,
+                    })
+                  }
+                  placeholder="e.g. http://localhost:5020/api/google/callback"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Must match: {process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5020'}/api/google/callback
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  checked={settings.google_login_active === 1}
+                  onCheckedChange={(checked) =>
+                    setSettings({
+                      ...settings,
+                      google_login_active: checked ? 1 : 0,
+                    })
+                  }
+                />
+                <Label>Enable Google Login/Business</Label>
+              </div>
             </div>
           </div>
 

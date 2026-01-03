@@ -57,35 +57,61 @@ function renderStructuredText(text: string | any) {
 }
 
 export function MessageContent({ msg }: { msg: Message }) {
+  const getOriginalUrl = (body: any) => {
+    if (!body || typeof body !== "object") return ""
+    return (
+      body.attachment_url ||
+      body.attchment_url ||
+      body.url ||
+      body.image_url ||
+      body.video_url ||
+      body.audio_url ||
+      body.document_url ||
+      body.file_url ||
+      ""
+    )
+  }
+
+  const getDisplayUrl = (rawUrl: string) => {
+    if (!rawUrl) return ""
+    return `/api/media/proxy?url=${encodeURIComponent(rawUrl)}`
+  }
+
+  // IMAGE
   if (msg.type === "image" && msg.body && typeof msg.body === "object") {
     const body: any = msg.body
-    const imageUrl = body.url || body.attchment_url || body.attachment_url || ""
-    
+    const originalUrl = getOriginalUrl(body)
+    const imageUrl = getDisplayUrl(originalUrl)
+
     if (imageUrl) {
       return (
         <div className="max-w-[600px]">
           <img
             src={imageUrl}
             alt="Image"
-            className="block w-full max-w-[600px] max-h-[250px] object-contain cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
-            onClick={() => window.open(imageUrl, "_blank")}
-            onError={(e) => {
-              ;(e.currentTarget as HTMLImageElement).src = "/placeholder.svg"
-            }}
+            loading="lazy"
+            className="block w-full max-w-[600px] max-h-[250px] object-contain rounded-lg"
           />
-          {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
-        </div>
-      )
-    } else {
-      return (
-        <div className="text-sm text-gray-500 italic">
-          [Image] {body.caption || "No image available"}
+          {body.caption && (
+            <p className="mt-2 text-sm break-all whitespace-pre-wrap">
+              {body.caption}
+            </p>
+          )}
         </div>
       )
     }
-  } else if (msg.type === "video" && msg.body && typeof msg.body === "object") {
+
+    return (
+      <div className="text-sm text-gray-500 italic">
+        [Image] {body.caption || "No image available"}
+      </div>
+    )
+  }
+
+  // VIDEO
+  if (msg.type === "video" && msg.body && typeof msg.body === "object") {
     const body: any = msg.body
-    const videoUrl = body.url || body.attchment_url || body.attachment_url || ""
+    const videoUrl = getDisplayUrl(getOriginalUrl(body))
     
     if (videoUrl) {
       return (
@@ -103,7 +129,7 @@ export function MessageContent({ msg }: { msg: Message }) {
     }
   } else if (msg.type === "audio" && msg.body && typeof msg.body === "object") {
     const body: any = msg.body
-    const audioUrl = body.url || body.attchment_url || body.attachment_url || ""
+    const audioUrl = getDisplayUrl(getOriginalUrl(body))
     
     if (audioUrl) {
       return (
@@ -121,9 +147,10 @@ export function MessageContent({ msg }: { msg: Message }) {
     }
   } else if (msg.type === "file" && msg.body && typeof msg.body === "object") {
     const body: any = msg.body
-    const fileUrl = body.url || body.attchment_url || body.attachment_url || ""
+    const fileUrl = getOriginalUrl(body)
+    const downloadUrl = getDisplayUrl(fileUrl)
     
-    if (fileUrl) {
+    if (downloadUrl) {
       const fileName = body.filename || body.caption || "Document"
       const fileSize = body.filesize || ""
       return (
@@ -146,7 +173,15 @@ export function MessageContent({ msg }: { msg: Message }) {
             <p className="text-sm font-medium truncate">{fileName}</p>
             {fileSize && <p className="text-xs text-gray-500">{fileSize}</p>}
           </div>
-          <Download className="h-4 w-4 text-gray-400" />
+          <a
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 text-xs underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Download
+          </a>
         </div>
       )
     } else {
@@ -213,9 +248,10 @@ export function MessageContent({ msg }: { msg: Message }) {
     )
   } else if (msg.type === "gif" && msg.body && typeof msg.body === "object" && (msg.body as any).url) {
     const body: any = msg.body
+    const gifUrl = getDisplayUrl(getOriginalUrl(body) || body.url)
     return (
       <div className="max-w-[380px]">
-        <img src={body.url} alt="GIF" className="w-full max-w-[380px] max-h-[400px] object-contain rounded-lg" />
+        <img src={gifUrl || body.url} alt="GIF" className="w-full max-w-[380px] max-h-[400px] object-contain rounded-lg" />
         {body.caption && <p className="mt-2 text-sm break-all whitespace-pre-wrap">{body.caption}</p>}
       </div>
     )

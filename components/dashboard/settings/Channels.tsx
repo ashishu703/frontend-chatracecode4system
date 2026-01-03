@@ -3,7 +3,9 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Globe, Check, Loader2, User } from "lucide-react"
+import { Globe, Check, Loader2, User, Star } from "lucide-react"
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
+import { faGoogle } from "@fortawesome/free-brands-svg-icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -50,6 +52,39 @@ export default function ChannelsSettings() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const user = useSelector((state: any) => state.auth.user)
   const [instagramConfig, setInstagramConfig] = useState<{ authURI?: string } | undefined>()
+
+  const [googleStatus, setGoogleStatus] = useState<any>(null);
+
+  // Fetch google connection status
+  useEffect(() => {
+    const fetchGoogleStatus = async () => {
+      try {
+        const response = await serverHandler.get('/api/google/status');
+        setGoogleStatus(response.data?.data);
+      } catch {}
+    };
+    fetchGoogleStatus();
+  }, []);
+
+  const handleConnectGoogle = async () => {
+    try {
+      const response = await serverHandler.get('/api/google/auth');
+      if (response.data?.data?.url) {
+        window.location.href = response.data.data.url;
+      }
+    } catch (err) {
+      console.error('Failed to initiate Google auth:', err);
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    try {
+      await serverHandler.post('/api/google/disconnect');
+      setGoogleStatus({ isConnected: false });
+    } catch (err) {
+      console.error('Failed to disconnect Google:', err);
+    }
+  };
 
   // Helper to deduplicate by platform + social/account id
   const dedupeAccounts = (list: ConnectedAccount[]) => {
@@ -822,6 +857,64 @@ export default function ChannelsSettings() {
                     size="sm"
                   >
                     {isConnected('whatsapp') ? "Disconnect" : "Connect"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Google Business Profile */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card className="relative overflow-hidden border-2 hover:border-green-300 transition-all duration-200 h-full">
+                <CardContent className="p-6 text-center space-y-4">
+                  <div className="text-green-600">
+                    <FontAwesomeIcon icon={faGoogle} className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Google Business</h3>
+                    <p className="text-xs text-gray-500">Profile Reviews</p>
+                    
+                    {googleStatus?.isConnected && (
+                      <div className="mt-3 p-3 bg-green-50 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarImage src={googleStatus.profile?.picture} />
+                            <AvatarFallback>
+                              <Star className="h-3 w-3" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="text-left">
+                            <p className="text-xs font-medium text-gray-800">{googleStatus.profile?.name}</p>
+                            <p className="text-xs text-gray-500 truncate">{googleStatus.profile?.email}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    {googleStatus?.isConnected ? (
+                      <Badge className="bg-green-100 text-green-700">
+                        <Check className="h-3 w-3 mr-1" />
+                        Connected
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">Not Connected</Badge>
+                    )}
+                  </div>
+                  <Button
+                    onClick={googleStatus?.isConnected ? handleDisconnectGoogle : handleConnectGoogle}
+                    variant={googleStatus?.isConnected ? "outline" : "default"}
+                    className={
+                      googleStatus?.isConnected
+                        ? "text-red-600 hover:bg-red-50"
+                        : "bg-green-600 hover:bg-green-700"
+                    }
+                    size="sm"
+                  >
+                    {googleStatus?.isConnected ? "Disconnect" : "Connect"}
                   </Button>
                 </CardContent>
               </Card>

@@ -6,11 +6,10 @@ import { motion, AnimatePresence } from "framer-motion"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import GeneralSettings from "./settings/General"
 import ChannelsSettings from "./settings/Channels"
-import AdminsSettings from "./settings/Admins"
-import AccountManagementSettings from "./settings/AccountManagement"
+import IntegrationsSettings from "./settings/Integrations"
+import ErrorLogsSettings from "./settings/ErrorLogs"
 
 export default function ChatbotAdminSettings() {
-  // New state to manage the active tab/section
   const [activeTab, setActiveTab] = useState("general")
 
   return (
@@ -46,39 +45,32 @@ export default function ChatbotAdminSettings() {
               Channels
             </button>
             <button
-              onClick={() => setActiveTab("admins")}
+              onClick={() => setActiveTab("integrations")}
               className={`px-4 py-3 font-semibold transition-colors duration-200 ${
-                activeTab === "admins"
-                  ? "border-b-2 border-indigo-600 text-indigo-600"
-                  : "text-gray-500 hover:text-indigo-600"
+                activeTab === "integrations"
+                  ? "border-b-2 border-purple-600 text-purple-600"
+                  : "text-gray-500 hover:text-purple-600"
               }`}
             >
-              Admins
+              Integrations
             </button>
             <button
-              onClick={() => setActiveTab("account")}
+              onClick={() => setActiveTab("error-logs")}
               className={`px-4 py-3 font-semibold transition-colors duration-200 ${
-                activeTab === "account"
-                  ? "border-b-2 border-green-600 text-green-600"
-                  : "text-gray-500 hover:text-green-600"
+                activeTab === "error-logs"
+                  ? "border-b-2 border-red-600 text-red-600"
+                  : "text-gray-500 hover:text-red-600"
               }`}
             >
-              Account Management
+              Error Logs
             </button>
           </div>
 
           <AnimatePresence mode="wait">
-            {/* General Integration Section */}
             {activeTab === "general" && <GeneralSettings />}
-
-            {/* Channels Integration Section */}
             {activeTab === "channels" && <ChannelsSettings />}
-
-            {/* Admins Section */}
-            {activeTab === "admins" && <AdminsSettings />}
-
-            {/* Account Management Section */}
-            {activeTab === "account" && <AccountManagementSettings />}
+            {activeTab === "integrations" && <IntegrationsSettings />}
+            {activeTab === "error-logs" && <ErrorLogsSettings />}
           </AnimatePresence>
         </div>
       </div>

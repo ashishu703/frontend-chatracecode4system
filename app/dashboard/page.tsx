@@ -8,24 +8,27 @@ import { MessageSquare, Bot, TrendingUp, Activity, Bell, LogOut, Settings } from
 import Image from "next/image"
 import { useSelector, useDispatch } from "react-redux"
 import { RootState } from "@/store/store"
-import { toggleSidebar } from "@/store/slices/uiSlice"
+import { toggleSidebar, setSidebarOpen } from "@/store/slices/uiSlice"
 import { setCurrentView } from "@/store/slices/dashboardSlice"
 import Sidebar from "@/components/dashboard/Sidebar"
 import DashboardView from "@/components/dashboard/DashboardView"
 import InboxView from "@/components/dashboard/InboxView"
-import PhonebookView from "@/components/dashboard/PhonebookView"
+import ContactsManagement from "@/components/dashboard/ContactsManagement"
 import BroadcastView from "@/components/dashboard/BroadcastView"
+import { BroadcastTemplateBuilder } from "@/components/dashboard/BroadcastView/CreateTemplatePage"
 import ChatbotView from "@/components/dashboard/ChatbotView"
+import ReviewManagementView from "@/components/dashboard/ReviewManagementView"
 import FeaturesView from "@/components/dashboard/FeaturesView";
 import { FlowBuilder } from "@/components/flow-integration/flow-builder"
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import serverHandler from '@/utils/api/enpointsUtils/serverHandler';
 import AllFlowsPage from "@/components/dashboard/allflows"
 import AllTemplatesPage from "@/components/flow-integration/alltemplates"
 import AutomationToolsView from "@/components/dashboard/AutomationTools/AutomationToolsView"
 import SettingsView from "@/components/dashboard/SettingsView"
+import EcommerceView from "@/components/ecommerce/EcommerceView"
 import { UserEndpoints } from "@/utils/api/enpointsUtils/Api-endpoints"
 
 const stats = [
@@ -62,6 +65,70 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const autoCollapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-collapse sidebar on smaller screens and on mouse leave
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) { // lg breakpoint (1024px)
+        if (sidebarOpen) {
+          dispatch(setSidebarOpen(false));
+        }
+      }
+    };
+
+    // Check on mount
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [sidebarOpen, dispatch]);
+
+  // Auto-collapse on mouse leave (with delay) - only on desktop
+  useEffect(() => {
+    // Only enable auto-collapse on desktop screens
+    if (window.innerWidth < 1024) return;
+
+    const handleMouseLeave = () => {
+      // Clear existing timeout
+      if (autoCollapseTimeoutRef.current) {
+        clearTimeout(autoCollapseTimeoutRef.current);
+      }
+      
+      // Set timeout to collapse after 800ms
+      autoCollapseTimeoutRef.current = setTimeout(() => {
+        // Only collapse if still on desktop and sidebar is open
+        if (window.innerWidth >= 1024 && sidebarOpen) {
+          dispatch(setSidebarOpen(false));
+        }
+      }, 800);
+    };
+
+    const handleMouseEnter = () => {
+      // Clear timeout when mouse enters sidebar
+      if (autoCollapseTimeoutRef.current) {
+        clearTimeout(autoCollapseTimeoutRef.current);
+        autoCollapseTimeoutRef.current = null;
+      }
+    };
+
+    const sidebarElement = sidebarRef.current;
+    if (sidebarElement && sidebarOpen) {
+      sidebarElement.addEventListener('mouseleave', handleMouseLeave);
+      sidebarElement.addEventListener('mouseenter', handleMouseEnter);
+    }
+
+    return () => {
+      if (sidebarElement) {
+        sidebarElement.removeEventListener('mouseleave', handleMouseLeave);
+        sidebarElement.removeEventListener('mouseenter', handleMouseEnter);
+      }
+      if (autoCollapseTimeoutRef.current) {
+        clearTimeout(autoCollapseTimeoutRef.current);
+      }
+    };
+  }, [sidebarOpen, dispatch]);
 
   useEffect(() => {
     const initializeDashboard = async () => {
@@ -71,7 +138,7 @@ export default function DashboardPage() {
           setLoading(true);
           setError(undefined);
           try {
-            const res = await serverHandler.get(UserEndpoints.DASHBOARD);
+            const res = await serverHandler.get(UserEndpoints.USER_DASHBOARD);
             setDashboardData((res.data as any).data);
           } catch (err) {
             console.error('Dashboard fetch error:', err);
@@ -137,21 +204,17 @@ export default function DashboardPage() {
       case "inbox":
         return <InboxView />
       case "contacts":
-        return <PhonebookView />
+        return <ContactsManagement />
       case "broadcast":
         return <BroadcastView />
-      case "broadcast-analytics":
+      case "template":
         return <BroadcastView />
       case "create-template":
-        return <BroadcastView />
-      case "prebuilt-template":
-        return <BroadcastView />
-      case "saved-templates":
-        return <BroadcastView />
-      case "broadcast-messages":
-        return <BroadcastView />
+        return <BroadcastTemplateBuilder />
       case "chatbot":
         return <ChatbotView />
+      case "reviews":
+        return <ReviewManagementView />
       case "features":
         return <FeaturesView />
       case "flows":
@@ -164,6 +227,15 @@ export default function DashboardPage() {
         return <AutomationToolsView />
       case "settings":
         return <SettingsView />
+      case "ecommerce":
+      case "ecommerce-overview":
+      case "ecommerce-catalogs":
+      case "ecommerce-products":
+      case "ecommerce-orders":
+      case "ecommerce-payments":
+      case "ecommerce-commerce-settings":
+      case "ecommerce-order-settings":
+        return <EcommerceView />
       default:
         return <DashboardView />
     }
@@ -171,7 +243,9 @@ export default function DashboardPage() {
 
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
-      <Sidebar />
+      <div ref={sidebarRef}>
+        <Sidebar />
+      </div>
 
       <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? "ml-64" : "ml-16"} flex flex-col min-w-0`}> 
         <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 sticky top-0 z-40">

@@ -13,6 +13,7 @@ import { StartNode } from "./start-node";
 import { MailNode } from "./mail-node";
 import { StartFlowNode } from "./start-node";
 import { ConditionNode } from "./condition-node";
+import DelayNode from "./delay-node";
 import React from "react";
 
 // Generic fallback node
@@ -40,5 +41,6 @@ export const nodeTypes = {
   requestAPINode: ApiRequestNode,
   sendEmailNode: MailNode,
   conditionNode: ConditionNode,
+  delayNode: DelayNode,
   genericNode: GenericNode,
 };

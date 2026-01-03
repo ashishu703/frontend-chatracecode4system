@@ -10,7 +10,7 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "MBG - AI-Powered Business Automation",
+  title: "code 4 system - AI-Powered Business Automation",
   description: "Transform your business with AI-powered automation",
   generator: 'v0.dev'
 }

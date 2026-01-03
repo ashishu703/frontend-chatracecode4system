@@ -1,10 +1,13 @@
 "use client"
 import { type NodeProps } from "@xyflow/react"
-import { ExternalLink } from "lucide-react";
+import { Play } from "lucide-react";
 
 export function StartNode({ selected }: NodeProps<any>) {
   return (
-    <div className={`min-w-[200px] min-h-[40px] border-2 border-gray-400 rounded-lg bg-white ${selected ? "ring-2 ring-blue-500" : ""}`}></div>
+    <div className={`min-w-[120px] min-h-[36px] border border-gray-300 rounded-full bg-white shadow-sm flex items-center justify-center gap-2 px-4 ${selected ? "ring-2 ring-blue-500" : ""}`}>
+      <Play className="w-4 h-4 text-red-500 fill-red-500" />
+      <span className="text-sm font-medium text-gray-700">Start</span>
+    </div>
   );
 }
 

@@ -29,14 +29,12 @@ import type {
   FlowTemplate,
 } from "@/types/flow-integration/flow";
 import {
-  ChevronRight,
-  ChevronLeft,
-  Eye,
   Plus,
   ZoomIn,
   ZoomOut,
   Layout,
   Save,
+  Copy as CopyIcon,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -96,6 +94,9 @@ interface FlowToolbarProps {
   setAddPopoverOpen: (open: boolean) => void;
   toolbarNodeOptions: ToolbarNodeOption[];
   onSave: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onAutoOrganize: () => void;
 }
 function FlowToolbar({
   onAddNode,
@@ -103,6 +104,9 @@ function FlowToolbar({
   setAddPopoverOpen,
   toolbarNodeOptions,
   onSave,
+  onZoomIn,
+  onZoomOut,
+  onAutoOrganize,
 }: FlowToolbarProps) {
   return (
     <TooltipProvider>
@@ -112,29 +116,24 @@ function FlowToolbar({
       >
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Eye className="h-5 w-5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Preview</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
             <Popover open={addPopoverOpen} onOpenChange={setAddPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon">
                   <Plus className="h-5 w-5" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-48 p-2 z-50">
-                <div className="flex flex-col gap-2">
+              <PopoverContent align="start" className="w-[400px] p-4 z-50">
+                <div className="grid grid-cols-2 gap-2">
                   {toolbarNodeOptions.map((opt: ToolbarNodeOption) => (
                     <Button
                       key={opt.type}
                       variant="outline"
                       size="sm"
                       className="w-full justify-start"
-                      onClick={() => onAddNode(opt.type)}
+                      onClick={() => {
+                        onAddNode(opt.type);
+                        setAddPopoverOpen(false);
+                      }}
                     >
                       {opt.label}
                     </Button>
@@ -143,11 +142,11 @@ function FlowToolbar({
               </PopoverContent>
             </Popover>
           </TooltipTrigger>
-          <TooltipContent>Add</TooltipContent>
+          <TooltipContent>Add Node</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button onClick={onSave} variant="default" size="icon">
+            <Button onClick={onSave} variant="default" size="icon" className="bg-blue-500 hover:bg-blue-600">
               <Save className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
@@ -155,7 +154,7 @@ function FlowToolbar({
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" onClick={onZoomIn}>
               <ZoomIn className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
@@ -163,7 +162,7 @@ function FlowToolbar({
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" onClick={onZoomOut}>
               <ZoomOut className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
@@ -171,7 +170,7 @@ function FlowToolbar({
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" onClick={onAutoOrganize}>
               <Layout className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
@@ -251,6 +250,8 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
             return "sendEmailNode";
           case "condition":
             return "conditionNode";
+          case "delay":
+            return "delayNode";
           case "start":
             return "startNode";
           default:
@@ -346,6 +347,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     { type: "requestAPINode", label: "API Request", dataType: "requestAPI" },
     { type: "assignAgentNode", label: "Assign Agent", dataType: "assignAgent" },
     { type: "conditionNode", label: "Condition", dataType: "condition" },
+    { type: "delayNode", label: "Delay", dataType: "delay" },
   ];
   const [pendingConnection, setPendingConnection] = useState<any>(null);
 
@@ -685,6 +687,40 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
     setSelectedNode(null);
   }, []);
 
+  const handleZoomIn = useCallback(() => {
+    reactFlowInstance.zoomIn();
+  }, [reactFlowInstance]);
+
+  const handleZoomOut = useCallback(() => {
+    reactFlowInstance.zoomOut();
+  }, [reactFlowInstance]);
+
+  const handleAutoOrganize = useCallback(() => {
+    if (nodes.length === 0) return;
+    
+    const nodeWidth = 400;
+    const nodeHeight = 300;
+    const horizontalSpacing = 450;
+    const verticalSpacing = 350;
+    
+    const organizedNodes = nodes.map((node, index) => {
+      const row = Math.floor(index / 3);
+      const col = index % 3;
+      return {
+        ...node,
+        position: {
+          x: col * horizontalSpacing + 100,
+          y: row * verticalSpacing + 100,
+        },
+      };
+    });
+    
+    setNodes(organizedNodes);
+    setTimeout(() => {
+      reactFlowInstance.fitView({ padding: 0.2 });
+    }, 100);
+  }, [nodes, setNodes, reactFlowInstance]);
+
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
@@ -834,6 +870,13 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
             onTrueGoTo: "",
             onFalseGoTo: "",
             delayInSeconds: 0,
+          },
+        };
+      case "delay":
+        return {
+          state: {
+            duration: 1,
+            unit: "seconds",
           },
         };
       default:
@@ -1021,6 +1064,8 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
               return "sendEmailNode";
             case "condition":
               return "conditionNode";
+          case "delay":
+            return "delayNode";
             case "start":
               return "startNode";
             default:
@@ -1169,12 +1214,17 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
         startNodeId={startNodeId}
         setStartNodeId={setStartNodeId}
       >
-        <div className="h-full flex flex-col bg-gray-50">
+        <div className="h-full flex flex-col" style={{ backgroundColor: '#F2F6FA' }}>
           <div className="flex-1 flex relative">
             {/* Canvas */}
             <div
               className="flex-1 relative w-full h-[calc(100vh-64px)] min-h-[400px]"
               ref={reactFlowWrapper}
+              style={{ 
+                backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
+                backgroundSize: '20px 20px',
+                backgroundColor: '#F2F6FA'
+              }}
             >
               <ReactFlow
                 nodes={nodes as any}
@@ -1192,7 +1242,7 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
                 fitView
                 className={uiState.isPreviewMode ? "pointer-events-none" : ""}
               >
-                <Background />
+                <Background color="#d1d5db" gap={20} />
                 <Controls />
                 <MiniMap
                   nodeColor={(node) => {
@@ -1220,6 +1270,9 @@ function FlowBuilderContent({ initialFlowData }: FlowBuilderContentProps) {
                 }
                 toolbarNodeOptions={toolbarNodeOptions}
                 onSave={handleSaveClick}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onAutoOrganize={handleAutoOrganize}
               />
             </div>
           </div>

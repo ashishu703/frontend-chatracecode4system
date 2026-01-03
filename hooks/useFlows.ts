@@ -25,29 +25,72 @@ export const useFlows = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const requestParams = {
-        page: params?.page || pagination.currentPage,
-        size: params?.size || pagination.pageSize,
-        search: params?.search || '',
-        sort: params?.sort || 'createdAt',
-        order: params?.order || 'desc'
+
+      const response = await serverHandler.get("/api/chat_flow/get_all");
+      const data = response.data as {
+        success: boolean;
+        data: Array<{
+          title: string;
+          flow_id: string;
+          is_default: boolean;
+        }>;
       };
 
-      const response = await serverHandler.get(ChatFlowEndpoints.GET_MINE_FLOWS, {
-        params: requestParams
-      });
-      const data = response.data as FlowsResponse;
-      console.log(data);
-      if (data.success) {
-        setFlows(data.data || []);
-        setPagination(data.pagination);
+      if (data.success && data.data) {
+        // Map the API response to the Flow interface
+        const mappedFlows: Flow[] = data.data.map((flow, index) => ({
+          id: index + 1, // Generate a temporary ID since API doesn't provide it
+          uid: "", // Empty as API doesn't provide
+          flow_id: flow.flow_id,
+          title: flow.title,
+          prevent_list: "", // Empty as API doesn't provide
+          ai_list: "", // Empty as API doesn't provide
+          createdAt: new Date().toISOString(), // Default value as API doesn't provide
+          updatedAt: new Date().toISOString(), // Default value as API doesn't provide
+        }));
+
+        // Apply search filter if provided
+        let filteredFlows = mappedFlows;
+        if (params?.search) {
+          const searchTerm = params.search.toLowerCase();
+          filteredFlows = mappedFlows.filter(
+            (flow) =>
+              flow.title.toLowerCase().includes(searchTerm) ||
+              flow.flow_id.toLowerCase().includes(searchTerm)
+          );
+        }
+
+        // Apply sorting if provided
+        if (params?.sort) {
+          filteredFlows.sort((a, b) => {
+            const aValue = a[params.sort as keyof Flow];
+            const bValue = b[params.sort as keyof Flow];
+            if (aValue === bValue) return 0;
+            const comparison = aValue > bValue ? 1 : -1;
+            return params?.order === "asc" ? comparison : -comparison;
+          });
+        }
+
+        // Apply pagination
+        const page = params?.page || pagination.currentPage;
+        const size = params?.size || pagination.pageSize;
+        const startIndex = (page - 1) * size;
+        const endIndex = startIndex + size;
+        const paginatedFlows = filteredFlows.slice(startIndex, endIndex);
+
+        setFlows(paginatedFlows);
+        setPagination({
+          totalItems: filteredFlows.length,
+          totalPages: Math.ceil(filteredFlows.length / size),
+          currentPage: page,
+          pageSize: size,
+        });
       } else {
-        setError('Failed to fetch flows');
+        setError("Failed to fetch flows");
+        setFlows([]);
       }
     } catch (err: any) {
-      console.error('Error fetching flows:', err);
-      setError(err.message || 'Failed to fetch flows');
+      setError(err.message || "Failed to fetch flows");
       setFlows([]);
     } finally {
       setLoading(false);
@@ -69,7 +112,6 @@ export const useFlows = () => {
         return { success: false, error: data.msg || 'Failed to delete flow' };
       }
     } catch (err: any) {
-      console.error('Error deleting flow:', err);
       return { success: false, error: err.message || 'Failed to delete flow' };
     }
   };
@@ -86,7 +128,6 @@ export const useFlows = () => {
         return { success: false, error: data.msg || 'Failed to create flow' };
       }
     } catch (err: any) {
-      console.error('Error creating flow:', err);
       return { success: false, error: err.message || 'Failed to create flow' };
     }
   };
@@ -103,7 +144,6 @@ export const useFlows = () => {
         return { success: false, error: data.msg || 'Failed to update flow' };
       }
     } catch (err: any) {
-      console.error('Error updating flow:', err);
       return { success: false, error: err.message || 'Failed to update flow' };
     }
   };
@@ -119,7 +159,6 @@ export const useFlows = () => {
         return { success: false, error: data.msg || 'Failed to get flow' };
       }
     } catch (err: any) {
-      console.error('Error getting flow:', err);
       return { success: false, error: err.message || 'Failed to get flow' };
     }
   };

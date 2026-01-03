@@ -79,8 +79,8 @@ export default function AdminLoginPage() {
           <CardHeader className="text-center">
             <motion.div className="flex items-center justify-center space-x-3 mb-4" whileHover={{ scale: 1.05 }}>
               <img
-                src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1752042604/mbg_logo_l7xfr2.png"
-                alt="MBG Logo"
+                src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1763706224/WhatsApp_Image_2025-11-21_at_11.50.23_AM_rvamky.jpg"
+                alt="code4system Logo"
                 width={100}
                 height={100}
               />

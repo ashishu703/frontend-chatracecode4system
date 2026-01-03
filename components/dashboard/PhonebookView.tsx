@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, memo } from "react";
-import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,21 +18,20 @@ import {
   Upload,
   Trash2,
   Search,
-  Plus,
   X,
   FolderOpen,
   Info,
   MoreVertical,
-  Check,
 } from "lucide-react";
 import { Contact } from "@/utils/api/contacts/Contact";
+import { ModalWrapper } from "./helpers/ModalWrapper";
+import { TagSelector } from "./helpers/TagSelector";
 
-// Optimized Contact Row Component
 const ContactRow = memo(({ 
   contact, 
   selectedContacts, 
   setSelectedContacts, 
-  displayPhonebooks, 
+  phonebooks, 
   assignedTo, 
   handleAssignedToChange,
   onAssignToTag
@@ -41,14 +39,13 @@ const ContactRow = memo(({
   contact: any;
   selectedContacts: string[];
   setSelectedContacts: (contacts: string[]) => void;
-  displayPhonebooks: any[];
+  phonebooks: any[];
   assignedTo: { [key: string]: string };
   handleAssignedToChange: (contactId: string, value: string) => void;
   onAssignToTag: (contactId: string) => void;
 }) => {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
 
-  // Click outside handler for actions menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -71,13 +68,13 @@ const ContactRow = memo(({
 
   const getPhonebookName = useMemo(() => {
     if (contact.phonebook_id) {
-      const phonebook = displayPhonebooks.find(
+      const phonebook = phonebooks.find(
         (p) => p.id.toString() === contact.phonebook_id.toString()
       );
       return phonebook ? phonebook.name : "Unknown Tag";
     }
     return "No Tag";
-  }, [contact.phonebook_id, displayPhonebooks]);
+  }, [contact.phonebook_id, phonebooks]);
 
   return (
     <tr className="hover:bg-gray-50 transition-colors">
@@ -177,24 +174,16 @@ const ContactRow = memo(({
 });
 
 export default function PhonebookView() {
-  // Core state
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [selectedPhonebook, setSelectedPhonebook] = useState<string>("all");
-  const [showAllTags, setShowAllTags] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [phonebookPage, setPhonebookPage] = useState(1);
-  const [phonebookPageSize] = useState(10);
-  const [allPhonebooks, setAllPhonebooks] = useState<any[]>([]);
   const [assignedTo, setAssignedTo] = useState<{ [key: string]: string }>({});
   const [addContactModal, setAddContactModal] = useState(false);
   const [importModal, setImportModal] = useState(false);
-  const [addPhonebookModal, setAddPhonebookModal] = useState(false);
   const [reassignModal, setReassignModal] = useState(false);
-  const [targetPhonebookForReassign, setTargetPhonebookForReassign] =
-    useState<string>("");
+  const [targetPhonebookForReassign, setTargetPhonebookForReassign] = useState<string>("");
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [contactForm, setContactForm] = useState({
     first_name: "",
@@ -202,10 +191,8 @@ export default function PhonebookView() {
     phone: "",
     email: "",
     gender: "",
+    phonebook_id: "",
   });
-  const [phonebookForm, setPhonebookForm] = useState({ name: "" });
-  const [tagSearchTerm, setTagSearchTerm] = useState("");
-  const [showTagDropdown, setShowTagDropdown] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -216,9 +203,9 @@ export default function PhonebookView() {
     queryFn: Contact.getContacts,
   });
 
-  const { data: phonebooksResponse, isLoading: phonebooksLoading } = useQuery({
-    queryKey: ["phonebooks", phonebookPage],
-    queryFn: () => Contact.getPhonebooks(phonebookPage, phonebookPageSize),
+  const { data: phonebooksResponse } = useQuery({
+    queryKey: ["phonebooks"],
+    queryFn: () => Contact.getPhonebooks(1, 100),
   });
 
   const { data: userInfoResponse } = useQuery({
@@ -229,51 +216,22 @@ export default function PhonebookView() {
   // Extract data
   const contacts = contactsResponse?.data || [];
   const phonebooks = phonebooksResponse?.data || [];
-  const phonebookPagination = phonebooksResponse?.pagination;
   const userInfo = userInfoResponse?.data;
 
-  // Initialize allPhonebooks
-  useEffect(() => {
-    if (phonebooks.length > 0 && phonebookPage === 1) {
-      setAllPhonebooks(phonebooks);
-    }
-  }, [phonebooks, phonebookPage]);
 
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (showTagDropdown && !target.closest(".tag-dropdown-container")) {
-        setShowTagDropdown(false);
-        setTagSearchTerm("");
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showTagDropdown]);
-
-  // Filter contacts with useMemo for performance
   const filteredContacts = useMemo(() => {
-    return contacts.filter((contact: any) => {
-    if (
-      selectedPhonebook !== "all" &&
-      contact.phonebook_id?.toString() !== selectedPhonebook
-    )
-      return false;
-      if (!debouncedSearchTerm) return true;
+    if (!debouncedSearchTerm) return contacts;
 
-      const searchLower = debouncedSearchTerm.toLowerCase();
-    return (
+    const searchLower = debouncedSearchTerm.toLowerCase();
+    return contacts.filter((contact: any) =>
       contact.name?.toLowerCase().includes(searchLower) ||
-        contact.phone?.includes(debouncedSearchTerm) ||
-        contact.mobile?.includes(debouncedSearchTerm) ||
+      contact.phone?.includes(debouncedSearchTerm) ||
+      contact.mobile?.includes(debouncedSearchTerm) ||
       contact.email?.toLowerCase().includes(searchLower) ||
       contact.first_name?.toLowerCase().includes(searchLower) ||
       contact.last_name?.toLowerCase().includes(searchLower)
     );
-  });
-  }, [contacts, selectedPhonebook, debouncedSearchTerm]);
+  }, [contacts, debouncedSearchTerm]);
 
   // Pagination with useMemo for performance
   const paginationData = useMemo(() => {
@@ -303,69 +261,7 @@ export default function PhonebookView() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, selectedPhonebook]);
-
-  const loadMorePhonebooks = async () => {
-    if (phonebookPagination && phonebookPage < phonebookPagination.totalPages) {
-      const nextPage = phonebookPage + 1;
-      setPhonebookPage(nextPage);
-      try {
-        const nextPageResponse = await Contact.getPhonebooks(
-          nextPage,
-          phonebookPageSize
-        );
-        if (nextPageResponse.success && nextPageResponse.data) {
-          setAllPhonebooks((prev) => [...prev, ...nextPageResponse.data]);
-          toast({
-            title: "Success",
-            description: `Loaded ${nextPageResponse.data.length} more phonebooks`,
-            variant: "success",
-          });
-        }
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to load more phonebooks",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const showAllPhonebooks = async () => {
-    if (phonebookPagination && phonebookPagination.totalPages > 1) {
-      try {
-        const allPhonebooksData = [...phonebooks];
-        for (let page = 2; page <= phonebookPagination.totalPages; page++) {
-          const response = await Contact.getPhonebooks(page, phonebookPageSize);
-          if (response.success && response.data)
-            allPhonebooksData.push(...response.data);
-        }
-        setAllPhonebooks(allPhonebooksData);
-        setShowAllTags(true);
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to load all phonebooks",
-          variant: "destructive",
-        });
-      }
-    } else {
-      setShowAllTags(true);
-    }
-  };
-
-  const displayPhonebooks = useMemo(() => 
-    showAllTags ? allPhonebooks : phonebooks, 
-    [showAllTags, allPhonebooks, phonebooks]
-  );
-  
-  const filteredTags = useMemo(() => 
-    displayPhonebooks.filter((phonebook: any) =>
-    phonebook.name.toLowerCase().includes(tagSearchTerm.toLowerCase())
-    ), 
-    [displayPhonebooks, tagSearchTerm]
-  );
+  }, [debouncedSearchTerm]);
 
   const addContactMutation = useMutation({
     mutationFn: Contact.addContact,
@@ -383,9 +279,8 @@ export default function PhonebookView() {
         phone: "",
         email: "",
         gender: "",
+        phonebook_id: "",
       });
-      setTagSearchTerm("");
-      setShowTagDropdown(false);
     },
     onError: (error: any) =>
       toast({
@@ -395,26 +290,6 @@ export default function PhonebookView() {
       }),
   });
 
-  const addPhonebookMutation = useMutation({
-    mutationFn: Contact.addPhonebook,
-    onSuccess: (data: any) => {
-      toast({
-        title: "Success",
-        description: "Phonebook created successfully",
-        variant: "success",
-      });
-      queryClient.invalidateQueries({ queryKey: ["phonebooks"] });
-      setAddPhonebookModal(false);
-      setPhonebookForm({ name: "" });
-      if (data.data?.id) setSelectedPhonebook(data.data.id.toString());
-    },
-    onError: (error: any) =>
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      }),
-  });
 
   const deleteContactsMutation = useMutation({
     mutationFn: Contact.deleteContacts,
@@ -452,7 +327,6 @@ export default function PhonebookView() {
       // Refresh all related data
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["phonebooks"] });
-      queryClient.invalidateQueries({ queryKey: ["userInfo"] });
       setSelectedContacts([]);
       setReassignModal(false);
       setTargetPhonebookForReassign("");
@@ -469,10 +343,7 @@ export default function PhonebookView() {
 
   const handleAddContact = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    const phonebookId =
-      selectedPhonebook !== "all"
-        ? selectedPhonebook
-        : userInfo?.phonebook_id || "1";
+    const phonebookId = contactForm.phonebook_id || userInfo?.phonebook_id || "1";
     const payload = {
       mobile: contactForm.phone.trim(),
       name: contactForm.last_name.trim()
@@ -484,12 +355,8 @@ export default function PhonebookView() {
       id: phonebookId.toString(),
     };
     addContactMutation.mutate(payload);
-  }, [selectedPhonebook, userInfo?.phonebook_id, contactForm, addContactMutation]);
+  }, [userInfo?.phonebook_id, contactForm, addContactMutation]);
 
-  const handleAddPhonebook = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    addPhonebookMutation.mutate({ name: phonebookForm.name });
-  }, [phonebookForm.name, addPhonebookMutation]);
 
   const handleDeleteSelected = useCallback(() => {
     if (selectedContacts.length > 0)
@@ -505,32 +372,13 @@ export default function PhonebookView() {
     });
   }, [toast]);
 
-  const getContactCount = useCallback((phonebookId: string) => {
-    if (phonebookId === "all") return contacts.length;
-    return contacts.filter(
-      (c: any) => c.phonebook_id?.toString() === phonebookId
-    ).length;
-  }, [contacts]);
 
   const handleAssignToTag = useCallback((contactId: string) => {
     setSelectedContacts([contactId]);
     setReassignModal(true);
   }, []);
 
-  // Auto-refresh data after reassignment
-  useEffect(() => {
-    if (reassignContactsMutation.isSuccess) {
-      // Refresh contacts data
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      // Refresh phonebooks data
-      queryClient.invalidateQueries({ queryKey: ["phonebooks"] });
-    }
-  }, [reassignContactsMutation.isSuccess, queryClient]);
 
-  const shouldShowMoreButton = useMemo(() =>
-    phonebookPagination && phonebookPagination.totalItems > 10,
-    [phonebookPagination]
-  );
 
   return (
     <div className="space-y-6">
@@ -577,16 +425,6 @@ export default function PhonebookView() {
                   <div className="p-2 space-y-1">
                     <button
                       onClick={() => {
-                        setAddPhonebookModal(true);
-                        setShowOptionsMenu(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded-md flex items-center gap-2 text-blue-700"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Tag
-                    </button>
-                    <button
-                      onClick={() => {
                         setImportModal(true);
                         setShowOptionsMenu(false);
                       }}
@@ -626,110 +464,6 @@ export default function PhonebookView() {
         </CardHeader>
 
         <CardContent className="p-6">
-          {/* Tags Section */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-700 mb-4">Tags</h3>
-
-            {phonebooksLoading ? (
-              <div className="flex flex-wrap gap-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="w-24 h-8 bg-gray-200 rounded-full animate-pulse"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {/* All Contacts Tag */}
-                <motion.button
-                  onClick={() => setSelectedPhonebook("all")}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
-                    selectedPhonebook === "all"
-                      ? "border-blue-500 bg-blue-500 text-white"
-                      : "border-gray-300 bg-white text-gray-700 hover:border-blue-300"
-                  }`}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <FolderOpen className="h-3.5 w-3.5" />
-                  <span className="text-sm font-medium">All Contacts</span>
-                  <span className="bg-white text-blue-600 text-xs px-1.5 py-0.5 rounded-full font-bold">
-                    {getContactCount("all")}
-                  </span>
-                </motion.button>
-
-                {/* Individual Tags */}
-                {displayPhonebooks.map((phonebook: any) => (
-                  <motion.button
-                    key={phonebook.id}
-                    onClick={() =>
-                      setSelectedPhonebook(phonebook.id.toString())
-                    }
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
-                      selectedPhonebook === phonebook.id.toString()
-                        ? "border-green-500 bg-green-500 text-white"
-                        : "border-gray-300 bg-white text-gray-700 hover:border-green-300"
-                    }`}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" />
-                    <span className="text-sm font-medium">
-                      {phonebook.name}
-                    </span>
-                    <span className="text-xs px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-600">
-                      {getContactCount(phonebook.id.toString())}
-                    </span>
-                    {selectedPhonebook === phonebook.id.toString() && (
-                      <Check className="h-3.5 w-3.5 text-white" />
-                    )}
-                  </motion.button>
-                ))}
-
-                {/* Show All Button */}
-                {!showAllTags &&
-                  shouldShowMoreButton &&
-                  phonebookPagination &&
-                  phonebookPagination.totalPages > 1 && (
-                    <motion.button
-                      onClick={() => showAllPhonebooks()}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-400 hover:bg-blue-100"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <span className="text-sm font-medium">
-                        Show All ({phonebookPagination.totalItems - 10} more)
-                      </span>
-                    </motion.button>
-                  )}
-
-                {/* Show Less Button */}
-                {showAllTags && shouldShowMoreButton && (
-                  <motion.button
-                    onClick={() => setShowAllTags(false)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <span className="text-sm font-medium">Show Less</span>
-                  </motion.button>
-                )}
-
-                {/* Create Tag Button */}
-                <motion.button
-                  onClick={() => setAddPhonebookModal(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span className="text-sm font-medium">Create Tag</span>
-                </motion.button>
-              </div>
-            )}
-          </div>
-
           {/* Search Section */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -873,7 +607,7 @@ export default function PhonebookView() {
                         contact={contact}
                         selectedContacts={selectedContacts}
                         setSelectedContacts={setSelectedContacts}
-                        displayPhonebooks={displayPhonebooks}
+                        phonebooks={phonebooks}
                         assignedTo={assignedTo}
                         handleAssignedToChange={handleAssignedToChange}
                         onAssignToTag={handleAssignToTag}
@@ -931,30 +665,12 @@ export default function PhonebookView() {
       </Card>
 
       {/* Add Contact Modal */}
-      {addContactModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
-          <motion.div
-            className="bg-white p-6 rounded-xl shadow-2xl w-[550px] max-w-[90vw] max-h-[90vh] overflow-y-auto relative z-10"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-          >
-            <div className="flex items-center justify-between mb-3">
-               <h2 className="text-lg font-semibold text-gray-900">
-                Add New Contact
-              </h2>
-              <button
-                onClick={() => {
-                  setAddContactModal(false);
-                  setTagSearchTerm("");
-                  setShowTagDropdown(false);
-                }}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="h-4 w-4 text-gray-500" />
-              </button>
-            </div>
+      <ModalWrapper
+        isOpen={addContactModal}
+        onClose={() => setAddContactModal(false)}
+        title="Add New Contact"
+        className="w-[550px] max-w-[90vw] max-h-[90vh] overflow-y-auto"
+      >
 
             <form onSubmit={handleAddContact} className="space-y-3">
               {/* First Name */}
@@ -1090,121 +806,19 @@ export default function PhonebookView() {
               </div>
 
               {/* Tag Selection */}
-              <div>
-                <label
-                  htmlFor="tag"
-                   className="block text-xs font-medium text-gray-700 mb-1"
-                >
-                  Assign to Tag <span className="text-red-500">*</span>
-                </label>
-
-                {/* Custom Searchable Dropdown */}
-                <div className="relative tag-dropdown-container">
-                  <div
-                    onClick={() => setShowTagDropdown(!showTagDropdown)}
-                     className="w-full h-9 px-3 py-2 border border-gray-300 rounded-md bg-white cursor-pointer hover:border-blue-500 focus:border-blue-500 focus:ring-blue-500 flex items-center justify-between"
-                  >
-                    <span
-                      className={
-                        selectedPhonebook !== "all"
-                          ? "text-gray-900"
-                          : "text-gray-500"
-                      }
-                    >
-                      {selectedPhonebook !== "all"
-                        ? displayPhonebooks.find(
-                            (p) => p.id.toString() === selectedPhonebook
-                          )?.name || "Select a tag"
-                        : "Select a tag for this contact"}
-                    </span>
-                    <svg
-                      className="w-4 h-4 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
-                  </div>
-
-                  {showTagDropdown && (
-                    <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-md shadow-lg z-[10000] max-h-60 overflow-hidden">
-                      {/* Search Input */}
-                      <div className="p-3 border-b border-gray-100">
-                        <Input
-                          placeholder="Search tags..."
-                          value={tagSearchTerm}
-                          onChange={(e) => setTagSearchTerm(e.target.value)}
-                          className="w-full"
-                          autoFocus
-                        />
-                      </div>
-
-                      {/* Options List */}
-                      <div className="max-h-48 overflow-y-auto">
-                        {/* All Contacts Option */}
-                        <div
-                          onClick={() => {
-                            setSelectedPhonebook("all");
-                            setShowTagDropdown(false);
-                            setTagSearchTerm("");
-                          }}
-                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100"
-                        >
-                          <div className="flex items-center gap-2">
-                            <FolderOpen className="h-4 w-4 text-blue-600" />
-                            <span className="font-medium text-blue-600">
-                              All Contacts
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Filtered Tags */}
-                        {filteredTags.map((phonebook: any) => (
-                          <div
-                            key={phonebook.id}
-                            onClick={() => {
-                              setSelectedPhonebook(phonebook.id.toString());
-                              setShowTagDropdown(false);
-                              setTagSearchTerm("");
-                            }}
-                            className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                          >
-                            <div className="flex items-center gap-2">
-                              <FolderOpen className="h-4 w-4 text-gray-600" />
-                              <span className="text-gray-900">
-                                {phonebook.name}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-
-                        {filteredTags.length === 0 && tagSearchTerm && (
-                          <div className="px-3 py-2 text-gray-500 text-sm text-center">
-                            No tags found matching "{tagSearchTerm}"
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <TagSelector
+                phonebooks={phonebooks}
+                value={contactForm.phonebook_id}
+                onChange={(phonebookId) => setContactForm((prev) => ({ ...prev, phonebook_id: phonebookId }))}
+                required
+              />
 
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end pt-3 border-t border-gray-200">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setAddContactModal(false);
-                    setTagSearchTerm("");
-                    setShowTagDropdown(false);
-                  }}
+                  onClick={() => setAddContactModal(false)}
                   className="px-4 py-2"
                 >
                   Cancel
@@ -1214,7 +828,8 @@ export default function PhonebookView() {
                   disabled={
                     addContactMutation.isPending ||
                     !contactForm.first_name.trim() ||
-                    !contactForm.phone.trim()
+                    !contactForm.phone.trim() ||
+                    !contactForm.phonebook_id
                   }
                   className="px-4 py-2 bg-green-600 hover:bg-green-700"
                 >
@@ -1229,160 +844,34 @@ export default function PhonebookView() {
                 </Button>
               </div>
             </form>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Add Phonebook Modal */}
-      {addPhonebookModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
-          <motion.div
-            className="bg-white p-8 rounded-xl shadow-2xl w-[500px] max-w-[90vw] relative z-10"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-          >
-            <div className="flex items-center justify-between mb-6">
-               <h2 className="text-lg font-semibold text-gray-900">
-                Create New Tag
-              </h2>
-              <button
-                onClick={() => setAddPhonebookModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddPhonebook} className="space-y-6">
-              <div>
-                <label
-                  htmlFor="tagName"
-                   className="block text-xs font-medium text-gray-700 mb-2"
-                >
-                  Tag Name
-                </label>
-                <Input
-                  id="tagName"
-                  placeholder="Enter a descriptive name for your tag"
-                  required
-                  value={phonebookForm.name}
-                  onChange={(e) =>
-                    setPhonebookForm((prev) => ({
-                      ...prev,
-                      name: e.target.value,
-                    }))
-                  }
-                                     className="w-full h-10 text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                  maxLength={50}
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  {phonebookForm.name.length}/50 characters
-                </p>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-blue-800">
-                    <p className="font-medium mb-1">Tag Organization Tips:</p>
-                    <ul className="space-y-1 text-blue-700">
-                      <li>
-                        • Use clear, descriptive names (e.g., "VIP Customers",
-                        "Follow-up Required")
-                      </li>
-                      <li>
-                        • Keep names under 50 characters for better display
-                      </li>
-                      <li>
-                        • Tags help organize contacts by purpose, priority, or
-                        status
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setAddPhonebookModal(false)}
-                  className="px-6 py-2.5"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    addPhonebookMutation.isPending || !phonebookForm.name.trim()
-                  }
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700"
-                >
-                  {addPhonebookMutation.isPending ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Creating...
-                    </div>
-                  ) : (
-                    "Create Tag"
-                  )}
-                </Button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
+      </ModalWrapper>
 
       {/* Import Modal */}
-      {importModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
-          <motion.div
-            className="bg-white p-6 rounded-lg shadow-xl w-96 relative z-10"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-          >
-            <h2 className="text-xl font-bold mb-4">Import Contacts</h2>
-            <p className="text-gray-600 mb-4">
-              CSV import functionality coming soon...
-            </p>
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={() => setImportModal(false)}>
-                Close
-              </Button>
-            </div>
-          </motion.div>
+      <ModalWrapper
+        isOpen={importModal}
+        onClose={() => setImportModal(false)}
+        title="Import Contacts"
+        className="w-96"
+      >
+        <p className="text-gray-600 mb-4">CSV import functionality coming soon...</p>
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={() => setImportModal(false)}>
+            Close
+          </Button>
         </div>
-      )}
+      </ModalWrapper>
 
       {/* Reassign Contacts Modal */}
-      {reassignModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
-          <motion.div
-            className="bg-white p-6 rounded-xl shadow-2xl w-[500px] max-w-[90vw] relative z-10"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-          >
-            <div className="flex items-center justify-between mb-6">
-               <h2 className="text-lg font-semibold text-gray-900">
-                Reassign Contacts to Tag
-              </h2>
-              <button
-                onClick={() => {
-                  setReassignModal(false);
-                  setTargetPhonebookForReassign("");
-                }}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
+      <ModalWrapper
+        isOpen={reassignModal}
+        onClose={() => {
+          setReassignModal(false);
+          setTargetPhonebookForReassign("");
+        }}
+        title="Reassign Contacts to Tag"
+        className="w-[500px] max-w-[90vw]"
+      >
+        <div className="space-y-6 -mt-6">
               {/* Selected Contacts Info */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
@@ -1412,7 +901,7 @@ export default function PhonebookView() {
                     <SelectValue placeholder="Choose a tag to reassign contacts to..." />
                   </SelectTrigger>
                   <SelectContent className="z-[10000] bg-white border border-gray-200 shadow-lg">
-                    {displayPhonebooks.map((phonebook: any) => (
+                    {phonebooks.map((phonebook: any) => (
                       <SelectItem
                         key={phonebook.id}
                         value={phonebook.id.toString()}
@@ -1474,9 +963,7 @@ export default function PhonebookView() {
                 </Button>
               </div>
             </div>
-          </motion.div>
-        </div>
-      )}
+      </ModalWrapper>
     </div>
   );
 }

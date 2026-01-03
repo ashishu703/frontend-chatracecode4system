@@ -37,7 +37,7 @@ export default function AdminSidebar() {
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center space-x-3">
           <Image
-            src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1752042604/mbg_logo_l7xfr2.png"
+            src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1763706224/WhatsApp_Image_2025-11-21_at_11.50.23_AM_rvamky.jpg"
             alt="Admin Logo"
             width={32}
             height={32}
@@ -73,7 +73,7 @@ export default function AdminSidebar() {
       {sidebarOpen && (
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
           <p className="text-xs text-gray-800 text-center">
-            <b>© MBG 2025</b>
+            <b>© code 4 system 2025</b>
             <br />
             <b>All rights reserved</b>
           </p>

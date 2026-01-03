@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Search, Info, Filter, X, CalendarDays, FileText, ArrowUp } from "lucide-react"
+import { Search, Info, Filter, X, CalendarDays, FileText, Send, CheckCircle2, Loader2, AlertCircle, MoreVertical, Plus, GitBranch } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { setCurrentView } from "@/store/slices/dashboardSlice"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -17,6 +17,8 @@ import { format, subDays } from "date-fns"
 import { Broadcast } from "@/utils/api/broadcast/broadcast"
 import type { TempleteItem } from "@/types/broadcast/broadCastResponse"
 import { whatsappTemplatesAPI } from "@/utils/api/broadcast/whatsapp-templates"
+import serverHandler from "@/utils/api/enpointsUtils/serverHandler"
+import type { Flow } from "@/types/chatbot/chatBotModel"
 
 interface BroadcastStats {
   sent: number
@@ -56,15 +58,21 @@ export default function BroadcastAnalyticsPage() {
   })
   const [newBroadcast, setNewBroadcast] = useState({
     title: "",
+    broadcastType: "template" as "template" | "flow",
     templateId: "",
+    flowId: "",
     phonebookId: "",
     isScheduled: false,
     scheduledDate: undefined as Date | undefined,
   })
+  const broadcastTitleRef = useRef<HTMLInputElement>(null)
   const [phonebooks, setPhonebooks] = useState<any[]>([])
   const [isLoadingPhonebooks, setIsLoadingPhonebooks] = useState(false)
   const [templates, setTemplates] = useState<TempleteItem[]>([])
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false)
+  const [flows, setFlows] = useState<Flow[]>([])
+  const [isLoadingFlows, setIsLoadingFlows] = useState(false)
+  const [messagingLimit] = useState(2000) // Hardcoded for now, can be fetched from API later
 
   const dispatch = useDispatch()
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -129,7 +137,7 @@ export default function BroadcastAnalyticsPage() {
     if (!tableRef.current) return
 
     const { scrollTop, scrollHeight, clientHeight } = tableRef.current
-    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100 // 100px threshold
+    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100
 
     if (isNearBottom && hasNextPage && !isFetchingNextPage) {
       fetchNextPage()
@@ -149,6 +157,11 @@ export default function BroadcastAnalyticsPage() {
     if (showNewBroadcastModal) {
       fetchPhonebooks()
       fetchTemplates()
+      fetchFlows()
+      // Auto-focus on broadcast title input
+      setTimeout(() => {
+        broadcastTitleRef.current?.focus()
+      }, 100)
     }
   }, [showNewBroadcastModal])
 
@@ -197,29 +210,6 @@ export default function BroadcastAnalyticsPage() {
     if (!dateRange.to) return "Select end date"
     return `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
   }, [dateRange.from, dateRange.to])
-
-  const StatCard = useCallback(({
-    title,
-    value,
-    icon,
-  }: {
-    title: string
-    value: number
-    icon: React.ReactNode
-  }) => (
-    <Card className="bg-white hover:shadow-lg transition-all duration-300 border border-gray-100 shadow-sm rounded-xl">
-      <CardContent className="p-6 h-32 flex flex-col justify-between">
-        <div className="flex items-center justify-between">
-          <div className="text-4xl font-bold text-gray-900">{value}</div>
-          <div className="text-3xl opacity-80">{icon}</div>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{title}</span>
-          <Info className="w-4 h-4 text-gray-400" />
-        </div>
-      </CardContent>
-    </Card>
-  ), [])
 
   const getStatusColor = useCallback((status: string) => {
     const statusColors: Record<string, string> = {
@@ -278,61 +268,109 @@ export default function BroadcastAnalyticsPage() {
     }
   }, [])
 
+  const fetchFlows = useCallback(async () => {
+    try {
+      setIsLoadingFlows(true)
+      const response = await serverHandler.get("/api/chat_flow/get_all")
+      const data = response.data as { success: boolean; data: Flow[] }
+      if (data.success && data.data) {
+        setFlows(data.data || [])
+      }
+    } catch (error) {
+      console.error("Error fetching flows:", error)
+      setFlows([])
+    } finally {
+      setIsLoadingFlows(false)
+    }
+  }, [])
+
   const handleCreateBroadcast = useCallback(async () => {
     try {
-      const selectedTemplate = templates.find((t) => t.id === newBroadcast.templateId)
       const selectedPhonebook = phonebooks.find((p) => p.id.toString() === newBroadcast.phonebookId)
 
-      if (!selectedTemplate || !selectedPhonebook) {
-        console.error("Template or phonebook not found")
+      if (!selectedPhonebook) {
+        console.error("Phonebook not found")
         return
       }
 
-      const requestPayload = {
-        title: newBroadcast.title,
-        templet: {
-          name: selectedTemplate.name,
-          parameter_format: selectedTemplate.parameter_format || "POSITIONAL",
-          components: selectedTemplate.components || [],
-          language: selectedTemplate.language || "en",
-          status: selectedTemplate.status || "APPROVED",
-          category: selectedTemplate.category || "MARKETING",
-          id: selectedTemplate.id,
-        },
-        phonebook: {
-          id: selectedPhonebook.id,
-          name: selectedPhonebook.name,
-          uid: selectedPhonebook.uid,
-          createdAt: selectedPhonebook.createdAt,
-          updatedAt: selectedPhonebook.updatedAt,
-        },
-        scheduleTimestamp:
-          newBroadcast.isScheduled && newBroadcast.scheduledDate ? newBroadcast.scheduledDate.getTime() : Date.now(),
-        example: [],
-      }
+      // Handle template-based broadcast
+      if (newBroadcast.broadcastType === "template") {
+        const selectedTemplate = templates.find((t) => t.id === newBroadcast.templateId)
+        if (!selectedTemplate) {
+          console.error("Template not found")
+          return
+        }
 
-      const response = await Broadcast.addNewBroadcast(requestPayload)
+        const requestPayload = {
+          title: newBroadcast.title,
+          templet: {
+            name: selectedTemplate.name,
+            parameter_format: selectedTemplate.parameter_format || "POSITIONAL",
+            components: selectedTemplate.components || [],
+            language: selectedTemplate.language || "en",
+            status: selectedTemplate.status || "APPROVED",
+            category: selectedTemplate.category || "MARKETING",
+            id: selectedTemplate.id,
+          },
+          phonebook: {
+            id: selectedPhonebook.id,
+            name: selectedPhonebook.name,
+            uid: selectedPhonebook.uid,
+            createdAt: selectedPhonebook.createdAt,
+            updatedAt: selectedPhonebook.updatedAt,
+          },
+          scheduleTimestamp:
+            newBroadcast.isScheduled && newBroadcast.scheduledDate ? newBroadcast.scheduledDate.getTime() : Date.now(),
+          example: [],
+        }
 
-      if (response.success) {
-        setShowNewBroadcastModal(false)
-        setNewBroadcast({
-          title: "",
-          templateId: "",
-          phonebookId: "",
-          isScheduled: false,
-          scheduledDate: undefined,
+        const response = await Broadcast.addNewBroadcast(requestPayload)
+        
+        if (response.success) {
+          setShowNewBroadcastModal(false)
+          setNewBroadcast({
+            title: "",
+            broadcastType: "template",
+            templateId: "",
+            flowId: "",
+            phonebookId: "",
+            isScheduled: false,
+            scheduledDate: undefined,
+          })
+          refetch()
+        }
+      } else if (newBroadcast.broadcastType === "flow") {
+        // Handle flow-based broadcast
+        const selectedFlow = flows.find((f) => f.flow_id === newBroadcast.flowId)
+        if (!selectedFlow) {
+          console.error("Flow not found")
+          return
+        }
+
+        // TODO: Implement flow-based broadcast API call
+        // For now, we'll use the same API structure but with flow information
+        // This might need backend support for flow-based broadcasts
+        console.log("Flow-based broadcast:", {
+          title: newBroadcast.title,
+          flowId: newBroadcast.flowId,
+          flow: selectedFlow,
+          phonebook: selectedPhonebook,
         })
-        refetch()
+        
+        // Placeholder: You may need to create a separate API endpoint for flow-based broadcasts
+        alert("Flow-based broadcasts are not yet fully implemented. Please use Template-based broadcasts for now.")
       }
     } catch (error) {
       console.error("Error creating broadcast:", error)
     }
-  }, [newBroadcast, templates, phonebooks, refetch])
+  }, [newBroadcast, templates, phonebooks, flows, refetch])
 
   const resetForm = () => {
     setNewBroadcast({
       title: "",
+      broadcastType: "template",
       templateId: "",
+      flowId: "",
       phonebookId: "",
       isScheduled: false,
       scheduledDate: undefined,
@@ -342,7 +380,7 @@ export default function BroadcastAnalyticsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-600 text-6xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Data</h2>
@@ -354,7 +392,7 @@ export default function BroadcastAnalyticsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       <style jsx>{`
         .scrollbar-hide::-webkit-scrollbar {
           display: none;
@@ -364,14 +402,20 @@ export default function BroadcastAnalyticsPage() {
           scrollbar-width: none;
         }
       `}</style>
-      <div className="border-b bg-white px-6 py-4">
-        <div className="flex items-center justify-end">
-          <div className="flex items-center space-x-4">
+
+      {/* Header Section */}
+      <div className="bg-white border-b px-6 py-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Broadcast Analytics</h1>
+            <p className="text-sm text-gray-500">Track and manage your broadcast campaigns.</p>
+          </div>
+          <div className="flex items-center gap-3">
             <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-64 justify-start text-left font-normal bg-transparent rounded-lg"
+                  className="border-gray-300 bg-white hover:bg-gray-50"
                 >
                   <CalendarDays className="mr-2 h-4 w-4" />
                   {formatDateRange()}
@@ -415,7 +459,7 @@ export default function BroadcastAnalyticsPage() {
                       </Button>
                       <Button
                         size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
                         onClick={() => {
                           setAppliedDateRange(dateRange)
                           setIsCalendarOpen(false)
@@ -431,196 +475,220 @@ export default function BroadcastAnalyticsPage() {
               </PopoverContent>
             </Popover>
             <Button
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => setShowNewBroadcastModal(true)}
             >
+              <Plus className="mr-2 h-4 w-4" />
               New Broadcast
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="px-6 py-8 bg-gradient-to-br from-gray-50 to-white">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Overview</h2>
-          <p className="text-gray-600">Track your broadcast performance metrics</p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 mb-4">
-          <StatCard title="Sent" value={stats.sent} icon="📤" />
-          <StatCard title="Delivered" value={stats.delivered} icon="📨" />
-          <StatCard title="Replied" value={stats.replied} icon="💬" />
-          <StatCard title="Sending" value={stats.sending} icon="⏳" />
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
-          <StatCard title="Failed" value={stats.failed} icon="❌" />
-          <StatCard title="Processing" value={stats.processing} icon="⚙️" />
-          <StatCard title="Queued" value={stats.queued} icon="📋" />
-        </div>
-      </div>
-
-      <div className="px-6 pb-6">
-        <div className="mb-6">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Broadcast list ({broadcasts.length} loaded of {pagination.totalItems} total)
-            </h2>
+      <div className="px-6 py-6 space-y-6">
+        {/* Messaging Limit Alert */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-start gap-3 flex-1">
+            <div className="mt-0.5">
+              <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                <Info className="w-3 h-3 text-white" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-900">
+                Your current messaging limit is <span className="font-bold">{messagingLimit.toLocaleString()} messages</span> per day
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                This is the maximum number of unique WhatsApp users you can send messages to outside of customer service windows within a 24-hour period.
+              </p>
+            </div>
           </div>
+          <Button
+            variant="outline"
+            className="bg-white border-gray-300 hover:bg-gray-50 ml-4"
+          >
+            {messagingLimit.toLocaleString()} Messages
+          </Button>
+        </div>
 
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-            <div className="flex items-center justify-between">
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Sent Card */}
+          <Card className="bg-white border border-gray-200 shadow-sm">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-600">Sent</h3>
+                <Send className="w-5 h-5 text-gray-400" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{stats.sent}</p>
+            </CardContent>
+          </Card>
+
+          {/* Delivered Card */}
+          <Card className="bg-white border border-gray-200 shadow-sm">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-600">Delivered</h3>
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{stats.delivered}</p>
+            </CardContent>
+          </Card>
+
+          {/* Processing Card */}
+          <Card className="bg-white border border-gray-200 shadow-sm">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-600">Processing</h3>
+                <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{stats.processing}</p>
+            </CardContent>
+          </Card>
+
+          {/* Failed Card */}
+          <Card className="bg-white border border-gray-200 shadow-sm">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-600">Failed</h3>
+                <AlertCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{stats.failed}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Broadcasts Table Section */}
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardContent className="p-6">
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Broadcasts</h2>
+              <p className="text-sm text-gray-500">{pagination.totalItems} total broadcasts</p>
+            </div>
+
+            {/* Search and Filter Bar */}
+            <div className="flex items-center justify-between gap-4 mb-6">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
                   type="text"
-                  name="search"
                   placeholder="Search broadcasts..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                    }
-                  }}
-                  className="pl-10 w-full bg-white border-gray-200 focus:border-green-500 focus:ring-green-500"
+                  className="pl-10 bg-white border-gray-300"
                 />
               </div>
-
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowFilterModal(true)}
-                  className="bg-gradient-to-r from-white to-gray-50 border-2 border-gray-200 px-5 py-2.5 rounded-xl font-semibold text-gray-700 shadow-sm"
-                >
-                  <Filter className="w-4 h-4 mr-2 text-green-600" />
-                  Filter
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                onClick={() => setShowFilterModal(true)}
+                className="border-gray-300 bg-white hover:bg-gray-50"
+              >
+                <Filter className="mr-2 h-4 w-4" />
+                Filters
+              </Button>
             </div>
-          </div>
-        </div>
 
-        <Card>
-          <CardContent className="p-0">
+            {/* Table */}
             <div 
               ref={tableRef}
-              className="max-h-96 overflow-y-auto scrollbar-hide"
+              className="overflow-x-auto scrollbar-hide"
               style={{
                 scrollbarWidth: 'none',
                 msOverflowStyle: 'none',
               }}
             >
               <table className="w-full">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Broadcast name</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Template</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Phonebook</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Scheduled</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Created</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading && broadcasts.length === 0 ? (
-                  <>
-                    {[...Array(5)].map((_, rowIndex) => (
-                      <tr key={`sk-${rowIndex}`} className="border-b">
-                        <td colSpan={7} className="py-3 px-4">
-                          <div className="h-4 w-full bg-gray-100 animate-pulse rounded" />
-                        </td>
-                      </tr>
-                    ))}
-                  </>
-                ) : broadcasts.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-16">
-                      <div className="flex flex-col items-center justify-center">
-                        <img
-                          src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1754993129/no_data.14591486_tv48zw.svg"
-                          alt="No data"
-                          className="w-56 h-56 object-contain mb-4"
-                        />
-                        <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={goToNewTemplate}>
-                          New Template
-                        </Button>
-                      </div>
-                    </td>
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Broadcast Name</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Template</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Phonebook</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Scheduled</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Created</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700"></th>
                   </tr>
-                ) : (
-                  <>
-                    {broadcasts.map((broadcast) => (
-                      <tr key={broadcast.id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4 font-medium">{broadcast.title}</td>
-                        <td className="py-3 px-4 text-gray-600">
-                          <div>
-                            <div className="font-medium">{broadcast.templet.name}</div>
-                            <div className="text-sm text-gray-500">{broadcast.templet.category}</div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-gray-600">{broadcast.phonebook.name}</td>
-                        <td className="py-3 px-4 text-gray-600">
-                          {format(new Date(broadcast.schedule), "MMM dd, yyyy HH:mm")}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge className={`${getStatusColor(broadcast.status)} capitalize`}>
-                            {getStatusDisplayName(broadcast.status)}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-gray-600">
-                          {format(new Date(broadcast.createdAt), "MMM dd, yyyy")}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                            ⋯
+                </thead>
+                <tbody>
+                  {isLoading && broadcasts.length === 0 ? (
+                    <>
+                      {[...Array(5)].map((_, rowIndex) => (
+                        <tr key={`sk-${rowIndex}`} className="border-b border-gray-100">
+                          <td colSpan={7} className="py-3 px-4">
+                            <div className="h-4 w-full bg-gray-100 animate-pulse rounded" />
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  ) : broadcasts.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-16">
+                        <div className="flex flex-col items-center justify-center">
+                          <img
+                            src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1763706224/WhatsApp_Image_2025-11-21_at_11.50.23_AM_rvamky.jpg"
+                            alt="No data"
+                            className="w-56 h-56 object-contain mb-4"
+                          />
+                          <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={goToNewTemplate}>
+                            New Template
                           </Button>
-                        </td>
-                      </tr>
-                    ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {broadcasts.map((broadcast) => (
+                        <tr key={broadcast.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4 text-sm font-medium text-gray-900">{broadcast.title}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">
+                            <div>
+                              <div className="font-medium">{broadcast.templet.name}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">{broadcast.templet.category}</div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{broadcast.phonebook.name}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">
+                            {format(new Date(broadcast.schedule), "MMM dd, yyyy HH:mm")}
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge className={`${getStatusColor(broadcast.status)} rounded-full px-3 py-0.5 text-xs font-medium`}>
+                              {getStatusDisplayName(broadcast.status)}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600">
+                            {format(new Date(broadcast.createdAt), "MMM dd, yyyy")}
+                          </td>
+                          <td className="py-3 px-4">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4 text-gray-400" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-                  </>
-                )}
-              </tbody>
-            </table>
-
-
-
-            <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50">
-              <div className="flex items-center gap-3">
-                <div className="text-sm text-gray-600">
-                  Showing <span className="font-semibold">{broadcasts.length}</span> of{" "}
-                  <span className="font-semibold">{pagination.totalItems}</span> broadcasts
+            {/* Pagination Summary */}
+            <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+              <p className="text-sm text-gray-500">
+                Showing {broadcasts.length} of {pagination.totalItems} broadcasts
+              </p>
+              {isFetchingNextPage && (
+                <div className="flex items-center justify-center gap-2 mt-2 text-sm text-blue-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading more...
                 </div>
-                
-                {isFetchingNextPage && (
-                  <div className="flex items-center gap-2 text-sm text-blue-600">
-                    <div className="h-3 w-3 rounded-full border-2 border-blue-300 border-t-blue-600 animate-spin" />
-                    Loading more...
-                  </div>
-                )}
-              </div>
-              
-              {broadcasts.length > 10 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tableRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  <ArrowUp className="w-4 h-4 mr-2" />
-                  Scroll to Top
-                </Button>
               )}
             </div>
-          </div>
           </CardContent>
         </Card>
       </div>
 
-          {showFilterModal && (
+      {/* Filter Modal */}
+      {showFilterModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg w-96 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -631,7 +699,6 @@ export default function BroadcastAnalyticsPage() {
             </div>
             <div className="mb-6">
               <p className="text-sm text-gray-600 mb-4">Choose status filters</p>
-
               <div className="space-y-3">
                 {Object.entries(selectedFilters).map(([key, checked]) => (
                   <div key={key} className="flex items-center space-x-3">
@@ -640,7 +707,7 @@ export default function BroadcastAnalyticsPage() {
                       id={key}
                       checked={checked}
                       onChange={() => handleFilterChange(key as keyof typeof selectedFilters)}
-                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
                     <label htmlFor={key} className="text-sm text-gray-700 uppercase">
                       {key === "pending" && "PENDING"}
@@ -655,7 +722,7 @@ export default function BroadcastAnalyticsPage() {
             </div>
             <div className="flex justify-end">
               <Button
-                className="bg-green-600 hover:bg-green-700 text-white px-8"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8"
                 onClick={() => setShowFilterModal(false)}
               >
                 Save
@@ -665,6 +732,7 @@ export default function BroadcastAnalyticsPage() {
         </div>
       )}
 
+      {/* New Broadcast Modal */}
       {showNewBroadcastModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg w-[600px] p-6">
@@ -682,6 +750,7 @@ export default function BroadcastAnalyticsPage() {
                 </label>
                 <Input
                   id="broadcastTitle"
+                  ref={broadcastTitleRef}
                   placeholder="Enter broadcast title..."
                   value={newBroadcast.title}
                   onChange={(e) =>
@@ -691,10 +760,53 @@ export default function BroadcastAnalyticsPage() {
                     }))
                   }
                   required
-                  className="w-full border-gray-300 focus:border-green-500 focus:ring-green-500"
+                  className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Broadcast Type <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="broadcastType"
+                      value="template"
+                      checked={newBroadcast.broadcastType === "template"}
+                      onChange={(e) =>
+                        setNewBroadcast((prev) => ({
+                          ...prev,
+                          broadcastType: e.target.value as "template" | "flow",
+                        }))
+                      }
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <FileText className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm text-gray-700">Template</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="broadcastType"
+                      value="flow"
+                      checked={newBroadcast.broadcastType === "flow"}
+                      onChange={(e) =>
+                        setNewBroadcast((prev) => ({
+                          ...prev,
+                          broadcastType: e.target.value as "template" | "flow",
+                        }))
+                      }
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <GitBranch className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm text-gray-700">Flow</span>
+                  </label>
+                </div>
+              </div>
+
+              {newBroadcast.broadcastType === "template" && (
               <div>
                 <label htmlFor="templateSelect" className="block text-sm font-medium text-gray-700 mb-2">
                   Select Template <span className="text-red-500">*</span>
@@ -704,7 +816,7 @@ export default function BroadcastAnalyticsPage() {
                   onValueChange={(value) => setNewBroadcast((prev) => ({ ...prev, templateId: value }))}
                   required
                 >
-                  <SelectTrigger className="w-full border-gray-300 focus:border-green-500 focus:ring-green-500">
+                  <SelectTrigger className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                     <SelectValue placeholder={isLoadingTemplates ? "Loading templates..." : "Choose a template..."} />
                   </SelectTrigger>
                   <SelectContent>
@@ -735,6 +847,44 @@ export default function BroadcastAnalyticsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              )}
+
+              {newBroadcast.broadcastType === "flow" && (
+              <div>
+                <label htmlFor="flowSelect" className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Flow <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={newBroadcast.flowId}
+                  onValueChange={(value) => setNewBroadcast((prev) => ({ ...prev, flowId: value }))}
+                  required
+                >
+                  <SelectTrigger className="w-full border-green-500 focus:border-green-500 focus:ring-green-500">
+                    <SelectValue placeholder={isLoadingFlows ? "Loading flows..." : "Choose a flow..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {isLoadingFlows ? (
+                      <SelectItem value="loading" disabled>
+                        Loading...
+                      </SelectItem>
+                    ) : flows.length > 0 ? (
+                      flows.map((flow) => (
+                        <SelectItem key={flow.flow_id} value={flow.flow_id}>
+                          <div className="flex items-center">
+                            <GitBranch className="w-4 h-4 text-green-600 mr-1" />
+                            <span>{flow.title}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-data" disabled>
+                        No flows available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              )}
 
               <div>
                 <label htmlFor="phonebookSelect" className="block text-sm font-medium text-gray-700 mb-2">
@@ -745,7 +895,7 @@ export default function BroadcastAnalyticsPage() {
                   onValueChange={(value) => setNewBroadcast((prev) => ({ ...prev, phonebookId: value }))}
                   required
                 >
-                  <SelectTrigger className="w-full border-gray-300 focus:border-green-500 focus:ring-green-500">
+                  <SelectTrigger className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                     <SelectValue
                       placeholder={isLoadingPhonebooks ? "Loading phonebooks..." : "Choose a phonebook..."}
                     />
@@ -784,7 +934,7 @@ export default function BroadcastAnalyticsPage() {
                         scheduledDate: e.target.checked ? new Date() : undefined,
                       }))
                     }
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:outline-none focus:ring-0"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:outline-none focus:ring-0"
                   />
                 </div>
 
@@ -794,7 +944,7 @@ export default function BroadcastAnalyticsPage() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal bg-white border-gray-300 focus:border-green-500 focus:ring-green-500"
+                          className="w-full justify-start text-left font-normal bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         >
                           <CalendarDays className="mr-2 h-4 w-4" />
                           {newBroadcast.scheduledDate
@@ -832,7 +982,7 @@ export default function BroadcastAnalyticsPage() {
                                   }))
                                 }
                               }}
-                              className="border border-gray-300 rounded px-2 py-1 text-sm focus:border-green-500 focus:ring-green-500"
+                              className="border border-gray-300 rounded px-2 py-1 text-sm focus:border-blue-500 focus:ring-blue-500"
                             />
                           </div>
                         </div>
@@ -856,12 +1006,13 @@ export default function BroadcastAnalyticsPage() {
                 onClick={handleCreateBroadcast}
                 disabled={
                   !newBroadcast.title ||
-                  !newBroadcast.templateId ||
+                  (newBroadcast.broadcastType === "template" && !newBroadcast.templateId) ||
+                  (newBroadcast.broadcastType === "flow" && !newBroadcast.flowId) ||
                   !newBroadcast.phonebookId ||
                   (newBroadcast.isScheduled && !newBroadcast.scheduledDate)
                 }
               >
-                Create Broadcast
+                Send Broadcast
               </Button>
             </div>
           </div>

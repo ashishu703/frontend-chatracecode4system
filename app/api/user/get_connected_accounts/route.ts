@@ -26,8 +26,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
 
-    console.log('🔍 Fetching connected accounts for user:', userId);
-
     if (!userId) {
       return NextResponse.json({ 
         success: false, 
@@ -51,8 +49,6 @@ export async function GET(request: NextRequest) {
       token = cookies.serviceToken || cookies.adminToken;
     }
 
-    console.log('🔑 Token found:', !!token);
-
     if (!token) {
       return NextResponse.json({ 
         success: false, 
@@ -67,64 +63,21 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
-        'X-User-ID': userId // Add user ID to headers as backup
-      }
-    });
-
-    // Get connected social accounts from three separate endpoints with proper /api prefix
-    console.log('📡 Calling backend endpoints...');
-    console.log('🔧 Request details:', {
-      baseURL,
-      token: token ? `${token.substring(0, 20)}...` : 'none',
-      userId,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token ? '***' : 'none'}`,
         'X-User-ID': userId
       }
     });
-    
-    // Use GET requests as backend expects GET, not POST
+
+    // Parallel API calls for better performance
     const [facebookResponse, instagramResponse, whatsappResponse] = await Promise.all([
-      authServerHandler.get<ApiResponse>('/api/messanger/accounts'),
-      authServerHandler.get<ApiResponse>('/api/instagram/accounts'),
-      authServerHandler.get<ApiResponse>('/api/whatsapp/accounts')
+      authServerHandler.get<ApiResponse>('/api/messanger/accounts').catch(() => ({ data: { profiles: [] } })),
+      authServerHandler.get<ApiResponse>('/api/instagram/accounts').catch(() => ({ data: { profiles: [] } })),
+      authServerHandler.get<ApiResponse>('/api/whatsapp/accounts').catch(() => ({ data: { profiles: [] } }))
     ]);
 
-    console.log('🔍 Raw Facebook response:', JSON.stringify(facebookResponse.data, null, 2));
-    console.log('🔍 Raw Instagram response:', JSON.stringify(instagramResponse.data, null, 2));
-    console.log('🔍 Raw WhatsApp response:', JSON.stringify(whatsappResponse.data, null, 2));
-
-    console.log('📊 Facebook response:', {
-      success: facebookResponse.data?.success,
-      profiles: facebookResponse.data?.profiles?.length || 0,
-      data: facebookResponse.data,
-      profilesArray: facebookResponse.data?.profiles
-    });
-
-    console.log('📊 Instagram response:', {
-      success: instagramResponse.data?.success,
-      profiles: instagramResponse.data?.profiles?.length || 0,
-      data: instagramResponse.data,
-      profilesArray: instagramResponse.data?.profiles
-    });
-
-    console.log('📊 WhatsApp response:', {
-      success: whatsappResponse.data?.success,
-      profiles: whatsappResponse.data?.profiles?.length || 0,
-      data: whatsappResponse.data,
-      profilesArray: whatsappResponse.data?.profiles
-    });
-
     // Combine all profiles from different platforms
-    // Handle both possible response structures: data.profiles or direct array
     const facebookProfiles = facebookResponse.data?.data?.profiles || facebookResponse.data?.profiles || [];
     const instagramProfiles = instagramResponse.data?.data?.profiles || instagramResponse.data?.profiles || [];
     const whatsappProfiles = whatsappResponse.data?.data?.profiles || whatsappResponse.data?.profiles || [];
-    
-    console.log('🔍 Facebook profiles count:', facebookProfiles.length);
-    console.log('🔍 Instagram profiles count:', instagramProfiles.length);
-    console.log('🔍 WhatsApp profiles count:', whatsappProfiles.length);
     
     const allProfiles = [
       ...facebookProfiles,
@@ -132,11 +85,8 @@ export async function GET(request: NextRequest) {
       ...whatsappProfiles
     ];
 
-    console.log('🔗 Total profiles found:', allProfiles.length);
-    console.log('📋 All profiles:', JSON.stringify(allProfiles, null, 2));
-
     // Transform the data to match our expected format
-    const connectedAccounts = allProfiles.map((profile: Profile) => ({
+    const transformedAccounts = allProfiles.map((profile: Profile) => ({
       id: profile.id,
       platform: profile.platform,
       account_name: profile.name,
@@ -144,11 +94,20 @@ export async function GET(request: NextRequest) {
       username: profile.username,
       avatar: profile.avatar,
       social_account_id: profile.social_account_id,
-      connected_at: new Date().toISOString(), // Since we don't have this info, using current time
+      connected_at: new Date().toISOString(),
       status: 'active'
     }));
 
-    console.log('✅ Transformed accounts:', connectedAccounts);
+    // Deduplicate by social_account_id or id to avoid duplicates
+    const seen = new Set<string>();
+    const connectedAccounts = transformedAccounts.filter((account) => {
+      const key = account.social_account_id || account.id;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
 
     return NextResponse.json({
       success: true,
@@ -157,12 +116,10 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('❌ Get connected accounts error:', error);
-    console.error('❌ Error details:', {
-      message: error.message,
-      stack: error.stack,
-      response: error.response?.data
-    });
+    // Only log errors in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Get connected accounts error:', error.message);
+    }
     return NextResponse.json({ 
       success: false, 
       message: "Failed to fetch connected accounts",

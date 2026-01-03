@@ -42,6 +42,27 @@ export class UserEndpoints {
   // Account Management
   static readonly DELETE_ACCOUNT = '/api/user/delete_account';
   static readonly EXPORT_DATA = '/api/user/export_data';
+  
+  // API Key Management
+  static readonly GENERATE_API_KEY = '/api/user/generate_api_key';
+  static readonly GET_API_KEY = '/api/user/api_key';
+
+  // QR Code Generator
+  static readonly GENERATE_QR = '/api/user/qr/generate';
+  static readonly GET_QR_LIST = '/api/user/qr/list';
+  
+  // Error Logs
+  static readonly GET_ERROR_LOGS = '/api/user/error_logs';
+  static readonly GET_ERROR_STATS = '/api/user/error_logs/stats';
+  static readonly GET_QR_CODE = '/api/user/qr/:qrId';
+  static readonly GET_QR_MASTER = '/api/user/qr/master/:qrMasterId';
+  static readonly GET_QR_ANALYTICS = '/api/user/qr/analytics/:qrMasterId';
+  static readonly DELETE_QR_CODE = '/api/user/qr/:qrId';
+  static readonly DELETE_QR_MASTER = '/api/user/qr/master/:qrMasterId';
+  static readonly DOWNLOAD_QR = '/api/user/qr/download/:qrMasterId';
+  static readonly TRACK_QR_SCAN = '/api/qr/scan/:token';
+  static readonly GET_QR_DATA = '/api/qr/data/:token';
+  static readonly UPDATE_QR_CONFIG = '/api/user/qr/configure/:qrMasterId';
 
   // Phonebook
   static readonly IMPORT_CONTACTS = '/api/phonebook/import_contacts';

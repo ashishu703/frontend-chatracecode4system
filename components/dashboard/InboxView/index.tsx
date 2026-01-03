@@ -98,7 +98,9 @@ export default function InboxView() {
 
   const deriveContent = React.useCallback((raw: any) => {
     const body: any = parseJsonIfNeeded(raw?.body ?? raw)
-    const base = { text: "", type: (raw?.type || "text") as Message["type"], body: undefined as any }
+    // Normalise unsupported WhatsApp message types so they render as text
+    const normalisedType = raw?.type === "unsupported" ? "text" : (raw?.type || "text")
+    const base = { text: "", type: normalisedType as Message["type"], body: undefined as any }
     if (typeof raw?.message === "string") base.text = raw.message
     if (typeof body === "string") base.text = body
     if (typeof body === "object" && body) {

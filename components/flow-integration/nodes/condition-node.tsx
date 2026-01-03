@@ -2,9 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useCallback } from "react"
-import { X, Plus, Save, Trash2, Edit, Star, Clock, MessageCircle, Calendar } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { X, Plus, Trash2, Clock, MessageCircle, Calendar, Copy, Play, GitBranch } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Handle, Position } from "@xyflow/react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -175,10 +173,9 @@ export function ConditionNode({ data, selected, id }: any) {
     try {
       const response = await serverHandler.post("/api/templet/add_new", payload)
       if ((response.data as any)?.success) {
-        setIsSaved(true)
         setShowDialog(false)
         toast({ title: "Template saved!", variant: "default" })
-        setTimeout(() => setIsSaved(false), 2000)
+        setTemplateName("")
       } else {
         toast({ title: "Error", description: (response.data as any)?.msg || "Failed to save", variant: "destructive" })
       }
@@ -189,16 +186,24 @@ export function ConditionNode({ data, selected, id }: any) {
     }
   }
 
-  const handleTitleEdit = () => setIsEditingTitle(true)
-  const handleTitleSave = () => {
-    setIsEditingTitle(false)
-    syncData()
-  }
-
   const handleSetStartNode = useCallback(() => {
-    setStartNodeId?.(id)
-    toast({ title: "Start node set!", variant: "default" })
-  }, [id, setStartNodeId, toast])
+    if (setStartNodeId) {
+      if (isStartNode) {
+        setStartNodeId(null)
+        toast({ title: "Start node removed", variant: "default" })
+      } else {
+        setStartNodeId(id)
+        toast({ title: "Start node set!", variant: "default" })
+  }
+    }
+  }, [id, setStartNodeId, toast, isStartNode])
+
+  const handleCopy = useCallback(() => {
+    if (duplicateNode) {
+      duplicateNode(id)
+      toast({ title: "Node copied successfully!", variant: "default" })
+    }
+  }, [id, duplicateNode, toast])
 
   const addOption = () => {
     const newOptions = [...options, { id: `opt-${Date.now()}`, value: "" }]
@@ -228,52 +233,63 @@ export function ConditionNode({ data, selected, id }: any) {
   }
 
   return (
-    <div className="relative">
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-gray-800 border-0" />
-      <div className={`w-[320px] bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm ${selected ? "ring-2 ring-blue-500" : ""}`}>
+    <div 
+      className="relative group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Handle type="target" position={Position.Left} className="w-3 h-3 !bg-gray-400 !border-2 !border-white" />
+      
+      {/* Hover Action Buttons */}
+      {isHovered && (
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 z-10">
+          <button 
+            onClick={handleSetStartNode} 
+            className="p-1.5 hover:bg-green-50 rounded transition-colors" 
+            title={isStartNode ? "Remove as start node" : "Set as start node"}
+          >
+            <Play className={`w-4 h-4 ${isStartNode ? "text-green-600 fill-green-600" : "text-green-600"}`} />
+            </button>
+          <button 
+            onClick={handleCopy} 
+            className="p-1.5 hover:bg-blue-50 rounded transition-colors" 
+            title="Copy"
+          >
+            <Copy className="w-4 h-4 text-blue-600" />
+            </button>
+          <button 
+            onClick={() => deleteNode(id)} 
+            className="p-1.5 hover:bg-red-50 rounded transition-colors" 
+            title="Delete"
+          >
+            <X className="w-4 h-4 text-red-600" />
+            </button>
+        </div>
+      )}
+
+      <div className={`w-[320px] bg-white rounded-lg shadow-md ${selected ? "ring-2 ring-blue-500" : "border border-gray-200"}`}>
         {/* Header */}
-        <div className="bg-purple-500 text-white px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {isEditingTitle ? (
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onBlur={handleTitleSave}
-                onKeyPress={(e) => e.key === "Enter" && handleTitleSave()}
-                className="bg-white text-gray-800 px-2 py-1 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white"
-                autoFocus
-              />
-            ) : (
-              <span className="font-medium text-sm">{title} #{messageNumber}</span>
-            )}
-            <button onClick={handleTitleEdit} className="p-1 hover:bg-purple-600 rounded transition-colors" title="Edit title">
-              <Edit className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="flex items-center gap-1">
-            <button onClick={handleSetStartNode} className="p-1 hover:bg-purple-600 rounded transition-colors" title="Set Start">
-              <Star className={`w-4 h-4 ${isStartNode ? "text-yellow-400 fill-yellow-400" : "text-white"}`} />
-            </button>
-            <button onClick={handleSave} className="p-1" title="Save">
-              <Save className={`w-4 h-4 ${isSaved ? "text-green-200" : "text-white"}`} />
-            </button>
-            <button onClick={() => deleteNode(id)} className="p-1" title="Delete">
-              <X className="w-4 h-4" />
-            </button>
+        <div className="px-3 py-2 border-b border-gray-100">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <GitBranch className="w-4 h-4 text-gray-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-gray-900 text-sm">
+                {title} #{messageNumber}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Conditional Branch</p>
+            </div>
           </div>
         </div>
 
         {/* Condition Form */}
-        <div className="p-4 space-y-4">
+        <div className="px-3 py-2 space-y-3">
           {/* Channel Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <MessageCircle className="w-4 h-4" />
-              Channel
-            </label>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5 block">CHANNEL</label>
             <Select value={channelType} onValueChange={handleChannelTypeChange}>
-              <SelectTrigger className="border-gray-300">
+              <SelectTrigger className="p-2 border border-gray-300 rounded-lg text-sm">
                 <SelectValue placeholder="Select channel type" />
               </SelectTrigger>
               <SelectContent>
@@ -288,9 +304,9 @@ export function ConditionNode({ data, selected, id }: any) {
 
             {/* Channel Selection Details */}
             {channelType && (
-              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="text-sm font-medium text-gray-700 mb-2">Selected Channels:</div>
-                <div className="space-y-2">
+              <div className="mt-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-xs font-medium text-gray-700 mb-1.5">Selected Channels:</div>
+                <div className="space-y-1.5">
                   {channelType === "omni" ? (
                     <div className="flex items-center gap-2">
                       <input
@@ -299,7 +315,7 @@ export function ConditionNode({ data, selected, id }: any) {
                         onChange={() => handleChannelToggle("facebook")}
                         className="rounded"
                       />
-                      <label className="text-sm">Facebook</label>
+                      <label className="text-xs">Facebook</label>
                     </div>
                   ) : channelType === "facebook" ? (
                     <div className="flex items-center gap-2">
@@ -309,7 +325,7 @@ export function ConditionNode({ data, selected, id }: any) {
                         onChange={() => handleChannelToggle("facebook")}
                         className="rounded"
                       />
-                      <label className="text-sm">Facebook</label>
+                      <label className="text-xs">Facebook</label>
                     </div>
                   ) : channelType === "instagram" ? (
                     <div className="flex items-center gap-2">
@@ -319,7 +335,7 @@ export function ConditionNode({ data, selected, id }: any) {
                         onChange={() => handleChannelToggle("instagram")}
                         className="rounded"
                       />
-                      <label className="text-sm">Instagram</label>
+                      <label className="text-xs">Instagram</label>
                     </div>
                   ) : channelType === "whatsapp" ? (
                     <div className="flex items-center gap-2">
@@ -329,7 +345,7 @@ export function ConditionNode({ data, selected, id }: any) {
                         onChange={() => handleChannelToggle("whatsapp")}
                         className="rounded"
                       />
-                      <label className="text-sm">WhatsApp</label>
+                      <label className="text-xs">WhatsApp</label>
                     </div>
                   ) : null}
                 </div>
@@ -339,13 +355,10 @@ export function ConditionNode({ data, selected, id }: any) {
 
           {/* Time Delay */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              Time Delay
-            </label>
-            <div className="space-y-3">
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5 block">TIME DELAY</label>
+            <div className="space-y-2">
               <Select value={timeDelayType} onValueChange={handleTimeDelayTypeChange}>
-                <SelectTrigger className="border-gray-300">
+                <SelectTrigger className="p-2 border border-gray-300 rounded-lg text-sm">
                   <SelectValue placeholder="Select time delay type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -366,11 +379,11 @@ export function ConditionNode({ data, selected, id }: any) {
                     value={timeDelayValue}
                     onChange={(e) => handleTimeDelayValueChange(e.target.value)}
                     onBlur={handleFieldBlur}
-                    className="flex-1 border-gray-300"
+                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm"
                     min="0"
                   />
                   <Select value={timeDelayUnit} onValueChange={handleTimeDelayUnitChange}>
-                    <SelectTrigger className="w-24 border-gray-300">
+                    <SelectTrigger className="w-[140px] p-2 border border-gray-300 rounded-lg text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -392,7 +405,7 @@ export function ConditionNode({ data, selected, id }: any) {
                     value={selectedDate}
                     onChange={(e) => handleDateChange(e.target.value)}
                     onBlur={handleFieldBlur}
-                    className="flex-1 border-gray-300"
+                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm"
                   />
                 </div>
               )}
@@ -400,14 +413,14 @@ export function ConditionNode({ data, selected, id }: any) {
           </div>
 
           {/* Options */}
-          <div className="mt-4 space-y-2">
+          <div className="mt-2 space-y-2">
             {options.map((option, index) => (
               <div key={option.id} className="flex items-center gap-2 relative">
                 <Handle
                   type="source"
                   position={Position.Right}
                   id={option.id}
-                  className="w-3 h-3 bg-purple-500 border-0 absolute right-0 top-1/2 transform -translate-y-1/2"
+                  className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white absolute right-0 top-1/2 transform -translate-y-1/2"
                   style={{ right: "-6px" }}
                 />
                 <Input
@@ -415,37 +428,35 @@ export function ConditionNode({ data, selected, id }: any) {
                   value={option.value}
                   onChange={(e) => updateOption(index, e.target.value)}
                   onBlur={() => handleOptionBlur(index)}
-                  className="flex-1 pr-8"
+                  className="flex-1 pr-8 p-2 border border-gray-300 rounded-lg text-sm"
                 />
                 {options.length > 1 && (
-                  <button onClick={() => removeOption(index)} className="bg-red-400 hover:bg-red-500 text-white p-2 rounded transition-colors" title="Remove">
+                  <button onClick={() => removeOption(index)} className="bg-red-400 hover:bg-red-500 text-white p-1.5 rounded transition-colors" title="Remove">
                     <Trash2 className="w-3 h-3" />
                   </button>
                 )}
                 {index === options.length - 1 && (
-                  <button onClick={addOption} className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded transition-colors" title="Add">
+                  <button onClick={addOption} className="bg-gray-400 hover:bg-gray-500 text-white p-1.5 rounded transition-colors" title="Add">
                     <Plus className="w-3 h-3" />
                   </button>
                 )}
               </div>
             ))}
-          </div>
-        </div>
       </div>
 
-      {/* Black dot handle on right side middle */}
+          {/* Continue Section */}
+          <div className="flex items-center justify-end pt-2 relative">
+            <span className="text-sm text-gray-700 font-medium mr-2">Continue</span>
       <Handle 
         type="source" 
         position={Position.Right} 
         id="main-output"
-        className="w-3 h-3 bg-gray-800 border-2 border-white shadow-md"
-        style={{ 
-          right: "-8px",
-          top: "50%",
-          transform: "translateY(-50%)",
-          zIndex: 10
-        }}
+              className="!w-5 !h-5 !bg-gray-400 !border-2 !border-white !rounded-full absolute right-0 top-1/2 transform -translate-y-1/2"
+              style={{ right: '-10px' }}
       />
+          </div>
+        </div>
+      </div>
 
       {/* Dialog for saving template */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>

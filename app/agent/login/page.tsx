@@ -34,11 +34,9 @@ export default function AgentLoginPage() {
       await login(formData.email, formData.password)
       router.push('/agent/dashboard')
     } catch (err) {
-      // error is handled by the hook
     }
   }
 
-  // Password recovery handler
   const handleRecovery = async (e: React.FormEvent) => {
     e.preventDefault();
     setRecoveryLoading(true);
@@ -75,13 +73,13 @@ export default function AgentLoginPage() {
           <CardHeader className="text-center">
             <motion.div className="flex items-center justify-center space-x-3 mb-4" whileHover={{ scale: 1.05 }}>
               <Image
-                src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1752042604/mbg_logo_l7xfr2.png"
-                alt="MBG Logo"
+                src="https://res.cloudinary.com/drpbrn2ax/image/upload/v1763706224/WhatsApp_Image_2025-11-21_at_11.50.23_AM_rvamky.jpg"
+                alt="code4system Logo"
                 width={40}
                 height={40}
                 className="rounded-lg"
               />
-              <span className="text-2xl font-bold text-gray-800">MBG</span>
+              <span className="text-2xl font-bold text-gray-800">code 4 system</span>
             </motion.div>
             <CardTitle className="text-2xl text-gray-800">Agent Login</CardTitle>
             <p className="text-gray-600">Sign in to your agent account</p>
