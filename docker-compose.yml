@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  # Next.js Frontend application
+  frontend-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chatbot-frontend
+    ports:
+      - "1400:1400"
+    environment:
+      NODE_ENV: production
+      PORT: 1400
+      NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-http://localhost:1300}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:1300}
+    restart: unless-stopped
+    volumes:
+      - ./.next:/app/.next
+      - ./public:/app/public
+
