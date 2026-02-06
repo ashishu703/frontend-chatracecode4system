@@ -66,9 +66,11 @@ export class UserEndpoints {
 
   // Phonebook
   static readonly IMPORT_CONTACTS = '/api/phonebook/import_contacts';
+  static readonly EXPORT_CONTACTS = '/api/phonebook/export_contacts';
   static readonly DELETE_CONTACTS = '/api/phonebook/del_contacts';
   static readonly GET_UID_CONTACTS = '/api/phonebook/get_uid_contacts';
   static readonly ADD_SINGLE_CONTACT = '/api/phonebook/add_single_contact';
+  static readonly UPDATE_CONTACT = '/api/phonebook/update_contact';
   static readonly ADD_PHONEBOOK = '/api/phonebook/add';
   static readonly GET_PHONEBOOKS = '/api/phonebook/get_by_uid';
   static readonly DELETE_PHONEBOOK = '/api/phonebook/del_phonebook';

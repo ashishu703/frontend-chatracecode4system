@@ -91,21 +91,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [eventBus] = useState(() => new SimpleEventEmitter())
   const [lastEmittedUid, setLastEmittedUid] = useState<string | null>(null)
 
-  // Debug environment variable
-  useEffect(() => {
-    console.log('NEXT_PUBLIC_WS_URL:', process.env.NEXT_PUBLIC_WS_URL);
-  }, []);
-
-  // Only connect socket if token exists and we're not in admin panel
   useEffect(() => {
     const token = localStorage.getItem("serviceToken");
     const role = localStorage.getItem("role");
-    
-    console.log('Socket connection check - Token:', !!token, 'Role:', role);
-    
-    // Don't connect socket if we're in admin panel or no token
+
     if (!token) {
-      console.log('Skipping socket connection - No token');
       if (socket) {
         socket.disconnect();
         setSocket(null);
@@ -117,16 +107,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (role === 'admin') {
-      console.log('Admin socket connection allowed for testing');
-    }
-
-    let wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4500"
-    // Convert WebSocket URL to HTTP URL for Socket.IO
-    if (wsUrl.startsWith("ws://")) wsUrl = wsUrl.replace("ws://", "http://")
-    if (wsUrl.startsWith("wss://")) wsUrl = wsUrl.replace("wss://", "https://")
-
-    console.log('Connecting to WebSocket URL:', wsUrl)
+    let wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4500";
+    if (wsUrl.startsWith("ws://")) wsUrl = wsUrl.replace("ws://", "http://");
+    if (wsUrl.startsWith("wss://")) wsUrl = wsUrl.replace("wss://", "https://");
 
     const newSocket = io(wsUrl, {
       auth: { token },
@@ -141,8 +124,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     // Connection events
     newSocket.on('connect', () => {
-      console.log('Socket connected successfully')
-      setIsConnected(true)
+      setIsConnected(true);
       try { eventBus.emit('socketConnected') } catch {}
       try {
         const raw = localStorage.getItem('user')
@@ -170,9 +152,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     })
 
-    newSocket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason)
-      setIsConnected(false)
+    newSocket.on('disconnect', () => {
+      setIsConnected(false);
       try { eventBus.emit('socketDisconnected', { reason }) } catch {}
     })
 
@@ -188,18 +169,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     })
 
     newSocket.on('push_new_msg', (msg: Message) => {
-      console.log('New message received in socket context:', msg)
-      console.log('Current messages count:', messages.length)
-      setMessages(prev => {
-        const updatedMessages = [...prev, msg]
-        console.log('Updated messages in context:', updatedMessages)
-        return updatedMessages
-      })
-      // Check if this is an incoming message and trigger flow matching
-      if (msg.route === 'incoming') {
-        console.log('Processing incoming message for flow matching...')
-        checkAndTriggerFlow(msg)
-      }
+      setMessages((prev) => [...prev, msg]);
+      if (msg.route === 'incoming') checkAndTriggerFlow(msg);
       try { eventBus.emit('newMessage', msg) } catch {}
     })
 

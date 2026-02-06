@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import serverHandler from "@/utils/api/enpointsUtils/serverHandler";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +22,8 @@ export default function ReviewManagementView() {
     queryKey: ['google-reviews', activeTab],
     queryFn: async () => {
       const response = await serverHandler.get(`/api/google/reviews?status=${activeTab !== 'all' ? activeTab : ''}`);
-      return response.data?.data || response.data || [];
+      const raw = response.data?.data ?? response.data;
+      return Array.isArray(raw) ? raw : [];
     },
   });
 
@@ -209,7 +210,7 @@ export default function ReviewManagementView() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {reviews?.map((review) => (
+                    {(Array.isArray(reviews) ? reviews : []).map((review) => (
                       <motion.div
                         key={review.id}
                         initial={{ opacity: 0, y: 10 }}

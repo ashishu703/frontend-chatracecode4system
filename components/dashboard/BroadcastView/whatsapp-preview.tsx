@@ -39,6 +39,16 @@ export function WhatsAppPreview({
   footerText,
   buttons,
 }: WhatsAppPreviewProps) {
+  // Use media proxy for external URLs (e.g. ngrok) to bypass browser warning splash
+  const getMediaDisplayUrl = (url: string) => {
+    if (!url) return "";
+    if (url.startsWith("/")) return url; // relative URL, use as-is
+    if (url.startsWith("http")) {
+      return `/api/media/proxy?url=${encodeURIComponent(url)}`;
+    }
+    return url;
+  };
+
   // Function to get appropriate icon for button type
   const getButtonIcon = (buttonType: string) => {
     switch (buttonType) {
@@ -98,7 +108,7 @@ export function WhatsAppPreview({
                 )}
                 {headerType === "Image" && headerUrl && (
                   <img
-                    src={headerUrl}
+                    src={getMediaDisplayUrl(headerUrl)}
                     alt="header"
                     className="w-full h-32 object-cover rounded"
                   />
@@ -106,7 +116,7 @@ export function WhatsAppPreview({
                 {headerType === "Video" && headerUrl && (
                   <div className="w-full">
                     <video
-                      src={headerUrl}
+                      src={getMediaDisplayUrl(headerUrl)}
                       controls
                       className="w-full rounded"
                     />
@@ -114,7 +124,7 @@ export function WhatsAppPreview({
                 )}
                 {headerType === "Document" && headerUrl && (
                   <a
-                    href={headerUrl}
+                    href={getMediaDisplayUrl(headerUrl)}
                     target="_blank"
                     className="text-blue-600 text-xs underline"
                   >

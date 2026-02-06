@@ -105,7 +105,6 @@ export default function OnboardingPage() {
           if (response.ok) {
             const data = await response.json()
             if (data.success && data.data && data.data.length > 0) {
-              console.log('User already has connected platforms:', data.data)
               setHasExistingConnections(true)
               // Redirect to dashboard immediately
               router.replace('/dashboard')
@@ -113,9 +112,7 @@ export default function OnboardingPage() {
             }
           }
         }
-      } catch (error) {
-        console.log('Error checking existing connections:', error)
-        // Continue with onboarding if there's an error
+      } catch {
       } finally {
         setIsLoading(false)
       }

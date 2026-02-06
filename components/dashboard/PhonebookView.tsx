@@ -22,6 +22,8 @@ import {
   FolderOpen,
   Info,
   MoreVertical,
+  Download,
+  Pencil,
 } from "lucide-react";
 import { Contact } from "@/utils/api/contacts/Contact";
 import { ModalWrapper } from "./helpers/ModalWrapper";
@@ -34,7 +36,8 @@ const ContactRow = memo(({
   phonebooks, 
   assignedTo, 
   handleAssignedToChange,
-  onAssignToTag
+  onAssignToTag,
+  onEditContact,
 }: {
   contact: any;
   selectedContacts: string[];
@@ -43,6 +46,7 @@ const ContactRow = memo(({
   assignedTo: { [key: string]: string };
   handleAssignedToChange: (contactId: string, value: string) => void;
   onAssignToTag: (contactId: string) => void;
+  onEditContact: (contact: any) => void;
 }) => {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
 
@@ -156,6 +160,16 @@ const ContactRow = memo(({
               <div className="p-1">
                 <button
                   onClick={() => {
+                    onEditContact(contact);
+                    setShowActionsMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 rounded-md flex items-center gap-2 text-green-700"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit Contact
+                </button>
+                <button
+                  onClick={() => {
                     onAssignToTag(contact.id);
                     setShowActionsMenu(false);
                   }}
@@ -182,9 +196,14 @@ export default function PhonebookView() {
   const [assignedTo, setAssignedTo] = useState<{ [key: string]: string }>({});
   const [addContactModal, setAddContactModal] = useState(false);
   const [importModal, setImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPhonebookId, setImportPhonebookId] = useState<string>("");
   const [reassignModal, setReassignModal] = useState(false);
   const [targetPhonebookForReassign, setTargetPhonebookForReassign] = useState<string>("");
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [editContactModal, setEditContactModal] = useState(false);
+  const [editingContact, setEditingContact] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: "", phone: "" });
   const [contactForm, setContactForm] = useState({
     first_name: "",
     last_name: "",
@@ -310,6 +329,31 @@ export default function PhonebookView() {
       }),
   });
 
+  const updateContactMutation = useMutation({
+    mutationFn: (payload: { id: number; name: string; mobile: string }) => Contact.updateContact(payload),
+    onSuccess: () => {
+      toast({ title: "Success", description: "Contact updated successfully", variant: "success" });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setEditContactModal(false);
+      setEditingContact(null);
+    },
+    onError: (error: any) =>
+      toast({ title: "Error", description: error.message, variant: "destructive" }),
+  });
+
+  const importContactsMutation = useMutation({
+    mutationFn: (payload: FormData) => Contact.importContacts(payload),
+    onSuccess: () => {
+      toast({ title: "Success", description: "Contacts imported successfully", variant: "success" });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setImportModal(false);
+      setImportFile(null);
+      setImportPhonebookId("");
+    },
+    onError: (error: any) =>
+      toast({ title: "Error", description: error.message, variant: "destructive" }),
+  });
+
   const reassignContactsMutation = useMutation({
     mutationFn: ({
       contactIds,
@@ -378,7 +422,66 @@ export default function PhonebookView() {
     setReassignModal(true);
   }, []);
 
+  const handleEditContact = useCallback((contact: any) => {
+    setEditingContact(contact);
+    setEditForm({
+      name: contact.name || "",
+      phone: contact.mobile || contact.phone || "",
+    });
+    setEditContactModal(true);
+  }, []);
 
+  const handleEditSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingContact) return;
+    const name = editForm.name.trim();
+    const phone = editForm.phone.trim();
+    if (!phone) {
+      toast({ title: "Error", description: "Phone is required", variant: "destructive" });
+      return;
+    }
+    updateContactMutation.mutate({ id: editingContact.id, name: name || editingContact.name, mobile: phone });
+  }, [editingContact, editForm, updateContactMutation, toast]);
+
+  const handleExport = useCallback(async (format: "csv" | "json") => {
+    try {
+      const blob = await Contact.exportContacts(format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `contacts.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Success", description: `Contacts exported as ${format.toUpperCase()}`, variant: "success" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  }, [toast]);
+
+  const handleDownloadTemplate = useCallback(() => {
+    const csv = "name,mobile,email,tag,source\nJohn Doe,+919876543210,john@example.com,Sales,manual";
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "contacts_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Template downloaded", variant: "success" });
+  }, [toast]);
+
+  const handleImportSubmit = useCallback(() => {
+    if (!importFile || !importPhonebookId) {
+      toast({ title: "Error", description: "Select file and tag", variant: "destructive" });
+      return;
+    }
+    const phonebook = phonebooks.find((p: any) => p.id.toString() === importPhonebookId);
+    const formData = new FormData();
+    formData.append("file", importFile);
+    formData.append("id", importPhonebookId);
+    formData.append("phonebook_name", phonebook?.name || "");
+    importContactsMutation.mutate(formData);
+  }, [importFile, importPhonebookId, phonebooks, importContactsMutation, toast]);
 
   return (
     <div className="space-y-6">
@@ -424,14 +527,25 @@ export default function PhonebookView() {
                 <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-20">
                   <div className="p-2 space-y-1">
                     <button
-                      onClick={() => {
-                        setImportModal(true);
-                        setShowOptionsMenu(false);
-                      }}
+                      onClick={() => { setImportModal(true); setShowOptionsMenu(false); }}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded-md flex items-center gap-2 text-blue-700"
                     >
                       <Upload className="h-4 w-4" />
                       Import Contacts
+                    </button>
+                    <button
+                      onClick={() => { handleExport("csv"); setShowOptionsMenu(false); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 rounded-md flex items-center gap-2 text-green-700"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export CSV
+                    </button>
+                    <button
+                      onClick={() => { handleExport("json"); setShowOptionsMenu(false); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 rounded-md flex items-center gap-2 text-green-700"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export JSON
                     </button>
                     <button
                       onClick={() => {
@@ -603,7 +717,7 @@ export default function PhonebookView() {
               ) : (
                 paginatedContacts.map((contact: any) => (
                       <ContactRow
-                    key={contact.id}
+                        key={contact.id}
                         contact={contact}
                         selectedContacts={selectedContacts}
                         setSelectedContacts={setSelectedContacts}
@@ -611,6 +725,7 @@ export default function PhonebookView() {
                         assignedTo={assignedTo}
                         handleAssignedToChange={handleAssignedToChange}
                         onAssignToTag={handleAssignToTag}
+                        onEditContact={handleEditContact}
                       />
                     ))
                  )}
@@ -846,18 +961,98 @@ export default function PhonebookView() {
             </form>
       </ModalWrapper>
 
+      {/* Edit Contact Modal */}
+      <ModalWrapper
+        isOpen={editContactModal}
+        onClose={() => { setEditContactModal(false); setEditingContact(null); }}
+        title="Edit Contact"
+        className="w-[450px]"
+      >
+        {editingContact && (
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
+              <Input
+                value={editForm.name}
+                onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                placeholder="Contact name"
+                className="w-full h-9"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
+              <Input
+                value={editForm.phone}
+                onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))}
+                placeholder="+919876543210"
+                type="tel"
+                required
+                className="w-full h-9"
+              />
+              <p className="text-xs text-gray-500 mt-1">Use +91 country code</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => { setEditContactModal(false); setEditingContact(null); }}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updateContactMutation.isPending} className="bg-green-600 hover:bg-green-700">
+                {updateContactMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </ModalWrapper>
+
       {/* Import Modal */}
       <ModalWrapper
         isOpen={importModal}
-        onClose={() => setImportModal(false)}
+        onClose={() => { setImportModal(false); setImportFile(null); setImportPhonebookId(""); }}
         title="Import Contacts"
-        className="w-96"
+        className="w-[480px]"
       >
-        <p className="text-gray-600 mb-4">CSV import functionality coming soon...</p>
-        <div className="flex justify-end">
-          <Button variant="outline" onClick={() => setImportModal(false)}>
-            Close
-          </Button>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Upload a CSV with columns: name, mobile (required, +91 country code e.g. +919876543210), email, tag, source</p>
+          <button
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-2 text-sm text-green-600 hover:text-green-700 font-medium"
+          >
+            <Download className="h-4 w-4" />
+            Download template
+          </button>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Target Tag</label>
+            <Select value={importPhonebookId} onValueChange={setImportPhonebookId}>
+              <SelectTrigger className="w-full h-9">
+                <SelectValue placeholder="Select tag..." />
+              </SelectTrigger>
+              <SelectContent className="z-[10000]">
+                {phonebooks.map((p: any) => (
+                  <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">CSV File</label>
+            <Input
+              type="file"
+              accept=".csv"
+              onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+              className="h-9"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setImportModal(false); setImportFile(null); setImportPhonebookId(""); }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImportSubmit}
+              disabled={importContactsMutation.isPending || !importFile || !importPhonebookId}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {importContactsMutation.isPending ? "Importing..." : "Import"}
+            </Button>
+          </div>
         </div>
       </ModalWrapper>
 

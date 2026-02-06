@@ -18,10 +18,14 @@ export const Contact = {
   getPhonebooks: async (page: number = 1, pageSize: number = 10): Promise<GenericApiResponse<Phonebook[]>> => {
     const res = await serverHandler.get(`${UserEndpoints.GET_PHONEBOOKS}?page=${page}&size=${pageSize}`);
     const data = res.data as GenericApiResponse<Phonebook[]>;
-    console.log(data);
-    if (!data.success) {
-      throw new Error((data as any).message || "Failed to fetch phonebooks");
-    }
+    if (!data.success) throw new Error((data as any).message || "Failed to fetch phonebooks");
+    return data;
+  },
+
+  updateContact: async (payload: { id: number; name: string; mobile: string }): Promise<GenericApiResponse<ContactModel>> => {
+    const res = await serverHandler.put(UserEndpoints.UPDATE_CONTACT, payload);
+    const data = res.data as GenericApiResponse<ContactModel>;
+    if (!data.success) throw new Error((data as any).message || "Failed to update contact");
     return data;
   },
 
@@ -79,6 +83,13 @@ export const Contact = {
       throw new Error((data as any).message || "Failed to reassign contacts");
     }
     return data;
+  },
+
+  exportContacts: async (format: 'csv' | 'json' = 'csv'): Promise<Blob> => {
+    const res = await serverHandler.get(`${UserEndpoints.EXPORT_CONTACTS}?format=${format}`, {
+      responseType: 'blob',
+    });
+    return res.data as Blob;
   },
 
   getUserInfo: async (): Promise<GenericApiResponse<{ id: string; phonebook_id: string; phonebook_name: string }>> => {
